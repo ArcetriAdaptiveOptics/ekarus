@@ -2,7 +2,7 @@ import numpy as np
 import configparser
 from astropy.io import fits as pyfits
 
-from ekarus.e2e.utils.deformable_mirror_utilities import cube2mat, getMaskPixelCoords, get_coords_from_IFF, simulate_influence_functions
+from ekarus.e2e.utils.deformable_mirror_utilities import getMaskPixelCoords, get_coords_from_IFF, simulate_influence_functions, cube2mat
 
 
 def init_ALPAO(input):
@@ -40,13 +40,13 @@ def _init_ALPAO_from_Nacts(Nacts:int, Npix:int = 128):
 
     # Define coordinates in meters, centering in (0,0)
     coords = (_getALPAOcoordinates(nacts_row_sequence)).astype(float)
-    radii = np.sqrt(coords[0]**2+coords[1]**2)/2
-    coords *= pupil_size/np.max(radii) # coords in meters
     coords[0] -= (np.max(coords[0])-np.min(coords[0]))/2
-    coords[1] -= (np.max(coords[1])-np.min(coords[1]))/2
+    coords[1] -= (np.max(coords[1])-np.min(coords[1]))/2    
+    radii = np.sqrt(coords[0]**2+coords[1]**2)/2
+    coords *= pupil_size/np.max(radii)
 
-    IMCube = simulate_influence_functions(coords, mask, pix_scale)
-    IFF = cube2mat(IMCube)
+    IFF = simulate_influence_functions(coords, mask, pix_scale)
+    # IFF = cube2mat(IMCube)
 
     return mask, coords, pix_scale, IFF
 
@@ -91,9 +91,9 @@ def _init_ALPAO_from_tn_data(tn):
     cube_mask = np.reshape(cube_mask, np.shape(IM), order = 'F')
     masked_cube = np.ma.masked_array(IM,cube_mask)
     IM = cube2mat(masked_cube)
-    IFF = IM @ CMat
+    IFF = IM @ np.linalg.inv(CMat)
 
-    act_coords = get_coords_from_IFF(IFF, pupil_mask)
+    act_coords = get_coords_from_IFF(IFF, pupil_mask, use_peak = True)
     
     return pupil_mask, act_coords, pix_scale, IFF
 

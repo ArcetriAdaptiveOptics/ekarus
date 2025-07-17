@@ -128,27 +128,35 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float = 1.0):
     imposing 'perfect' zonal commands """
     
     n_acts = np.max(np.shape(act_coords))
-    H,W = np.shape(local_mask)
+    # H,W = np.shape(local_mask)
+
+    mask_ids = np.arange(np.size(local_mask))
+    pix_ids = mask_ids[~(local_mask).flatten()]
     
-    pix_coords = getMaskPixelCoords(local_mask)
-    act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale)
+    pix_coords = getMaskPixelCoords(local_mask).T
+    act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale).T
     
-    img_cube = np.zeros([H,W,n_acts])
+    # img_cube = np.zeros([H,W,n_acts])
+    # flat_img = np.zeros(H*W)
+    IFF = np.zeros([len(pix_ids),n_acts])
 
     for k in range(n_acts):
         act_data = np.zeros(n_acts)
-        act_data[k] = 1.0
+        act_data[k] = 1e-6
         tps = ThinPlateSpline(alpha=0.0)
-        tps.fit(act_pix_coords.T, act_data)
-        flat_img = tps.transform(pix_coords.T)
-        img_cube[:,:,k] = np.reshape(flat_img, [H,W])
+        tps.fit(act_pix_coords, act_data)
+        img = tps.transform(pix_coords[pix_ids,:])
+        IFF[:,k] = img[:,0]
+        # img_cube[:,:,k] = np.reshape(flat_img, [H,W])
 
-    # Masked array
-    cube_mask = np.tile(local_mask,n_acts)
-    cube_mask = np.reshape(cube_mask, np.shape(img_cube), order = 'F')
-    cube = np.ma.masked_array(img_cube, cube_mask, dtype=np.uint8)
+    return IFF
+
+    # # Masked array
+    # cube_mask = np.tile(local_mask,n_acts)
+    # cube_mask = np.reshape(cube_mask, np.shape(img_cube), order = 'F')
+    # cube = np.ma.masked_array(img_cube, cube_mask, dtype=np.uint8)
     
-    return cube
+    # return cube
 
 
 def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
@@ -177,9 +185,9 @@ def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
     
     H,W = np.shape(mask)
 
-    pix_coords = np.zeros([2,np.shape(coords)[-1]],dtype=int)
-    pix_coords[0,:] = coords[1,:]*pix_scale + H/2
-    pix_coords[1,:] = coords[0,:]*pix_scale + W/2
+    pix_coords = np.zeros([2,np.shape(coords)[-1]])
+    pix_coords[0,:] = (coords[1,:]*pix_scale/2 + H)/2
+    pix_coords[1,:] = (coords[0,:]*pix_scale/2 + W)/2
     
     return pix_coords
 
@@ -199,7 +207,7 @@ def get_coords_from_IFF(IFF, mask, use_peak=True):
     use_peak : bool, optional
         If True, actuator coordinates are computed from the IFF peak.
         If False, actuator coordinates are computed from the photocenter of the IFF.
-        Defaults to True.
+        Defaults to True, the photocenter approach seems to be giving issues
 
     Returns
     -------

@@ -20,12 +20,17 @@ class DeformableMirror():
     
     def __init__(self, input):
         self.mask, self.act_coords, self.pixel_scale, self.IFF = init_ALPAO(input)
+
+        # initialize mirror surface and actuator position
         self.Nacts = np.shape(self.act_coords)[1]
         self.act_pos = np.zeros(self.Nacts)
+        self.surface = self.IFF @ self.act_pos
+
+        # compute reconstructor
         self.R, self.U = compute_reconstructor(self.IFF)
 
 
-    def plot_surface(self, surf2plot = None, plt_title:str = None, plt_mask = None):
+    def plot_surface(self, surf2plot = None, title:str = '', plt_mask = None):
         """
         Plots surf2plot or (default) the segment's
         current shape on the DM mask
@@ -46,7 +51,8 @@ class DeformableMirror():
         if surf2plot is None:
             surf2plot = self.surface
         
-        pix_ids = self.valid_ids.flatten()
+        mask_ids = np.arange(np.size(self.mask))
+        pix_ids = mask_ids[~(self.mask).flatten()]
             
         image = np.zeros(np.size(self.mask))
         image[pix_ids] = surf2plot
@@ -59,16 +65,16 @@ class DeformableMirror():
         
         image = np.ma.masked_array(image, plt_mask)
         
-        plt.figure(figsize=(10,10))  
+        #plt.figure(figsize=(10,10))  
         plt.imshow(image, origin = 'lower', cmap = 'hot')
         
         img_rms = np.std(image.data[~image.mask])
         
-        if plt_title is None:
-            plt_title = f"RMS: {img_rms:.2e}"
+        if title == '':
+            title = f"RMS: {img_rms:.2e}"
             
         plt.axis('off')
-        plt.title(plt_title)
+        plt.title(title)
         
         return img_rms
     
@@ -89,13 +95,13 @@ class DeformableMirror():
         
         if pos is None:
             pos = self.act_pos.copy()
-        x,y = self.act_coords[:,0], self.act_coords[:,1] 
+        x,y = self.act_coords[0,:], self.act_coords[1,:] 
         
         act_pix_size = 3
         if np.sum(self.Nacts) < 100:
             act_pix_size = 12
         
-        plt.figure(figsize = (10,10))
+        #plt.figure(figsize = (10,10))
         plt.scatter(x,y, c=pos, s=act_pix_size**2, cmap='hot')
         plt.axis('equal')
         plt.colorbar()
