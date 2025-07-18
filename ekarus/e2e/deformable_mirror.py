@@ -1,33 +1,70 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ekarus.e2e.utils.deformable_mirror_utilities import slaving, compute_reconstructor
-from ekarus.e2e.utils.alpao_initializer import init_ALPAO
-
 
 class DeformableMirror():
     """ 
     This class defines the methods for a generic deformable mirror.
     It implements the following functions:
+
+        - get_position(): returns the position of the DM actuators
+
+        - set_position(): apply a zonal or modal command to the DM
         
         - plot_surface(): plot the current shape or a shape in input
         
         - plot_position(): plot a command or the actuator position at the actuator coordinates
 
-        - set_position(): apply a zonal or modal command to the DM
-        
     """
     
-    def __init__(self, input):
-        self.mask, self.act_coords, self.pixel_scale, self.IFF = init_ALPAO(input)
+    def __init__(self):
+        pass
 
-        # initialize mirror surface and actuator position
-        self.Nacts = np.shape(self.act_coords)[1]
-        self.act_pos = np.zeros(self.Nacts)
-        self.surface = self.IFF @ self.act_pos
 
-        # compute reconstructor
-        self.R, self.U = compute_reconstructor(self.IFF)
+    def get_position(self):
+        """ Returns the current actuator position """
+        return self.act_pos
+    
+    
+    def set_position(self, cmd_amps, absolute:bool = False, modal:bool = False):
+        """
+        Computes and applies a zonal/modal amplitude
+        command to the DM
+
+        Parameters
+        ----------
+        cmd_amps : ndarray(float) [Nacts]
+            The array of zonal (modal) amplitudes.
+            
+        absolute : bool, optional
+            True if the command is absolute and not
+            relative to the current actuators' position.
+            The default is False.
+            
+        modal : bool, optional
+            True for modal amplitudes. The default is False.
+
+        """
+        
+        if modal: # convert modal to zonal
+            
+            # length check
+            mode_amps = cmd_amps.copy()
+            n_modes = np.shape(self.U)[1]
+            if len(mode_amps) < n_modes:
+                mode_amps = np.zeros(n_modes)
+                mode_amps[:len(cmd_amps)] = cmd_amps
+        
+            shape = self.U @ mode_amps
+            cmd_amps = self.R @ shape
+        
+        # Position (zonal) command
+        if absolute:
+            cmd_amps -= self.act_pos
+
+        # Update positions and shape
+        self.act_pos += cmd_amps
+        self.surface += self.IFF @ cmd_amps
 
 
     def plot_surface(self, surf2plot = None, title:str = '', plt_mask = None):
@@ -107,54 +144,7 @@ class DeformableMirror():
         plt.colorbar()
     
 
-    
-    def set_position(self, cmd_amps, absolute:bool = False, modal:bool = False):
-        """
-        Computes and applies a zonal/modal amplitude
-        command to the DM
 
-        Parameters
-        ----------
-        cmd_amps : ndarray(float) [Nacts]
-            The array of zonal (modal) amplitudes.
-            
-        absolute : bool, optional
-            True if the command is absolute and not
-            relative to the current actuators' position.
-            The default is False.
-            
-        modal : bool, optional
-            True for modal amplitudes. The default is False.
-
-        """
-        
-        if modal: # convert modal to zonal
-            
-            # length check
-            mode_amps = cmd_amps.copy()
-            n_modes = np.shape(self.U)[1]
-            if len(mode_amps) < n_modes:
-                mode_amps = np.zeros(n_modes)
-                mode_amps[:len(cmd_amps)] = cmd_amps
-        
-            shape = self.U @ mode_amps
-            cmd_amps = self.R @ shape
-        
-        # Position (zonal) command
-        if absolute:
-            cmd_amps -= self.act_pos
-
-        # Update positions and shape
-        self.act_pos += cmd_amps
-        self.surface += self.IFF @ cmd_amps
-
- 
-
-    def _slave_cmd(self, cmd, max_cmd: float = 0.9):
-        """ DM utils slaving function wrapper """
-
-        slaved_cmd = slaving(self.act_coords, cmd, slaving_method = 'interp', cmd_thr = max_cmd)
-        return slaved_cmd
 
 
     
