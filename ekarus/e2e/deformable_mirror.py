@@ -65,6 +65,7 @@ class DeformableMirror():
         # Update positions and shape
         self.act_pos += cmd_amps
         self.surface += self.IFF @ cmd_amps
+        
 
 
     def plot_surface(self, surf2plot = None, title:str = '', plt_mask = None):
