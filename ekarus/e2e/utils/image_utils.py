@@ -1,9 +1,17 @@
 import numpy as np
 from arte.types.mask import CircularMask
 
-
-
 def image_grid(shape, recenter:bool = False, xp=np):
+    """
+    Define a grid of X and Y coordinates on an image shape
+
+    :param shape: tuple grid dimensions
+    :param recenter: (optional) boolean to recenter 
+    the coordinates wrt to the image center.
+    Defaults to False
+    :param xp: (optional) numpy or cupy for GPU acceleration
+    :return: X,Y grid of coordinates
+    """
 
     ny, nx = shape
 
@@ -19,7 +27,13 @@ def image_grid(shape, recenter:bool = False, xp=np):
 
 
 def get_photocenter(image, xp=np):
-
+    """ 
+    Compute the image photocenter
+    
+    :param image: 2D array intensity on which to compute the photocenter
+    :param xp: (optional) numpy or cupy for GPU acceleration
+    :return: y,x coordinates of the photocenter
+    """
     X,Y = image_grid(image.shape)
     qy = xp.sum(Y * image) / xp.sum(image)
     qx = xp.sum(X * image) / xp.sum(image)
@@ -41,3 +55,8 @@ def get_circular_mask(shape, radius, center=None):
     """
     mask = CircularMask(shape, maskRadius=radius, maskCenter=center)
     return (mask.mask()).astype(bool)
+
+
+def compute_pixel_size(wavelength, pupil_diameter_in_m, padding=1):
+    """ Get the number of pixels per radian """
+    return wavelength/pupil_diameter_in_m/padding
