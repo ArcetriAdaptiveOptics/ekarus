@@ -14,21 +14,34 @@ def create_field_from_zernike_coefficients(mask, noll_ids:tuple, amplitudes:tupl
     
     :return: input electric field as a numpy complex array
     """
+    phase_mask = project_zernike_on_mask(mask, noll_ids, amplitudes)
+    return mask.asTransmissionValue() * np.exp(1j * phase_mask)
+
+
+def project_zernike_on_mask(mask, noll_ids:tuple, amplitudes:tuple):
+    """
+    Create a linear combination of Zernikes on a mask.
+    
+    :param mask: CircularMask object defining the pupil
+    :param noll_ids: tuple of Zernike noll number
+    :param amplitudes: Amplitude or tuple of amplitudes
+                       of the Zernike aberration in radians
+    
+    :return: zernike combination
+    """
     zg = ZernikeGenerator(mask)
 
     if isinstance(noll_ids,int):
         amp = amplitudes
         noll = noll_ids
-        phase_mask = amp * zg.getZernike(noll)
+        zern = amp * zg.getZernike(noll)
     else:
         amplitudes *= np.ones_like(noll_ids)
-        phase_mask = np.zeros(mask.mask().shape)
+        zern = np.zeros(mask.mask().shape)
         for amp,noll in zip(amplitudes, noll_ids):
-            phase_mask += amp * zg.getZernike(noll)
-    
-    # phase_mask = phase_mask % np.pi # wrap to pi
-    
-    return mask.asTransmissionValue() * np.exp(1j * phase_mask)
+            zern += amp * zg.getZernike(noll)
+
+    return zern
 
 
 # def create_field_from_zernike_coefficients(mask, zernike_mode, amplitude):
