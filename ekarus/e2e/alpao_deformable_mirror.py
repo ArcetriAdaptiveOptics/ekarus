@@ -118,10 +118,10 @@ class ALPAODM(DeformableMirror):
 
         try:
             iff_hdu = pyfits.open(iff_path)
-            self.IFF = np.array(iff_hdu.data[0])
+            self.IFF = np.array(iff_hdu[0].data)
         except FileNotFoundError:
             self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask, self.pixel_scale)
-            dir_path = os.path.join(basepath,'ekarus/e2e/alpao_dms/DM'+str(self.Nacts))
+            dir_path = os.path.join(basepath,'ekarus/e2e/alpao_dms/DM'+str(self.Nacts)+'/')
             os.mkdir(dir_path)
             hdr = pyfits.Header()
             hdr['N_ACTS'] =  self.Nacts
@@ -142,14 +142,14 @@ class ALPAODM(DeformableMirror):
         basepath = os.getcwd()
         im_path = os.path.join(basepath, 'ekarus/e2e/alpao_dms/' + str(tn) + '/IMCube.fits')
         im_hdu = pyfits.open(im_path)
-        IM = np.array(im_hdu.data[0])
+        IM = np.array(im_hdu[0].data)
 
         self.Nacts = np.shape(IM)[2]
 
         try:
             cmdmat_path = os.path.join(basepath, 'ekarus/e2e/alpao_dms/' + str(tn) + '/cmdMatrix.fits')
             cmdmat_hdu = pyfits.open(cmdmat_path)
-            self.CMat = np.array(cmdmat_hdu.data[0])
+            self.CMat = np.array(cmdmat_hdu[0].data)
         except FileNotFoundError:
             self.CMat = np.eye(self.Nacts)
 
