@@ -1,6 +1,8 @@
 import numpy as xp
 # import cupy as xp
 
+from ekarus.e2e.utils.image_utils import image_grid
+
 class PyramidWFS:
     """
     Optical modeling of a pyramid wavefront sensor for adaptive optics.
@@ -27,22 +29,14 @@ class PyramidWFS:
         :param shape: tuple (ny, nx) electric field dimensions
         :return: array numpy 2D float (phase delay in pixels)
         """
-        ny, nx = shape
-        cx, cy = nx // 2, ny // 2
-
-        # Coordinates wrt center
-        x = xp.arange(nx) - cx
-        y = xp.arange(ny) - cy
-        X, Y = xp.meshgrid(x, y)
-
-        # Phase delay calculation
-        D = xp.min((nx,ny))#//2
+        X,Y = image_grid(shape, recenter=True)
+        D = xp.max(shape)
         phi = self.apex_angle*(1 - 1/D*(xp.abs(X)+xp.abs(Y)))
 
         return phi
     
 
-    def propagate(self, input_field):
+    def propagate(self, input_field, pix2rad):
         """
         Propagate the electric field through the pyramid:
         1. From the pupil plane to the focal plane (FFT)
@@ -50,59 +44,46 @@ class PyramidWFS:
         3. From the focal plane to the output pupil plane (IFFT)
 
         :param input_field: complex array numpy 2D representing the input electric field
+        :param pix2rad: float indicating the number of pixels per radian
+
         :return: complex array numpy 2D representing the output electric field
         """
-        # 1. Propagation from the pupil plane to the focal plane (Fourier transform)
-        _ef_on_focal_plane = xp.fft.fft2(input_field)#, norm = 'ortho')
-        self.field_on_focal_plane = xp.fft.fftshift(_ef_on_focal_plane)
+        self.field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(input_field))
 
-        # 2. Calcola il ritardo di fase della piramide
-        phase_delay = self.pyramid_phase_delay(self.field_on_focal_plane.shape)
-
-        # 2b. Applica il ritardo di fase: ogni punto viene ritardato di phase_delay (fase)
+        phase_delay = self.pyramid_phase_delay(self.field_on_focal_plane.shape) / pix2rad
         self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay)
 
-        # 3. Inverse propagation from the focal plane to the output pupil plane (inverse transform)
-        self._ef_focal_plane_delayed = xp.fft.ifftshift(self._ef_focal_plane_delayed)
-        output_field = xp.fft.ifft2(self._ef_focal_plane_delayed)#, norm = 'ortho')
+        output_field = xp.fft.ifft2(xp.fft.ifftshift(self._ef_focal_plane_delayed))
 
         return output_field
     
 
-    def modulate(self, input_field, alpha_pix, N_steps=16):
+    def modulate(self, input_field, alpha, pix2rad):
         """
         Modulates the input electric field by tilting it in different directions
         and averaging the resulting intensities.
 
         :param input_field: complex array numpy 2D representing the input electric field
-        :param alpha_pix: float, modulation amplitude in pixels
+        :param alpha: float, modulation amplitude in radians
+        :param pix2rad: float indicating the number of pixels per radian
 
         :return: array numpy 2D representing the average intensity after modulation
         """
-        ny, nx = xp.shape(input_field)
-        cx, cy = nx // 2, ny // 2
 
-        # Coordinates wrt center
-        x = xp.arange(nx) - cx
-        y = xp.arange(ny) - cy
+        tiltX,tiltY = image_grid(input_field.shape, recenter=True)
+        L = xp.max(input_field.shape)
 
-        # Tilt coordinates
-        tiltX,tiltY = xp.meshgrid(x, y)
-        maxX = xp.max(xp.abs(tiltX))
-        maxY = xp.max(xp.abs(tiltY))
-
-        # Number of steps for modulation (multiple of 4 for symmetry between subapertures)
+        alpha_pix = alpha/pix2rad
+        N_steps = int((alpha_pix//4+1)*4)
         phi_vec = 2*xp.pi*xp.arange(N_steps)/N_steps
 
-        # Initialize intensity and perform modulation
-        intensity = xp.zeros([ny,nx])
+        intensity = xp.zeros(input_field.shape, dtype = float)
 
         for phi in phi_vec:
-            tilt = tiltX * xp.cos(phi) + tiltY * xp.sin(phi)
-            tilt *= 1/xp.sqrt((maxX*xp.cos(phi))**2 + (maxY*xp.sin(phi))**2)
+            tilt = (tiltX * xp.cos(phi) + tiltY * xp.sin(phi))/L
             tilted_input = input_field * xp.exp(1j*tilt*alpha_pix)
 
-            output = self.propagate(tilted_input)
-            intensity += (xp.abs(output)**2)/N_steps
+            output = self.propagate(tilted_input, pix2rad)
+            intensity += (xp.abs(output**2))/N_steps
 
         return intensity

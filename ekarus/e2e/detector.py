@@ -1,9 +1,8 @@
 import numpy as xp
 # import cupy as xp
 
-from arte.types.mask import CircularMask
-
 from arte.math.toccd import toccd
+from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circular_mask
 
 
 class Detector:
@@ -32,7 +31,7 @@ class Detector:
         :return: array of slopes for each subaperture
         """
 
-        ccd_intensity = self.resize_intensity_on_detector(intensity)
+        ccd_intensity = xp.array(toccd(intensity, self.detector_shape),dtype=float)
 
         if self.subapertures is None:
             raise ValueError('Supaperture masks have not been defined!')
@@ -67,55 +66,20 @@ class Detector:
 
         :return: array of 4 boolean masks for each subaperture
         """
-        ccd_intensity = self.resize_intensity_on_detector(intensity)
 
-        # Find image center
-        ny, nx = xp.shape(ccd_intensity)
-        cx, cy = nx // 2, ny // 2
+        ccd_intensity = xp.array(toccd(intensity, self.detector_shape),dtype=float)
+        ny,nx = ccd_intensity.shape
 
-        # Coordinates wrt center
-        x = xp.arange(nx) - cx
-        y = xp.arange(ny) - cy
-        X, Y = xp.meshgrid(x, y)
-
-        # Use only a single quadrant
-        quadrant = ccd_intensity[xp.logical_and(X < 0, Y >= 0)]
-        quadrant = quadrant.reshape((ny // 2, nx // 2))
-
-        # Find photocenter
-        xquad = xp.arange(nx//2)
-        yquad = xp.arange(ny//2)
-        Xquad, Yquad = xp.meshgrid(xquad, yquad)
-        qy = xp.sum(Yquad * quadrant) / xp.sum(quadrant)
-        qx = xp.sum(Xquad * quadrant) / xp.sum(quadrant)
-
-        # Define mask in single quadrant
-        cmask = CircularMask(xp.shape(quadrant), maskRadius=Npix//2, maskCenter=(qy,qx))
-        quad_mask = cmask.mask()
-
-        # Pad and flip mask to 4 quadrants
-        padded_mask = xp.ones(xp.size(ccd_intensity))
-        padded_mask[xp.logical_and(X.flatten() < 0, Y.flatten() >= 0)] = quad_mask.flatten()
-        padded_mask = (padded_mask.reshape(ccd_intensity.shape)).astype(bool)    
-
-        mask_A = padded_mask.copy()
-        mask_B = xp.roll(mask_A, shift = 2*(cx-qx), axis = 1)
-        mask_C = xp.roll(mask_A, shift = 2*(cy-qy), axis = 0)
-        mask_aux = xp.roll(mask_A, shift = 2*(cy-qy), axis = 0)
-        mask_D = xp.roll(mask_aux, shift = 2*(cx-qx), axis = 1)
-        # mask_B = xp.flip(mask_A, axis=1)
-        # mask_C = xp.flip(mask_A, axis=0)
-        # mask_D = xp.flip(mask_B, axis=0)
-
+        subaperture_centers = xp.zeros([4,2])
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
-        subaperture_masks[0] = mask_A
-        subaperture_masks[1] = mask_B
-        subaperture_masks[2] = mask_C
-        subaperture_masks[3] = mask_D
+
+        for i in range(4):
+            qy,qx = self.find_subaperture_center(ccd_intensity,quad_n=i+1)
+            subaperture_centers[i,:] = xp.array([qy,qx])
+            subaperture_masks[i] = get_circular_mask(ccd_intensity.shape, radius=Npix//2, center=(qy,qx))
 
         self.subapertures = subaperture_masks
-
-        return subaperture_masks
+        self.subaperture_centers = subaperture_centers
 
 
     def electron_noise(self, intensity, flux=None):
@@ -143,55 +107,73 @@ class Detector:
         
         return xp.maximum(0,noisy_intensity)
     
+
+
+    def find_subaperture_center(self, ccd_intensity, quad_n:int = 1):
+
+        X,Y = image_grid(ccd_intensity.shape, recenter=True)
+        quadrant_mask = xp.zeros_like(ccd_intensity)
+
+        match quad_n:
+            case 1:
+                quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
+            case 2:
+                quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
+            case 3:
+                quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
+            case 4:
+                quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
+            case _:
+                raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
+
+        quadrant_mask = xp.reshape(quadrant_mask, ccd_intensity.shape)
+        intensity = ccd_intensity * quadrant_mask
+        qy,qx = get_photocenter(intensity)
+
+        # return qy,qx
+        return xp.round(qy),xp.round(qx)
     
-    def resize_intensity_on_detector(self, intensity, flux=None):
-        """ Rescales to detector shape and adjusts the flux """
-        return toccd(intensity, self.detector_shape, set_total=flux)
 
+    # @ staticmethod
+    # def _find_quadrant(ccd_intensity, quad_n:int = 1):
 
-    def _get_circular_mask(self, shape, radius, center=None):
-        """
-        Create a circular mask for the given shape.
+    #     ny, nx = xp.shape(ccd_intensity)
+    #     x = xp.arange(nx)
+    #     y = xp.arange(ny)
+    #     X, Y = xp.meshgrid(x, y)
+
+    #     match quad_n:
+    #         case 1:
+    #             quadrant = ccd_intensity[xp.logical_and(X < nx//2, Y >= ny//2)]
+    #         case 2:
+    #             quadrant = ccd_intensity[xp.logical_and(X >= nx//2, Y >= ny//2)]
+    #         case 3:
+    #             quadrant = ccd_intensity[xp.logical_and(X < nx//2, Y < ny//2)]
+    #         case 4:
+    #             quadrant = ccd_intensity[xp.logical_and(X >= nx//2, Y < ny//2)]
+    #         case _:
+    #             raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
         
-        :param shape: tuple (ny, nx) dimensions of the mask
-        :param radius: radius of the circular mask
-        :param center: tuple (cy, cx) center of the circular mask
-        :return: boolean numpy array with the mask
-        """
-        mask = CircularMask(shape, maskRadius=radius, maskCenter=center)
-        return (mask.mask()).astype(bool)
+    #     quadrant = quadrant.reshape((ny // 2, nx // 2))
+
+    #     return quadrant
     
+    # @ staticmethod
+    # def _find_first_quadrant(ccd_intensity, quad_n:int = 1):
+    #     # Find image center
+    #     ny, nx = xp.shape(ccd_intensity)
+    #     cx, cy = nx // 2, ny // 2
 
-    # @staticmethod
-    # def _toccd(a, newshape, set_total=None):
-    #     '''
-    #     Clone of oaalib's toccd() function, using least common multiple
-    #     to rebin an array similar to opencv's INTER_AREA interpolation.
-    #     '''
-    #     from arte.math.factors import lcm
-    #     from arte.utils.rebin import rebin
+    #     # Coordinates wrt center
+    #     x = xp.arange(nx) - cx
+    #     y = xp.arange(ny) - cy
+    #     X, Y = xp.meshgrid(x, y)
 
-    #     if (a.shape == newshape).all():
-    #         return a
+    #     quadrant = ccd_intensity[xp.logical_and(X < 0, Y >= 0)]
+    #     quadrant = quadrant.reshape((ny // 2, nx // 2))
 
-    #     if len(a.shape) != 2:
-    #         raise ValueError('Input array shape is %s instead of 2d, cannot continue:' % str(a.shape))
-
-    #     if len(newshape) != 2:
-    #         raise ValueError('Output shape is %s instead of 2d, cannot continue' % str(newshape))
-
-    #     if set_total is None:
-    #         set_total = a.sum()
-
-    #     mcmx = lcm(a.shape[0], newshape[0])
-    #     mcmy = lcm(a.shape[1], newshape[1])
-
-    #     temp = rebin(a, (mcmx, a.shape[1]), sample=True)
-    #     temp = rebin(temp, (newshape[0], a.shape[1]))
-    #     temp = rebin(temp, (newshape[0], mcmy), sample=True)
-    #     rebinned = rebin(temp, newshape)
-
-    #     return rebinned / rebinned.sum() * set_total
+    #     return quadrant
+    
     
 
     
