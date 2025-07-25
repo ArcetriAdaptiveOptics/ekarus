@@ -3,6 +3,7 @@ import configparser
 
 from ekarus.e2e.deformable_mirror import DeformableMirror
 from astropy.io import fits as pyfits
+import os
 
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
 from arte.types.mask import CircularMask
@@ -41,14 +42,6 @@ class ALPAODM(DeformableMirror):
 
         slaved_cmd = dmutils.slaving(self.act_coords, cmd, slaving_method = 'interp', cmd_thr = max_cmd)
         return slaved_cmd
-
-
-    @staticmethod
-    def _read_fits(file_path):
-        """ Basic function to read fits files """
-        with pyfits.open(file_path) as hdu:
-            data_out = np.array(hdu[0].data)
-        return data_out
     
     
     @staticmethod
@@ -97,8 +90,10 @@ class ALPAODM(DeformableMirror):
         self.Nacts = Nacts
 
         # read configuration file
+        basepath = os.getcwd()
         config = configparser.ConfigParser()
-        config.read('../alpao_dms/configuration.ini')
+        config_path = os.path.join(basepath,'ekarus/e2e/alpao_dms/configuration.ini')
+        config.read(config_path)
         try:
             dms = config[f'DM{Nacts}']
         except:
@@ -119,7 +114,18 @@ class ALPAODM(DeformableMirror):
         radii = np.sqrt(coords[0]**2+coords[1]**2)/2
         self.act_coords = coords*pupil_size/np.max(radii)
 
-        self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask, self.pixel_scale)
+        iff_path = os.path.join(basepath,'ekarus/e2e/alpao_dms/DM'+str(self.Nacts)+'/InfluenceFunctions.fits')
+
+        try:
+            iff_hdu = pyfits.open(iff_path)
+            self.IFF = np.array(iff_hdu.data[0])
+        except FileNotFoundError:
+            self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask, self.pixel_scale)
+            dir_path = os.path.join(basepath,'ekarus/e2e/alpao_dms/DM'+str(self.Nacts))
+            os.mkdir(dir_path)
+            hdr = pyfits.Header()
+            hdr['N_ACTS'] =  self.Nacts
+            pyfits.writeto(iff_path, self.IFF, hdr)
 
 
 
@@ -133,17 +139,23 @@ class ALPAODM(DeformableMirror):
             Tracking number of the saved data
         """
 
-        IM = self._read_fits('../alpao_dms/' + str(tn) + '/IMCube.fits')
+        basepath = os.getcwd()
+        im_path = os.path.join(basepath, 'ekarus/e2e/alpao_dms/' + str(tn) + '/IMCube.fits')
+        im_hdu = pyfits.open(im_path)
+        IM = np.array(im_hdu.data[0])
 
         self.Nacts = np.shape(IM)[2]
 
         try:
-            self.CMat = self._read_fits('../alpao_dms/' + str(tn) + '/cmdMatrix.fits')
+            cmdmat_path = os.path.join(basepath, 'ekarus/e2e/alpao_dms/' + str(tn) + '/cmdMatrix.fits')
+            cmdmat_hdu = pyfits.open(cmdmat_path)
+            self.CMat = np.array(cmdmat_hdu.data[0])
         except FileNotFoundError:
             self.CMat = np.eye(self.Nacts)
 
         config = configparser.ConfigParser()
-        config.read('../alpao_dms/configuration.ini')
+        config_path = os.path.join(basepath,'ekarus/e2e/alpao_dms/configuration.ini')
+        config.read(config_path)
         dms = config[f'DM{self.Nacts}']
         pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
