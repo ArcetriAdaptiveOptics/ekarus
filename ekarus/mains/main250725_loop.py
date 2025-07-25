@@ -39,15 +39,37 @@ dm = ALPAODM(468)
 alpha = 3*lambda0/pupil_diameter
 
 
+basepath = os.getcwd()
+try:
+    dir_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/')
+    os.mkdir(dir_path)
+except FileExistsError:
+    pass
+
 # 2. Define the subapertures using a piston input wavefront
 print('Defining the detector subaperture masks ...')
 mask = CircularMask((oversampling * Npix, oversampling * Npix), maskRadius=Npix // 2)
 piston =  create_field_from_zernike_coefficients(mask, 1, 1)
 
 modulated_intensity = wfs.modulate(piston, 10*alpha, pix2rad)
-ccd.define_subaperture_masks(modulated_intensity, Npix = 63.5)
+
+subap_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/SubapertureMasks.fits')
+centers_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/SubapertureCenters.fits')
+try:
+    subap_hdu = pyfits.open(subap_path)
+    ccd.subapertures = (np.array(subap_hdu[0].data)).astype(bool)
+    centers_hdu = pyfits.open(centers_path)
+    ccd.subaperture_centers = np.array(centers_hdu[0].data)
+except FileNotFoundError:
+    ccd.define_subaperture_masks(modulated_intensity, Npix = 63.5)
+    hdr = pyfits.Header()
+    hdr['SHAPE'] = ccd.detector_shape
+    hdr['PYR_ANG'] = wfs.apex_angle
+    pyfits.writeto(subap_path, (ccd.subapertures).astype(np.uint8), hdr, overwrite=True)
+    pyfits.writeto(centers_path, ccd.subaperture_centers, hdr, overwrite=True)
 
 ccd_intensity = toccd(modulated_intensity,ccd.detector_shape)
+# TO DO: Add detector noise!!!
 
 plt.figure()
 plt.imshow(ccd_intensity-(ccd.subapertures[0]+ccd.subapertures[1]+ccd.subapertures[2]+ccd.subapertures[3])/4, origin='lower')
@@ -59,7 +81,6 @@ plt.title('Subaperture masks')
 r0 = 5e-2
 L0 = 8
 
-basepath = os.getcwd()
 KL_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/KLmatrix.fits')
 m2c_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/m2c.fits')
 
@@ -72,15 +93,13 @@ try:
 except FileNotFoundError:
     KL, m2c, singular_values = make_modal_base_from_ifs_fft(1-dm.mask, pupil_diameter, \
     dm.IFF.T, r0, L0, zern_modes=7, zern_mask = mask, oversampling=oversampling, verbose = True)
-    dir_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/')
-    os.mkdir(dir_path)
     hdr = pyfits.Header()
     hdr['N_ACTS'] = dm.Nacts
     hdr['PUP_DIAM'] = pupil_diameter
     hdr['FR_PAR'] = r0
     hdr['ATMO_LEN'] = L0
-    pyfits.writeto(KL_path, KL, hdr)
-    pyfits.writeto(m2c_path, m2c, hdr)
+    pyfits.writeto(KL_path, KL, hdr, overwrite=True)
+    pyfits.writeto(m2c_path, m2c, hdr, overwrite=True)
 
 
 N=9
@@ -111,7 +130,7 @@ try:
 except FileNotFoundError:
 
     slope_len = int(np.sum(1-ccd.subapertures[0])*2)
-    IM = np.zeros((slope_len,dm.Nacts))
+    IM = np.zeros((slope_len,np.shape(KL)[0]))
     amp = 0.1
 
     for i in range(np.shape(KL)[0]):
@@ -146,8 +165,8 @@ except FileNotFoundError:
     hdr['PUP_DIAM'] = pupil_diameter
     hdr['FR_PAR'] = r0
     hdr['ATMO_LEN'] = L0
-    pyfits.writeto(IM_path, IM, hdr)
-    pyfits.writeto(Rec_path, Rec, hdr)
+    pyfits.writeto(IM_path, IM, hdr, overwrite=True)
+    pyfits.writeto(Rec_path, Rec, hdr, overwrite=True)
 
 
 # 4. Test the reconstruction
@@ -169,6 +188,7 @@ except FileNotFoundError:
 screen = phs._phaseScreens
 
 phase = screen[0,:Npix*oversampling,:Npix*oversampling]
+phase *= 0.1/np.max(phase)
 
 plt.figure()
 plt.imshow(phase)
@@ -179,14 +199,15 @@ input_field = mask.asTransmissionValue() * np.exp(1j*phase)
 meas_intensity = wfs.modulate(input_field, alpha, pix2rad)
 slopes = ccd.compute_slopes(meas_intensity)
 modes = Rec @ slopes
-dm_shape = dm.IFF @ modes
+cmd = m2c @ modes
+dm_shape = dm.IFF @ cmd
 flat_img = np.zeros(np.size(mask.mask()))
 flat_img[~mask.mask().flatten()] = dm_shape
 dm_phase = np.reshape(flat_img, mask.mask().shape)
 
 plt.figure(figsize=(12,6))
 plt.subplot(1,3,1)
-plt.imshow(np.angle(input_field),origin='lower')
+plt.imshow(np.ma.masked_array(phase, mask = mask.mask()),origin='lower')
 plt.colorbar(shrink=0.5)
 plt.title('Input phase')
 
@@ -196,7 +217,7 @@ plt.colorbar(shrink=0.5)
 plt.title('DM phase')
 
 plt.subplot(1,3,3)
-plt.imshow(np.angle(input_field*np.exp(-1j*dm_phase)),origin='lower')
+plt.imshow(np.ma.masked_array(phase-dm_phase, mask = mask.mask()),origin='lower')
 plt.colorbar(shrink=0.5)
 plt.title('Output phase')
 
