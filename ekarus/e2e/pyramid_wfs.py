@@ -16,7 +16,7 @@ class PyramidWFS:
         """
         Pyramid wavefront sensor constructor.
 
-        :param apex_angle: pyramid vertex angle (in pixels)
+        :param apex_angle: pyramid vertex angle in radians
         """
         self.apex_angle = apex_angle
         
@@ -31,7 +31,7 @@ class PyramidWFS:
         """
         X,Y = image_grid(shape, recenter=True)
         D = xp.max(shape)
-        phi = self.apex_angle*(1 - 1/D*(xp.abs(X)+xp.abs(Y)))
+        phi = 2*xp.pi*self.apex_angle*(1 - 1/D*(xp.abs(X)+xp.abs(Y)))
 
         return phi
     

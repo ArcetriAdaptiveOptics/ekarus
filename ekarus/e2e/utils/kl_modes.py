@@ -1,6 +1,5 @@
 import numpy as np
 from arte.utils.zernike_generator import ZernikeGenerator
-# from arte.types.mask import CircularMask
 
 def make_ortho_modes(array, xp, dtype):
     """
@@ -124,13 +123,12 @@ def make_modal_base_from_ifs_fft(pupil_mask, diameter, influence_functions, r0, 
 
         # Orthonormalize Zernike modes
         modes_to_be_removed = make_ortho_modes(modes_to_be_removed, xp=xp, dtype=dtype)
+
         # Normalize Zernike modes
         for i in range(zern_modes):
             modes_to_be_removed[i+1, :] -= xp.mean(modes_to_be_removed[i+1, :])
             modes_to_be_removed[i+1, :] /= xp.sqrt(xp.mean(modes_to_be_removed[i+1, :]**2))
         
-        
-
     if zern_modes > 0:
         coef_zern = xp.matmul(modes_to_be_removed, pinv(influence_functions))
         modes_to_be_removed = xp.matmul(coef_zern, influence_functions)
