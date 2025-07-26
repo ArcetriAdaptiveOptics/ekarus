@@ -1,109 +1,90 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
-from astropy.io import fits as pyfits
 import os
 
-from arte.math.toccd import toccd
-from arte.types.mask import CircularMask
-from arte.atmo.phase_screen_generator import PhaseScreenGenerator
+from ekarus.e2e.utils import my_fits_package as myfits
 
 from ekarus.e2e.alpao_deformable_mirror import ALPAODM
 from ekarus.e2e.pyramid_wfs import PyramidWFS
 from ekarus.e2e.detector import Detector
 
-from ekarus.e2e.utils.zernike_coefficients import create_field_from_zernike_coefficients
-from ekarus.e2e.utils.image_utils import compute_pixel_size
-from ekarus.e2e.utils.kl_modes import make_modal_base_from_ifs_fft
+from ekarus.userscripts import *
 
-# 1. Define the system
-lambda0 = 1000e-9
-pupil_diameter = 30e-3
+
+# TODO: add detector noise
+# TODO: add cupy acceleration
+
+# System data
+lambdaInM = 1000e-9
+pupilSizeInM = 32e-3
 oversampling = 4
 Npix = 128
-pix2rad = compute_pixel_size(wavelength=lambda0, pupil_diameter_in_m=pupil_diameter, padding=oversampling)
 
-# Pyramid WFS
-apex_angle = 0.005859393655500168 # vertex angle in radians
-wfs = PyramidWFS(apex_angle)
+pix2rad = lambdaInM/pupilSizeInM/oversampling 
 
-# CCD
+alpha = 3*lambdaInM/pupilSizeInM # modulation angle
+apex_angle = 0.005859393655500168/(2*np.pi)*30/32
 detector_shape = (256,256)
-ccd = Detector(detector_shape=detector_shape)
+subaperture_size = 63.5
 
-# DM 
-print('Initializing ALPAO DM ...')
+# Atmospheric data
+r0 = 5e-2
+L0 = 8
+
+# Sensor, detector, DM
+print('Initializing sensor, detector and deformable mirror ...')
+wfs = PyramidWFS(apex_angle)
+ccd = Detector(detector_shape=detector_shape)
 dm = ALPAODM(468)
 
-# Modulation angle
-alpha = 3*lambda0/pupil_diameter
-
-
+# Define save directory and data dictionary
 basepath = os.getcwd()
+dir_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/')
+
+hdr_dict = {'WAVELEN': lambdaInM*1e+9, 'PUP_SIZE': pupilSizeInM, 'OVERSAMP': oversampling, 'N_PIX': Npix, \
+'MOD_ANG': alpha, 'APEX_ANG': apex_angle, 'CCD_SIZE': np.max(detector_shape), 'SUBAPPIX': subaperture_size, \
+'FR_PAR': r0, 'ATMO_LEN': L0}
+
 try:
-    dir_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/')
     os.mkdir(dir_path)
 except FileExistsError:
     pass
 
-# 2. Define the subapertures using a piston input wavefront
+
+# 1. Define the subapertures using a piston input wavefront
 print('Defining the detector subaperture masks ...')
-mask = CircularMask((oversampling * Npix, oversampling * Npix), maskRadius=Npix // 2)
-piston =  create_field_from_zernike_coefficients(mask, 1, 1)
 
-modulated_intensity = wfs.modulate(piston, 10*alpha, pix2rad)
-
-subap_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/SubapertureMasks.fits')
-centers_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/SubapertureCenters.fits')
+subap_path = os.path.join(dir_path,'SubapertureMasks.fits')
 try:
-    subap_hdu = pyfits.open(subap_path)
-    ccd.subapertures = (np.array(subap_hdu[0].data)).astype(bool)
-    centers_hdu = pyfits.open(centers_path)
-    ccd.subaperture_centers = np.array(centers_hdu[0].data)
+    ccd.subapertures = myfits.read_fits(subap_path, isBool=True)
 except FileNotFoundError:
-    ccd.define_subaperture_masks(modulated_intensity, Npix = 63.5)
-    hdr = pyfits.Header()
-    hdr['SHAPE'] = ccd.detector_shape
-    hdr['PYR_ANG'] = wfs.apex_angle
-    pyfits.writeto(subap_path, (ccd.subapertures).astype(np.uint8), hdr, overwrite=True)
-    pyfits.writeto(centers_path, ccd.subaperture_centers, hdr, overwrite=True)
+    ccd.subapertures, modulated_intensity = define_subaperture_masks(wfs, ccd, Npix, oversampling, \
+                                             lambdaInM, pupilSizeInM, subapertureSizeInPixels=subaperture_size)
+    myfits.save_fits(subap_path, (ccd.subapertures).astype(np.uint8), hdr_dict)
 
-ccd_intensity = toccd(modulated_intensity,ccd.detector_shape)
-# TO DO: Add detector noise!!!
-
-plt.figure()
-plt.imshow(ccd_intensity-(ccd.subapertures[0]+ccd.subapertures[1]+ccd.subapertures[2]+ccd.subapertures[3])/4, origin='lower')
-plt.scatter(ccd.subaperture_centers[:,0],ccd.subaperture_centers[:,1],color='red')
-plt.title('Subaperture masks')
+    ccd_intensity = ccd.resize_on_detector(modulated_intensity)
+    plt.figure()
+    plt.imshow(ccd_intensity-(ccd.subapertures[0]+ccd.subapertures[1]+\
+                              ccd.subapertures[2]+ccd.subapertures[3]), origin='lower')
+    plt.title('Subaperture masks')
 
 
-# 3. Calibrate the system
-r0 = 5e-2
-L0 = 8
-
-KL_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/KLmatrix.fits')
-m2c_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/m2c.fits')
-
+# 2. Define the system modes
 print('Obtaining the Karhunen-Loeve mirror modes ...')
-try:
-    kl_hdu = pyfits.open(KL_path)
-    KL = np.array(kl_hdu[0].data)
-    m2c_hdu = pyfits.open(m2c_path)
-    m2c = np.array(m2c_hdu[0].data)
-except FileNotFoundError:
-    KL, m2c, singular_values = make_modal_base_from_ifs_fft(1-dm.mask, pupil_diameter, \
-    dm.IFF.T, r0, L0, zern_modes=7, zern_mask = mask, oversampling=oversampling, verbose = True)
-    hdr = pyfits.Header()
-    hdr['N_ACTS'] = dm.Nacts
-    hdr['PUP_DIAM'] = pupil_diameter
-    hdr['FR_PAR'] = r0
-    hdr['ATMO_LEN'] = L0
-    pyfits.writeto(KL_path, KL, hdr, overwrite=True)
-    pyfits.writeto(m2c_path, m2c, hdr, overwrite=True)
 
+KL_path = os.path.join(dir_path,'KLmatrix.fits')
+m2c_path = os.path.join(dir_path,'m2c.fits')
+
+try:
+    KL = myfits.read_fits(KL_path)
+    m2c = myfits.read_fits(m2c_path)
+except FileNotFoundError:
+    KL, m2c = make_KL_modal_base_from_dm(dm, Npix, oversampling, pupilSizeInM, r0, L0, zern2remove = 5)
+    myfits.save_fits(KL_path, KL, hdr_dict)
+    myfits.save_fits(m2c_path, m2c, hdr_dict)
 
 N=9
-plt.figure(figsize=(3*N,10))
+plt.figure(figsize=(2*N,7))
 
 for i in range(N):
     plt.subplot(4,N,i+1)
@@ -115,111 +96,86 @@ for i in range(N):
     plt.subplot(4,N,i+1+N*3)
     dm.plot_surface(KL[-i-1,:],title=f'KL Mode {np.shape(KL)[0]-i-1}')
 
+
+
+# 3. Calibrate the system
 print('Calibrating the KL modes ...')
 
-IM_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/IMmatrix.fits')
-Rec_path = os.path.join(basepath,'ekarus/mains/250725_sim_data/Rec.fits')
-
+IM_path = os.path.join(dir_path,'IMmatrix.fits')
+Rec_path = os.path.join(dir_path,'Rec.fits')
 
 try:
-    im_hdu = pyfits.open(IM_path)
-    IM= np.array(im_hdu[0].data)
-    Rec_hdu = pyfits.open(Rec_path)
-    Rec = np.array(Rec_hdu[0].data)
+    IM = myfits.read_fits(IM_path)
+    Rec = myfits.read_fits(Rec_path)
 
 except FileNotFoundError:
-
-    slope_len = int(np.sum(1-ccd.subapertures[0])*2)
-    IM = np.zeros((slope_len,np.shape(KL)[0]))
-    amp = 0.1
-
-    for i in range(np.shape(KL)[0]):
-
-        kl_phase = np.zeros(mask.mask().shape)
-        kl_phase[~mask.mask()] = KL[i,:]*amp
-        kl_phase = np.reshape(kl_phase,mask.mask().shape)
-        input_field = np.exp(1j*kl_phase) * mask.asTransmissionValue()
-        modulated_intensity = wfs.modulate(input_field, alpha, pix2rad)
-        push_slope = ccd.compute_slopes(modulated_intensity)/amp
-
-        input_field = np.conj(input_field)
-        modulated_intensity = wfs.modulate(input_field, alpha, pix2rad)
-        pull_slope = ccd.compute_slopes(modulated_intensity)/amp
-
-        IM[:,i] = (push_slope-pull_slope)/2
+    IM = calibrate_modes(wfs, ccd, KL, Npix, oversampling, lambdaInM, pupilSizeInM, amp = 0.1)
+    # slope_STD = np.std(IM, axis=0)
+    # IM = calibrate_modes(wfs, ccd, KL, Npix, oversampling, lambdaInM, pupilSizeInM, amp = 1/slope_STD)
 
     print('Computing the reconstructor ...')
     U,S,Vt = np.linalg.svd(IM, full_matrices=False)
-    Sinv = 1/S
-    Sinv[Sinv>1e+6] = 0
-    Rec = (Vt.T*Sinv) @ U.T
+    Rec = (Vt.T*1/S) @ U.T
 
     plt.figure()
-    plt.plot(Sinv,'o')
+    plt.plot(1/S,'o')
     plt.grid()
     plt.yscale('log')
     plt.title('Reconstructor eigenvalues')
 
-    hdr = pyfits.Header()
-    hdr['N_ACTS'] = dm.Nacts
-    hdr['PUP_DIAM'] = pupil_diameter
-    hdr['FR_PAR'] = r0
-    hdr['ATMO_LEN'] = L0
-    pyfits.writeto(IM_path, IM, hdr, overwrite=True)
-    pyfits.writeto(Rec_path, Rec, hdr, overwrite=True)
+    myfits.save_fits(IM_path, IM, hdr_dict)
+    myfits.save_fits(Rec_path, Rec, hdr_dict)
 
 
-# 4. Test the reconstruction
+# 4. Get atmospheric phase screen
 print('Generating phase screens ...')
-D = 1.8
-m2pix = 1024
+
 Nscreens = 1
-phs = PhaseScreenGenerator(screenSizeInPixels=int(D*m2pix), screenSizeInMeters=D, outerScaleInMeters=L0, seed=42)
 
-fname = os.path.join(basepath, 'ekarus/mains/250725_sim_data/MyPhaseScreens.fits')
+atmo_path = os.path.join(dir_path, 'MyPhaseScreens.fits')
 try:
-    phs = phs.load_normalized_phase_screens(fname)
+    screen = myfits.read_fits(atmo_path)
 except FileNotFoundError:
-    phs.generate_normalized_phase_screens(Nscreens)
-    phs.rescale_to(r0At500nm=r0)
-    phs.get_in_radians_at(wavelengthInMeters=lambda0)
-    phs.save_normalized_phase_screens(fname)
+    screen = turbulence_generator(lambdaInM, r0, L0, Nscreens, \
+     screenSizeInPixels=1024, screenSizeInMeters=1.0, savepath=atmo_path)
+    myfits.save_fits(atmo_path, screen, hdr_dict)
 
-screen = phs._phaseScreens
-
-phase = screen[0,:Npix*oversampling,:Npix*oversampling]
-phase *= 0.1/np.max(phase)
+input_phase = screen[0,:Npix*oversampling,:Npix*oversampling] * 1e-3
 
 plt.figure()
-plt.imshow(phase)
+plt.imshow(input_phase)
 plt.colorbar()
 plt.title('Atmo screen')
 
-input_field = mask.asTransmissionValue() * np.exp(1j*phase)
-meas_intensity = wfs.modulate(input_field, alpha, pix2rad)
-slopes = ccd.compute_slopes(meas_intensity)
-modes = Rec @ slopes
-cmd = m2c @ modes
-dm_shape = dm.IFF @ cmd
-flat_img = np.zeros(np.size(mask.mask()))
-flat_img[~mask.mask().flatten()] = dm_shape
-dm_phase = np.reshape(flat_img, mask.mask().shape)
 
-plt.figure(figsize=(12,6))
-plt.subplot(1,3,1)
-plt.imshow(np.ma.masked_array(phase, mask = mask.mask()),origin='lower')
-plt.colorbar(shrink=0.5)
+# 5. Perform the iteration
+dm_cmd, ccd_image, pup_mask = perform_loop_iteration(wfs, ccd, dm, Rec, m2c, input_phase, Npix, oversampling, lambdaInM, pupilSizeInM)
+dm_phase = dm.IFF @ dm_cmd
+
+input_field = pup_mask * np.exp(1j*input_phase)
+field_on_focal_plane = np.fft.fftshift(np.fft.fft2(input_field))
+psf = np.abs(field_on_focal_plane)**2
+
+plt.figure(figsize=(9,9))
+plt.subplot(2,2,1)
+plt.imshow(np.ma.masked_array(input_phase, mask = pup_mask),origin='lower')
+plt.colorbar()
 plt.title('Input phase')
 
-plt.subplot(1,3,2)
-plt.imshow(np.ma.masked_array(dm_phase, mask = mask.mask()),origin='lower')
-plt.colorbar(shrink=0.5)
-plt.title('DM phase')
+plt.subplot(2,2,2)
+plt.imshow(np.log(psf),origin='lower')
+plt.colorbar()
+plt.title('log PSF')
 
-plt.subplot(1,3,3)
-plt.imshow(np.ma.masked_array(phase-dm_phase, mask = mask.mask()),origin='lower')
-plt.colorbar(shrink=0.5)
-plt.title('Output phase')
+plt.subplot(2,2,3)
+plt.imshow(ccd_image,origin='lower')
+plt.colorbar()
+plt.title('Detector image')
+
+plt.subplot(2,2,4)
+dm.plot_position(dm_cmd)
+plt.title('Mirror command')
+
 
 plt.show()
 
