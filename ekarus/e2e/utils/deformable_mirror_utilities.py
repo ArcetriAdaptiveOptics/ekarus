@@ -147,16 +147,8 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float = 1.0):
         tps.fit(act_pix_coords, act_data)
         img = tps.transform(pix_coords[pix_ids,:])
         IFF[:,k] = img[:,0]
-        # img_cube[:,:,k] = np.reshape(flat_img, [H,W])
 
     return IFF
-
-    # # Masked array
-    # cube_mask = np.tile(local_mask,n_acts)
-    # cube_mask = np.reshape(cube_mask, np.shape(img_cube), order = 'F')
-    # cube = np.ma.masked_array(img_cube, cube_mask, dtype=np.uint8)
-    
-    # return cube
 
 
 def get_pixel_coords(mask, coords, pix_scale:float = 1.0):

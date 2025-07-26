@@ -1,6 +1,7 @@
 import numpy as np
 from arte.types.mask import CircularMask
 
+
 def image_grid(shape, recenter:bool = False, xp=np):
     """
     Define a grid of X and Y coordinates on an image shape
@@ -57,6 +58,6 @@ def get_circular_mask(shape, radius, center=None):
     return (mask.mask()).astype(bool)
 
 
-def compute_pixel_size(wavelength, pupil_diameter_in_m, padding=1):
+def compute_pixel_size(wavelength, pupil_diameter_in_m, padding:int=1):
     """ Get the number of pixels per radian """
     return wavelength/pupil_diameter_in_m/padding
