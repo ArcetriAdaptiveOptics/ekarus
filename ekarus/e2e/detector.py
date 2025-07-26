@@ -7,7 +7,7 @@ from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circul
 
 class Detector:
 
-    def __init__(self, detector_shape = None, RON: float = 0.0):
+    def __init__(self, detector_shape = None, RON: float = 0.0, max_bits:int = 12):
         """
         Detector constructor.
         
@@ -18,20 +18,24 @@ class Detector:
         self.RON = RON
         self.subapertures = None
         self.detector_shape = detector_shape
+        self.max_bits = max_bits
 
     
-    def compute_slopes(self, intensity, use_diagonal:bool=False):
+    def compute_slopes(self, intensity, rebin:int = 0, use_diagonal:bool=False):
         """
         Compute slopes from the intensity image using subaperture masks.
 
         :param intensity: 2D array of intensity values.
-        :param Npix: pixel diameter of the subaperture.
+        :param Npix: pixel diameter of the subaperture.        :
+        :param rebin: (optional) int indicating the rebinning factor
+        with 0 meaning no rebiining, 1 reducing the image size to 1/4
+        Default is 0
         :param use_diagonal: if True, include diagonal terms in the slopes.
 
         :return: array of slopes for each subaperture
         """
 
-        ccd_intensity = xp.array(toccd(intensity, self.detector_shape),dtype=float)
+        ccd_intensity = self.resize_on_detector(intensity, rebin)
 
         if self.subapertures is None:
             raise ValueError('Supaperture masks have not been defined!')
@@ -57,32 +61,36 @@ class Detector:
         return slope
     
     
-    def define_subaperture_masks(self, intensity, Npix):
+    def define_subaperture_masks(self, intensity, Npix, rebin:int = 0):
         """
         Create subaperture masks for the given shape and pixel size.
 
-        :param intensity: 2D array of intensity values.
+        :param intensity: 2D array of intensity values
         :param Npix: pixel diameter of the subaperture
+        :param rebin: (optional) int indicating the rebinning factor
+        with 0 meaning no rebiining, 1 reducing the image size to 1/4
+        Default is 0
 
         :return: array of 4 boolean masks for each subaperture
         """
 
-        ccd_intensity = xp.array(toccd(intensity, self.detector_shape),dtype=float)
+        ccd_intensity = self.resize_on_detector(intensity, rebin)
+
         ny,nx = ccd_intensity.shape
 
-        subaperture_centers = xp.zeros([4,2])
+        # subaperture_centers = xp.zeros([4,2])
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
 
         for i in range(4):
             qy,qx = self.find_subaperture_center(ccd_intensity,quad_n=i+1)
-            subaperture_centers[i,:] = xp.array([qy,qx])
+            # subaperture_centers[i,:] = xp.array([qy,qx])
             subaperture_masks[i] = get_circular_mask(ccd_intensity.shape, radius=Npix//2, center=(qy,qx))
 
         self.subapertures = subaperture_masks
-        self.subaperture_centers = subaperture_centers
+        # self.subaperture_centers = subaperture_centers
 
 
-    def electron_noise(self, intensity, flux=None):
+    def add_electron_noise(self, intensity, flux):
         """
         Simulate detector noise based on the given intensity and real photon flux.
         
@@ -93,8 +101,6 @@ class Detector:
         Returns:
         - Noisy intensity image.
         """
-        if flux is None:
-            flux = xp.sum(intensity)
 
         # Re-scale the intensity based on the flux
         norm_intensity = intensity*flux/xp.sum(intensity)
@@ -104,8 +110,23 @@ class Detector:
         readout_noise = xp.random.normal(0, self.RON, size=xp.shape(intensity)) # readout noise
         
         noisy_intensity = xp.round(norm_intensity + poisson_noise + readout_noise)
+
+        # Saturation
+        noisy_intensity = xp.minimum(2**self.max_bits,noisy_intensity)
         
         return xp.maximum(0,noisy_intensity)
+    
+    
+
+    def resize_on_detector(self, image, rebin_fact:int = 0):
+
+        ccd_size =self.detector_shape
+        if rebin_fact > 0:
+            rebin = 4*rebin_fact
+            ccd_size = (self.detector_shape[0]//rebin, self.detector_shape[1]//rebin)
+        ccd_intensity = toccd(image, ccd_size)
+
+        return ccd_intensity
     
 
 
@@ -132,48 +153,6 @@ class Detector:
 
         # return qy,qx
         return xp.round(qy),xp.round(qx)
-    
-
-    # @ staticmethod
-    # def _find_quadrant(ccd_intensity, quad_n:int = 1):
-
-    #     ny, nx = xp.shape(ccd_intensity)
-    #     x = xp.arange(nx)
-    #     y = xp.arange(ny)
-    #     X, Y = xp.meshgrid(x, y)
-
-    #     match quad_n:
-    #         case 1:
-    #             quadrant = ccd_intensity[xp.logical_and(X < nx//2, Y >= ny//2)]
-    #         case 2:
-    #             quadrant = ccd_intensity[xp.logical_and(X >= nx//2, Y >= ny//2)]
-    #         case 3:
-    #             quadrant = ccd_intensity[xp.logical_and(X < nx//2, Y < ny//2)]
-    #         case 4:
-    #             quadrant = ccd_intensity[xp.logical_and(X >= nx//2, Y < ny//2)]
-    #         case _:
-    #             raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
-        
-    #     quadrant = quadrant.reshape((ny // 2, nx // 2))
-
-    #     return quadrant
-    
-    # @ staticmethod
-    # def _find_first_quadrant(ccd_intensity, quad_n:int = 1):
-    #     # Find image center
-    #     ny, nx = xp.shape(ccd_intensity)
-    #     cx, cy = nx // 2, ny // 2
-
-    #     # Coordinates wrt center
-    #     x = xp.arange(nx) - cx
-    #     y = xp.arange(ny) - cy
-    #     X, Y = xp.meshgrid(x, y)
-
-    #     quadrant = ccd_intensity[xp.logical_and(X < 0, Y >= 0)]
-    #     quadrant = quadrant.reshape((ny // 2, nx // 2))
-
-    #     return quadrant
-    
     
 
     
