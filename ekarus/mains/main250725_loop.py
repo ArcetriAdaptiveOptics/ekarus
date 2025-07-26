@@ -109,9 +109,9 @@ try:
     Rec = myfits.read_fits(Rec_path)
 
 except FileNotFoundError:
-    IM = calibrate_modes(wfs, ccd, KL, Npix, oversampling, lambdaInM, pupilSizeInM, amp = 0.1)
+    IM = calibrate_modes(wfs, ccd, KL, Npix, oversampling, lambdaInM, pupilSizeInM, amps = 0.1)
     # slope_STD = np.std(IM, axis=0)
-    # IM = calibrate_modes(wfs, ccd, KL, Npix, oversampling, lambdaInM, pupilSizeInM, amp = 1/slope_STD)
+    # IM = calibrate_modes(wfs, ccd, KL, Npix, oversampling, lambdaInM, pupilSizeInM, amps = 1/slope_STD)
 
     print('Computing the reconstructor ...')
     U,S,Vt = np.linalg.svd(IM, full_matrices=False)

@@ -43,7 +43,7 @@ def perform_loop_iteration(wfs, ccd, dm, Rec, m2c, input_phase, Npix, oversampli
 
 
 
-def calibrate_modes(wfs, ccd, MM, Npix, oversampling, lambdaInM, pupilSizeInM, amp:float = 0.1, xp=np):
+def calibrate_modes(wfs, ccd, MM, Npix, oversampling, lambdaInM, pupilSizeInM, amps:float = 0.1, xp=np):
 
     Nmodes = xp.shape(MM)[0]
     slope_len = int(xp.sum(1-ccd.subapertures[0])*2)
@@ -54,13 +54,13 @@ def calibrate_modes(wfs, ccd, MM, Npix, oversampling, lambdaInM, pupilSizeInM, a
 
     mask = CircularMask((oversampling * Npix, oversampling * Npix), maskRadius=Npix // 2)
 
-    if isinstance(amp, float):
-        amp *= xp.ones(Nmodes)
+    if isinstance(amps, float):
+        amps *= xp.ones(Nmodes)
 
     for i in range(Nmodes):
-
+        amp = amps[i]
         mode_phase = xp.zeros(mask.mask().shape)
-        mode_phase[~mask.mask()] = MM[i,:]*amp[i]
+        mode_phase[~mask.mask()] = MM[i,:]*amp
         mode_phase = xp.reshape(mode_phase,mask.mask().shape)
         input_field = xp.exp(1j*mode_phase) * mask.asTransmissionValue()
         modulated_intensity = wfs.modulate(input_field, alpha, pix2rad)
