@@ -21,7 +21,7 @@ class Detector:
         self.max_bits = max_bits
 
     
-    def compute_slopes(self, intensity, rebin:int = 0, use_diagonal:bool=False):
+    def compute_slopes(self, intensity, rebin:int = 0, photon_flux = None, use_diagonal:bool=False):
         """
         Compute slopes from the intensity image using subaperture masks.
 
@@ -35,7 +35,7 @@ class Detector:
         :return: array of slopes for each subaperture
         """
 
-        ccd_intensity = self.resize_on_detector(intensity, rebin)
+        ccd_intensity = self.resize_on_detector(intensity, rebin, photon_flux)
 
         if self.subapertures is None:
             raise ValueError('Supaperture masks have not been defined!')
@@ -51,7 +51,12 @@ class Detector:
         slope = xp.hstack((up_down, left_right))
 
         if use_diagonal:
-            diag = (B+C) - (A+D)
+            ccd_lr = xp.fliplr(ccd_intensity)
+            maskAlr = xp.fliplr(self.subapertures[0])
+            maskClr = xp.fliplr(self.subapertures[2])
+            Alr = ccd_lr[~maskAlr]
+            Clr = ccd_lr[~maskClr]
+            diag = (B+Clr) - (Alr+D)
             slope = xp.hstack((up_down, left_right, diag))
 
         # Normalize slopes by the mean intensity
@@ -61,7 +66,7 @@ class Detector:
         return slope
     
     
-    def define_subaperture_masks(self, intensity, Npix, rebin:int = 0):
+    def define_subaperture_masks(self, intensity, Npix, rebin:int = 0, photon_flux = None):
         """
         Create subaperture masks for the given shape and pixel size.
 
@@ -74,7 +79,7 @@ class Detector:
         :return: array of 4 boolean masks for each subaperture
         """
 
-        ccd_intensity = self.resize_on_detector(intensity, rebin)
+        ccd_intensity = self.resize_on_detector(intensity, rebin, photon_flux)
 
         ny,nx = ccd_intensity.shape
 
@@ -118,13 +123,16 @@ class Detector:
     
     
 
-    def resize_on_detector(self, image, rebin_fact:int = 0):
+    def resize_on_detector(self, image, rebin_fact:int = 0, photon_flux = None):
 
         ccd_size =self.detector_shape
         if rebin_fact > 0:
             rebin = 4*rebin_fact
             ccd_size = (self.detector_shape[0]//rebin, self.detector_shape[1]//rebin)
         ccd_intensity = toccd(image, ccd_size)
+
+        if photon_flux is not None:
+            ccd_intensity = self.add_electron_noise(ccd_intensity, photon_flux)
 
         return ccd_intensity
     

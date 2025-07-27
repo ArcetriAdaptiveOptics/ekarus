@@ -1,7 +1,7 @@
 from arte.types.mask import CircularMask
 from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 
-from ekarus.e2e.utils.zernike_coefficients import create_field_from_zernike_coefficients
+# from ekarus.e2e.utils.zernike_coefficients import create_field_from_zernike_coefficients
 from ekarus.e2e.utils.kl_modes import make_modal_base_from_ifs_fft
 
 import numpy as np
@@ -82,7 +82,7 @@ def define_subaperture_masks(wfs, ccd, Npix, oversampling, lambdaInM, pupilSizeI
     alpha = lambdaInM/pupilSizeInM #/oversampling
 
     mask = CircularMask((oversampling * Npix, oversampling * Npix), maskRadius=Npix // 2)
-    piston =  create_field_from_zernike_coefficients(mask, 1, 1)
+    piston = 1-mask.mask()# create_field_from_zernike_coefficients(mask, 1, 1)
 
     modulated_intensity = wfs.modulate(piston, 10*alpha, pix2rad)
     ccd.define_subaperture_masks(modulated_intensity, Npix = subapertureSizeInPixels)
