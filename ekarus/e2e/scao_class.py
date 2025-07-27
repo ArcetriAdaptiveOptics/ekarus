@@ -1,0 +1,112 @@
+import numpy as np
+
+from arte.types.mask import CircularMask
+from ekarus.e2e.utils.kl_modes import make_modal_base_from_ifs_fft
+
+
+class SCAO():
+
+    def __init__(self, wfs, ccd, dm, Npix, pupilSizeInM, throughput = None, modulationAngleInLambdaoverD = 3.0, oversampling:int = 4, xp=np):
+
+        self.Npix = Npix
+        self.cmask = CircularMask((oversampling * Npix, oversampling * Npix), maskRadius=Npix // 2)
+
+        self.oversampling = oversampling
+
+        self.pupilSizeInM = pupilSizeInM
+        self.modN = modulationAngleInLambdaoverD
+
+        self.wfs = wfs
+        self.ccd = ccd
+        self.dm = dm
+
+        self.throughput = throughput
+
+        self._xp = xp
+
+
+    def _pixel_size(self, lambdaInM):
+        return lambdaInM/self.pupilSizeInM
+
+    
+    def photon_flux(self, starMagnitude, B0 = 1e+10):
+        total_flux = B0 * 10**(-starMagnitude/2.5)
+        return self.throughput * total_flux
+
+
+    def define_subaperture_masks(self, lambdaInM, subapertureSizeInPixels, starMagnitude = None, modulationAngleInLambdaoverD = 10):
+
+        alpha = self._pixel_size(lambdaInM=lambdaInM)
+
+        piston = 1-self.cmask.mask()
+        modulated_intensity = self.wfs.modulate(piston, modulationAngleInLambdaoverD*alpha, alpha)
+
+        if starMagnitude is not None:
+            flux = self.photon_flux(starMagnitude=starMagnitude)
+
+        self.ccd.define_subaperture_masks(modulated_intensity, Npix = subapertureSizeInPixels, photon_flux = flux)
+
+
+    def define_KL_modal_base(self, r0, L0, zern2remove:int = 5):
+
+        KL, m2c, singular_values = make_modal_base_from_ifs_fft(1-self.dm.mask, \
+        self.pupilSizeInM, self.dm.IFF.T, r0, L0, zern_modes=zern2remove, zern_mask = self.cmask, \
+        oversampling=self.oversampling, verbose = True)
+
+        self.KL = KL
+        self.m2c = m2c
+
+
+    def perform_loop_iteration(self, input_phase, lambdaInM, starMagnitude = None):
+
+        alpha = self._pixel_size(lambdaInM=lambdaInM)
+
+        if starMagnitude is not None:
+            flux = self.photon_flux(starMagnitude=starMagnitude)
+
+        input_field = self.cmask.asTransmissionValue() * self._xp.exp(1j*input_phase)
+        meas_intensity = self.wfs.modulate(input_field, self.modN * alpha, alpha)
+        slopes = self.ccd.compute_slopes(meas_intensity, photon_flux = flux)
+        modes = self.Rec @ slopes
+        cmd = self.m2c @ modes
+
+        ccd_image = self.ccd.resize_on_detector(meas_intensity)
+
+        return cmd, ccd_image
+
+
+    def calibrate_modes(self, lambdaInM, amps:float = 0.1, starMagnitude = None):
+
+        Nmodes = self._xp.shape(self.KL)[0]
+        slope_len = int(self._xp.sum(1-self.ccd.subapertures[0])*2)
+        IM = self._xp.zeros((slope_len,Nmodes))
+
+        alpha = self._pixel_size(lambdaInM=lambdaInM)
+
+        if starMagnitude is not None:
+            flux = self.photon_flux(starMagnitude=starMagnitude)
+
+        if isinstance(amps, float):
+            amps *= self._xp.ones(Nmodes)
+
+        for i in range(Nmodes):
+            amp = amps[i]
+            mode_phase = self._xp.zeros(self.cmask.mask().shape)
+            mode_phase[~self.cmask.mask()] = self.KL[i,:]*amp
+            mode_phase = self._xp.reshape(mode_phase, self.cmask.mask().shape)
+            input_field = self._xp.exp(1j*mode_phase) * self.cmask.asTransmissionValue()
+            modulated_intensity = self.wfs.modulate(input_field, self.modN * alpha, alpha)
+            push_slope = self.ccd.compute_slopes(modulated_intensity, photon_flux = flux)/amp
+
+            input_field = self._xp.conj(input_field)
+            modulated_intensity = self.wfs.modulate(input_field, self.modN * alpha, alpha)
+            pull_slope = self.ccd.compute_slopes(modulated_intensity, photon_flux = flux)/amp
+
+            IM[:,i] = (push_slope-pull_slope)/2
+
+        self.IM = IM
+
+        U,S,Vt = self._xp.linalg.svd(IM, full_matrices=False)
+        self.Rec = (Vt.T*1/S) @ U.T
+
+        
