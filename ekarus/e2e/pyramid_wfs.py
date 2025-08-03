@@ -1,5 +1,4 @@
-import numpy as xp
-# import cupy as xp
+import numpy as np
 
 from ekarus.e2e.utils.image_utils import image_grid
 
@@ -12,13 +11,14 @@ class PyramidWFS:
     where the phase shift depends on the distance from the apex.
     """
 
-    def __init__(self, apex_angle):
+    def __init__(self, apex_angle, xp=np):
         """
         Pyramid wavefront sensor constructor.
 
         :param apex_angle: pyramid vertex angle in radians
         """
         self.apex_angle = apex_angle
+        self._xp = xp
         
 
     def pyramid_phase_delay(self, shape):
@@ -30,8 +30,8 @@ class PyramidWFS:
         :return: array numpy 2D float (phase delay in pixels)
         """
         X,Y = image_grid(shape, recenter=True)
-        D = xp.max(shape)
-        phi = 2*xp.pi*self.apex_angle*(1 - 1/D*(xp.abs(X)+xp.abs(Y)))
+        D = self._xp.max(shape)
+        phi = 2*self._xp.pi*self.apex_angle*(1 - 1/D*(self._xp.abs(X)+self._xp.abs(Y)))
 
         return phi
     
@@ -48,12 +48,12 @@ class PyramidWFS:
 
         :return: complex array numpy 2D representing the output electric field
         """
-        self.field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(input_field))
+        self.field_on_focal_plane = self._xp.fft.fftshift(self._xp.fft.fft2(input_field))
 
         phase_delay = self.pyramid_phase_delay(self.field_on_focal_plane.shape) / pix2rad
-        self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay)
+        self._ef_focal_plane_delayed = self.field_on_focal_plane * self._xp.exp(1j*phase_delay)
 
-        output_field = xp.fft.ifft2(xp.fft.ifftshift(self._ef_focal_plane_delayed))
+        output_field = self._xp.fft.ifft2(self._xp.fft.ifftshift(self._ef_focal_plane_delayed))
 
         return output_field
     
@@ -71,19 +71,19 @@ class PyramidWFS:
         """
 
         tiltX,tiltY = image_grid(input_field.shape, recenter=True)
-        L = xp.max(input_field.shape)
+        L = max(input_field.shape)
 
-        alpha_pix = alpha/pix2rad
-        N_steps = int((alpha_pix//4+1)*4)
-        phi_vec = 2*xp.pi*xp.arange(N_steps)/N_steps
+        alpha_pix = alpha/pix2rad*(2*self._xp.pi)
+        N_steps = int((alpha_pix//20+1)*4)
+        phi_vec = 2*self._xp.pi*self._xp.arange(N_steps)/N_steps
 
-        intensity = xp.zeros(input_field.shape, dtype = float)
+        intensity = self._xp.zeros(input_field.shape, dtype = self._xp.float32)
 
         for phi in phi_vec:
-            tilt = (tiltX * xp.cos(phi) + tiltY * xp.sin(phi))/L
-            tilted_input = input_field * xp.exp(1j*tilt*alpha_pix)
+            tilt = (tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi))/L
+            tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix)
 
             output = self.propagate(tilted_input, pix2rad)
-            intensity += (xp.abs(output**2))/N_steps
+            intensity += (self._xp.abs(output**2))/N_steps
 
         return intensity

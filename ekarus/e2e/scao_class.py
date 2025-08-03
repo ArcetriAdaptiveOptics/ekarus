@@ -26,25 +26,28 @@ class SCAO():
 
 
     def _pixel_size(self, lambdaInM):
-        return lambdaInM/self.pupilSizeInM
+        return lambdaInM/self.pupilSizeInM/self.oversampling
 
     
     def photon_flux(self, starMagnitude, B0 = 1e+10):
-        total_flux = B0 * 10**(-starMagnitude/2.5)
-        return self.throughput * total_flux
+        Nphot = None
+        if starMagnitude is not None:
+            total_flux = B0 * 10**(-starMagnitude/2.5)
+            Nphot = total_flux * self.throughput
+        return Nphot
 
 
-    def define_subaperture_masks(self, lambdaInM, subapertureSizeInPixels, starMagnitude = None, modulationAngleInLambdaoverD = 10):
+    def define_subaperture_masks(self, lambdaInM, subapertureSizeInPixels, starMagnitude = None, modulationAngleInLambdaoverD = 20):
 
-        alpha = self._pixel_size(lambdaInM=lambdaInM)
+        pix_scale = self._pixel_size(lambdaInM=lambdaInM)
+        alpha = pix_scale * self.oversampling * modulationAngleInLambdaoverD
 
         piston = 1-self.cmask.mask()
-        modulated_intensity = self.wfs.modulate(piston, modulationAngleInLambdaoverD*alpha, alpha)
+        modulated_intensity = self.wfs.modulate(piston, alpha, pix_scale)
 
-        if starMagnitude is not None:
-            flux = self.photon_flux(starMagnitude=starMagnitude)
+        Nphot = self.photon_flux(starMagnitude=starMagnitude)
 
-        self.ccd.define_subaperture_masks(modulated_intensity, Npix = subapertureSizeInPixels, photon_flux = flux)
+        self.ccd.define_subaperture_masks(modulated_intensity, Npix = subapertureSizeInPixels, photon_flux = Nphot)
 
 
     def define_KL_modal_base(self, r0, L0, zern2remove:int = 5):
@@ -59,14 +62,14 @@ class SCAO():
 
     def perform_loop_iteration(self, input_phase, lambdaInM, starMagnitude = None):
 
-        alpha = self._pixel_size(lambdaInM=lambdaInM)
+        pix_scale = self._pixel_size(lambdaInM=lambdaInM)
+        alpha = pix_scale * self.oversampling * self.modN
 
-        if starMagnitude is not None:
-            flux = self.photon_flux(starMagnitude=starMagnitude)
+        Nphot = self.photon_flux(starMagnitude=starMagnitude)
 
         input_field = self.cmask.asTransmissionValue() * self._xp.exp(1j*input_phase)
-        meas_intensity = self.wfs.modulate(input_field, self.modN * alpha, alpha)
-        slopes = self.ccd.compute_slopes(meas_intensity, photon_flux = flux)
+        meas_intensity = self.wfs.modulate(input_field, alpha, pix_scale)
+        slopes = self.ccd.compute_slopes(meas_intensity, photon_flux = Nphot)
         modes = self.Rec @ slopes
         cmd = self.m2c @ modes
 
@@ -75,16 +78,16 @@ class SCAO():
         return cmd, ccd_image
 
 
-    def calibrate_modes(self, lambdaInM, amps:float = 0.1, starMagnitude = None):
+    def calibrate_modes(self, MM, lambdaInM, amps:float = 0.1, starMagnitude = None):
 
-        Nmodes = self._xp.shape(self.KL)[0]
+        Nmodes = self._xp.shape(MM)[0]
         slope_len = int(self._xp.sum(1-self.ccd.subapertures[0])*2)
         IM = self._xp.zeros((slope_len,Nmodes))
 
-        alpha = self._pixel_size(lambdaInM=lambdaInM)
+        pix_scale = self._pixel_size(lambdaInM=lambdaInM)
+        alpha = pix_scale * self.oversampling * self.modN
 
-        if starMagnitude is not None:
-            flux = self.photon_flux(starMagnitude=starMagnitude)
+        Nphot = self.photon_flux(starMagnitude=starMagnitude)
 
         if isinstance(amps, float):
             amps *= self._xp.ones(Nmodes)
@@ -92,15 +95,15 @@ class SCAO():
         for i in range(Nmodes):
             amp = amps[i]
             mode_phase = self._xp.zeros(self.cmask.mask().shape)
-            mode_phase[~self.cmask.mask()] = self.KL[i,:]*amp
+            mode_phase[~self.cmask.mask()] = MM[i,:]*amp
             mode_phase = self._xp.reshape(mode_phase, self.cmask.mask().shape)
             input_field = self._xp.exp(1j*mode_phase) * self.cmask.asTransmissionValue()
-            modulated_intensity = self.wfs.modulate(input_field, self.modN * alpha, alpha)
-            push_slope = self.ccd.compute_slopes(modulated_intensity, photon_flux = flux)/amp
+            modulated_intensity = self.wfs.modulate(input_field, alpha, pix_scale)
+            push_slope = self.ccd.compute_slopes(modulated_intensity, photon_flux = Nphot)/amp
 
             input_field = self._xp.conj(input_field)
-            modulated_intensity = self.wfs.modulate(input_field, self.modN * alpha, alpha)
-            pull_slope = self.ccd.compute_slopes(modulated_intensity, photon_flux = flux)/amp
+            modulated_intensity = self.wfs.modulate(input_field, alpha, pix_scale)
+            pull_slope = self.ccd.compute_slopes(modulated_intensity, photon_flux = Nphot)/amp
 
             IM[:,i] = (push_slope-pull_slope)/2
 
