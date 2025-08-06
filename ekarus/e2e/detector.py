@@ -1,5 +1,4 @@
 import numpy as xp
-# import cupy as xp
 
 from arte.math.toccd import toccd
 from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circular_mask
@@ -83,16 +82,13 @@ class Detector:
 
         ny,nx = ccd_intensity.shape
 
-        # subaperture_centers = xp.zeros([4,2])
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
 
         for i in range(4):
             qy,qx = self.find_subaperture_center(ccd_intensity,quad_n=i+1)
-            # subaperture_centers[i,:] = xp.array([qy,qx])
             subaperture_masks[i] = get_circular_mask(ccd_intensity.shape, radius=Npix//2, center=(qy,qx))
 
         self.subapertures = subaperture_masks
-        # self.subaperture_centers = subaperture_centers
 
 
     def add_electron_noise(self, intensity, flux):

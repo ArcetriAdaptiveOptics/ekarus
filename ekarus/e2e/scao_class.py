@@ -49,6 +49,9 @@ class SCAO():
 
         self.ccd.define_subaperture_masks(modulated_intensity, Npix = subapertureSizeInPixels, photon_flux = Nphot)
 
+        # image = self.ccd.resize_on_detector(modulated_intensity, photon_flux = Nphot)
+        #self.clope_computer = SlopeComputer(self.wfs, subaperture_image=image, Npix=subapertureSizeInpixels)
+
 
     def define_KL_modal_base(self, r0, L0, zern2remove:int = 5):
 
@@ -56,22 +59,24 @@ class SCAO():
         self.pupilSizeInM, self.dm.IFF.T, r0, L0, zern_modes=zern2remove, zern_mask = self.cmask, \
         oversampling=self.oversampling, verbose = True)
 
-        self.KL = KL
-        self.m2c = m2c
+        return KL, m2c
 
 
-    def perform_loop_iteration(self, input_phase, lambdaInM, starMagnitude = None):
+    def perform_loop_iteration(self, input_phase, Rec, lambdaInM, m2c = None, starMagnitude = None):
 
         pix_scale = self._pixel_size(lambdaInM=lambdaInM)
         alpha = pix_scale * self.oversampling * self.modN
 
         Nphot = self.photon_flux(starMagnitude=starMagnitude)
 
+        if m2c is None:
+            m2c = self._xp.eye((self.dm.Nacts,self._xp.shape(Rec)[0]))
+
         input_field = self.cmask.asTransmissionValue() * self._xp.exp(1j*input_phase)
         meas_intensity = self.wfs.modulate(input_field, alpha, pix_scale)
         slopes = self.ccd.compute_slopes(meas_intensity, photon_flux = Nphot)
-        modes = self.Rec @ slopes
-        cmd = self.m2c @ modes
+        modes = Rec @ slopes
+        cmd = m2c @ modes
 
         ccd_image = self.ccd.resize_on_detector(meas_intensity)
 
@@ -107,9 +112,9 @@ class SCAO():
 
             IM[:,i] = (push_slope-pull_slope)/2
 
-        self.IM = IM
-
         U,S,Vt = self._xp.linalg.svd(IM, full_matrices=False)
-        self.Rec = (Vt.T*1/S) @ U.T
+        Rec = (Vt.T*1/S) @ U.T
+
+        return IM, Rec
 
         
