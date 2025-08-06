@@ -1,5 +1,5 @@
 import numpy as np
-from arte.types.mask import CircularMask
+# from arte.types.mask import CircularMask
 
 
 def image_grid(shape, recenter:bool = False, xp=np):
@@ -45,17 +45,38 @@ def get_photocenter(image, xp=np):
     return qy,qx
 
 
-def get_circular_mask(shape, radius, center=None):
+def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
     """
     Create a circular mask for the given shape.
-    
     :param shape: tuple (ny, nx) dimensions of the mask
     :param radius: radius of the circular mask
     :param center: tuple (cy, cx) center of the circular mask
     :return: boolean numpy array with the mask
     """
-    mask = CircularMask(shape, maskRadius=radius, maskCenter=center)
-    return (mask.mask()).astype(bool)
+    if center is None:
+        cx,cy = mask_shape
+        center = (cx/2,cy/2)
+
+    dist = lambda x,y: xp.sqrt((x-mask_center[0])**2+(y-mask_center[1])**2)
+    mask = xp.fromfunction(lambda i,j: dist(j,i) < mask_radius, mask_shape, dtype = bool)
+
+    return mask
+    # mask = CircularMask(shape, maskRadius=radius, maskCenter=center)
+    # return (mask.mask()).astype(bool)
+
+
+def reshape_on_mask(flat_array, mask, xp=np):
+    """
+    Reshape a given array on a 2D mask.
+    :param flat_array: array of shape sum(1-mask)
+    :param mask: boolean 2D mask
+    :return: 2D array with flat_array in ~mask
+    """
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    image = xp.zeros(mask.shape,dtype=dtype)
+    image[~mask] = flat_array
+    image = xp.reshape(image, mask.shape)
+    return image
 
 
 def compute_pixel_size(wavelength, pupil_diameter_in_m, padding:int=1):

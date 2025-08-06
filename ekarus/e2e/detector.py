@@ -1,5 +1,4 @@
-import numpy as xp
-# import cupy as xp
+import numpy as np
 
 from arte.math.toccd import toccd
 from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circular_mask
@@ -7,7 +6,7 @@ from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circul
 
 class Detector:
 
-    def __init__(self, detector_shape = None, RON: float = 0.0, max_bits:int = 12):
+    def __init__(self, detector_shape = None, RON: float = 0.0, max_bits:int = 12, xp=np):
         """
         Detector constructor.
         
@@ -19,6 +18,9 @@ class Detector:
         self.subapertures = None
         self.detector_shape = detector_shape
         self.max_bits = max_bits
+
+        self._xp = xp
+        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
     
     def compute_slopes(self, intensity, rebin:int = 0, photon_flux = None, use_diagonal:bool=False):
@@ -48,19 +50,19 @@ class Detector:
         up_down = (A+B) - (C+D)
         left_right = (A+C) - (B+D)
 
-        slope = xp.hstack((up_down, left_right))
+        slope = self._xp.hstack((up_down, left_right))
 
         if use_diagonal:
-            ccd_lr = xp.fliplr(ccd_intensity)
-            maskAlr = xp.fliplr(self.subapertures[0])
-            maskClr = xp.fliplr(self.subapertures[2])
+            ccd_lr = self._xp.fliplr(ccd_intensity)
+            maskAlr = self._xp.fliplr(self.subapertures[0])
+            maskClr = self._xp.fliplr(self.subapertures[2])
             Alr = ccd_lr[~maskAlr]
             Clr = ccd_lr[~maskClr]
             diag = (B+Clr) - (Alr+D)
-            slope = xp.hstack((up_down, left_right, diag))
+            slope = self._xp.hstack((up_down, left_right, diag))
 
         # Normalize slopes by the mean intensity
-        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))
+        mean_intensity = self._xp.mean(self._xp.hstack((A,B,C,D)))
         slope *= 1/mean_intensity
 
         return slope
@@ -84,7 +86,7 @@ class Detector:
         ny,nx = ccd_intensity.shape
 
         # subaperture_centers = xp.zeros([4,2])
-        subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
+        subaperture_masks = self._xp.zeros((4, ny, nx), dtype=bool)
 
         for i in range(4):
             qy,qx = self.find_subaperture_center(ccd_intensity,quad_n=i+1)
@@ -108,18 +110,18 @@ class Detector:
         """
 
         # Re-scale the intensity based on the flux
-        norm_intensity = intensity*flux/xp.sum(intensity)
+        norm_intensity = intensity*flux/self._xp.sum(intensity)
 
         # Noise
-        poisson_noise = xp.random.poisson(norm_intensity, xp.shape(intensity)) # Possion noise
-        readout_noise = xp.random.normal(0, self.RON, size=xp.shape(intensity)) # readout noise
+        poisson_noise = self._xp.random.poisson(norm_intensity, self._xp.shape(intensity)) # Possion noise
+        readout_noise = self._xp.random.normal(0, self.RON, size=self._xp.shape(intensity)) # readout noise
         
-        noisy_intensity = xp.round(norm_intensity + poisson_noise + readout_noise)
+        noisy_intensity = self._xp.round(norm_intensity + poisson_noise + readout_noise)
 
         # Saturation
-        noisy_intensity = xp.minimum(2**self.max_bits,noisy_intensity)
+        noisy_intensity = self._xp.minimum(2**self.max_bits,noisy_intensity)
         
-        return xp.maximum(0,noisy_intensity)
+        return self._xp.maximum(0,noisy_intensity)
     
     
 
@@ -141,26 +143,26 @@ class Detector:
     def find_subaperture_center(self, ccd_intensity, quad_n:int = 1):
 
         X,Y = image_grid(ccd_intensity.shape, recenter=True)
-        quadrant_mask = xp.zeros_like(ccd_intensity)
+        quadrant_mask = self._xp.zeros_like(ccd_intensity)
 
         match quad_n:
             case 1:
-                quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
+                quadrant_mask[self._xp.logical_and(X < 0, Y >= 0)] = 1
             case 2:
-                quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
+                quadrant_mask[self._xp.logical_and(X >= 0, Y >= 0)] = 1
             case 3:
-                quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
+                quadrant_mask[self._xp.logical_and(X < 0, Y < 0)] = 1
             case 4:
-                quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
+                quadrant_mask[self._xp.logical_and(X >= 0, Y < 0)] = 1
             case _:
                 raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
 
-        quadrant_mask = xp.reshape(quadrant_mask, ccd_intensity.shape)
+        quadrant_mask = self._xp.reshape(quadrant_mask, ccd_intensity.shape)
         intensity = ccd_intensity * quadrant_mask
         qy,qx = get_photocenter(intensity)
 
         # return qy,qx
-        return xp.round(qy),xp.round(qx)
+        return self._xp.round(qy),self._xp.round(qx)
     
 
     

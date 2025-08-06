@@ -1,5 +1,5 @@
 import numpy as np
-from arte.utils.zernike_generator import ZernikeGenerator
+from ekarus.analytical.zernike_generator import ZernikeGenerator
 
 def make_ortho_modes(array, xp, dtype):
     """
@@ -19,7 +19,7 @@ def make_ortho_modes(array, xp, dtype):
     Q : 2D array
         Orthogonal matrix
     """
-    # return an othogonal 2D array
+    # return an orthogonal 2D array
     
     size_array = xp.shape(array)
 
@@ -27,17 +27,17 @@ def make_ortho_modes(array, xp, dtype):
         raise ValueError('Error in input data, the input array must have two dimensions.')
 
     if size_array[1] > size_array[0]:
-        Q, R = xp.linalg.qr(array.T)
+        Q, _ = xp.linalg.qr(array.T)
         Q = Q.T
     else:
-        Q, R = xp.linalg.qr(array)
+        Q, _ = xp.linalg.qr(array)
 
     Q = xp.asarray(Q, dtype=dtype)
 
     return Q
 
-def make_modal_base_from_ifs_fft(pupil_mask, diameter, influence_functions, r0, L0,
-                            zern_modes=0, zern_mask = None, oversampling=2, filt_modes=None,
+def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influence_functions, r0, L0,
+                            zern_modes=0, oversampling=2, filt_modes=None,
                             if_max_condition_number=None, verbose=False,
                             xp=np, dtype=np.float32):
     """"
@@ -45,8 +45,10 @@ def make_modal_base_from_ifs_fft(pupil_mask, diameter, influence_functions, r0, 
 
     Parameters:
     -----------
-    mask : 2D array
+    pupil_mask : 2D array (bool)
         Pupil mask
+    pupil_pix_radius : float
+        Pupil radius in pixels
     diameter : float
         Telescope diameter
     influence_functions : 2D array
@@ -111,15 +113,14 @@ def make_modal_base_from_ifs_fft(pupil_mask, diameter, influence_functions, r0, 
     modes_to_be_removed[0, :] = 1.0
 
     if zern_modes > 0:
-        zg = ZernikeGenerator(zern_mask)#, xp=xp, dtype=dtype)
+        zg = ZernikeGenerator(pupil_mask, pupil_pix_radius)#, xp=xp, dtype=dtype)
         zern_modes_cube = xp.stack([(zg.getZernike(z)).astype(dtype) for z in range(2, zern_modes + 2)])
 
         if verbose:
             print(f"Generated Zernike modes shape: {zern_modes_cube.shape}")
 
-        zern_idx_mask = xp.where(~zern_mask.mask().ravel())[0]
         for i in range(zern_modes):
-            modes_to_be_removed[i+1, :] = zern_modes_cube[i].ravel()[zern_idx_mask]
+            modes_to_be_removed[i+1, :] = zern_modes_cube[i].ravel()[idx_mask]
 
         # Orthonormalize Zernike modes
         modes_to_be_removed = make_ortho_modes(modes_to_be_removed, xp=xp, dtype=dtype)
