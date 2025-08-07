@@ -4,7 +4,7 @@ import os
 
 from ekarus.e2e.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
-from ekarus.e2e.utils.image_utils import image_grid
+from ekarus.e2e.utils.image_utils import get_circular_mask #image_grid
 from ekarus.e2e.utils import my_fits_package as myfits
 
 
@@ -79,7 +79,7 @@ class ALPAODM(DeformableMirror):
         return coords
 
 
-    def _init_ALPAO_from_Nacts(self, Nacts:int, pupil_mask):
+    def _init_ALPAO_from_Nacts(self, Nacts:int, Npix:int):
         """ 
         Initializes the ALPAO DM mask and actuator coordinates
 
@@ -87,8 +87,8 @@ class ALPAODM(DeformableMirror):
         ----------
         Nacts : int
             The number of actuators in the DM.
-        pupil_mask : ndarray(bool)
-            The mask over which to define the IFFs
+        Npix : int
+            The number of pixels across the pupil
         """
         self.Nacts = Nacts
 
@@ -101,10 +101,10 @@ class ALPAODM(DeformableMirror):
         self.pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
         # Define mask & pixel scale
-        self.mask = pupil_mask #get_circular_mask((Npix,Npix),Npix//2)
-        X,Y = image_grid(pupil_mask.shape, recenter=True)
-        R = np.sqrt(X[~pupil_mask]**2+Y[~pupil_mask]**2)
-        Npix = np.max(R)
+        self.mask = get_circular_mask((Npix,Npix),Npix//2)
+        # X,Y = image_grid(pupil_mask.shape, recenter=True)
+        # R = np.sqrt(X[~pupil_mask]**2+Y[~pupil_mask]**2)
+        # Npix = np.max(R)
         self.pixel_scale = Npix/self.pupil_size
 
         # Define coordinates in meters, centering in (0,0)

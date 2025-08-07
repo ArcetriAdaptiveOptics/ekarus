@@ -58,7 +58,7 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
         mask_center = (W/2,H/2)
 
     dist = lambda x,y: xp.sqrt((x-mask_center[0])**2+(y-mask_center[1])**2)
-    mask = xp.fromfunction(lambda i,j: dist(j,i) > mask_radius, [H,W])
+    mask = xp.fromfunction(lambda i,j: dist(j,i) >= mask_radius, [H,W])
     mask = mask.astype(bool)
     return mask
     # mask = CircularMask(shape, maskRadius=radius, maskCenter=center)

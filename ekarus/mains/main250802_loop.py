@@ -12,7 +12,7 @@ from ekarus.e2e.slope_computer import SlopeComputer
 from ekarus.e2e.scao_class import SCAO
 from ekarus.e2e.utils.turbulence_generator import generate_phasescreens, move_mask_on_phasescreen
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, get_circular_mask
+from ekarus.e2e.utils.image_utils import showZoomCenter#, get_circular_mask
 
 
 # TODO: add cupy acceleration
@@ -23,7 +23,7 @@ pupilSizeInM = 32e-3
 oversampling = 4
 Npix = 128
 
-pupil_mask = get_circular_mask((oversampling*Npix,oversampling*Npix),Npix//2)
+# pupil_mask = get_circular_mask((oversampling*Npix,oversampling*Npix),Npix//2)
 
 pix2rad = lambdaInM/pupilSizeInM/oversampling 
 rad2arcsec = 180/np.pi*3600
@@ -37,13 +37,13 @@ subaperture_size = 63.5
 r0 = 5e-2
 L0 = 25
 
-show = False
+show = True
 
 # Sensor, detector, DM
 print('Initializing sensor, detector and deformable mirror ...')
 wfs = PyramidWFS(apex_angle)
 ccd = Detector(detector_shape=detector_shape)
-dm = ALPAODM(468, pupil_mask = pupil_mask)
+dm = ALPAODM(468, Npix=Npix)
 slope_computer = SlopeComputer(wfs_type = 'PyrWFS')
 
 scao = SCAO(wfs, ccd, slope_computer, dm, Npix, pupilSizeInM, oversampling=oversampling)

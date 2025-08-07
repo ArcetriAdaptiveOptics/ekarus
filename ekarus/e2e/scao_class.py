@@ -44,10 +44,10 @@ class SCAO():
     def compute_slopes(self, input_field, lambdaInM, starMagnitude, modulation_angle):
         
         pix_scale = self._pixel_size(lambdaInM=lambdaInM)
-        Nphot = self.photon_flux(starMagnitude=starMagnitude)
+        Nphot = self._photon_flux(starMagnitude=starMagnitude)
 
         modulated_intensity = self.wfs.modulate(input_field, modulation_angle, pix_scale)
-        detector_image = self.ccd.image_to_detector(modulated_intensity, photon_flux = Nphot)
+        detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphot)
         slopes = self.slope_computer.compute_slopes(detector_image)
 
         return slopes
@@ -55,7 +55,7 @@ class SCAO():
 
     def define_KL_modal_base(self, r0, L0, zern2remove:int = 5):
 
-        KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels,
+        KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.dm.mask, self.pupilSizeInPixels,
         self.pupilSizeInM, self.dm.IFF.T, r0, L0, zern_modes=zern2remove,
         oversampling=self.oversampling, verbose = True)
 
@@ -79,7 +79,7 @@ class SCAO():
             input_field = self._xp.conj(input_field)
             pull_slope = self.compute_slopes(input_field, lambdaInM, starMagnitude, modulation_angle)/amp
 
-            IM = self._xp.vstack(IM,(push_slope-pull_slope)/2)
+            IM = self._xp.hstack((IM,(push_slope-pull_slope)/2))
 
         U,S,Vt = self._xp.linalg.svd(IM, full_matrices=False)
         Rec = (Vt.T*1/S) @ U.T
