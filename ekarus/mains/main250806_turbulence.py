@@ -20,10 +20,8 @@ Nscreens = 1
 basepath = os.getcwd()
 dir_path = os.path.join(basepath,'ekarus/mains/250806_atmo_data/')
 
-try:
-    os.mkdir(dir_path)
-except FileExistsError:
-    pass
+if not os.path.exists(dir_path):
+    os.makedirs(dir_path)
 
 atmo_path = os.path.join(dir_path, 'AtmoScreens.fits')
 try:
@@ -42,19 +40,19 @@ wind_speed = 7.5
 wind_angle = np.pi/4
 
 mask_shape = (400,300)
-mx,my = mask_shape
+H,W = mask_shape
 mask = get_circular_mask(mask_shape, 128)
 
 
 full_mask = np.ones_like(screen)
-x0,y0 = update_coordinates_on_phasescreen(screen, mask.shape, 0, wind_speed, wind_angle, pixelsPerMeter)
+x0,y0 = update_coordinates_on_phasescreen(screen.shape, mask.shape, 0, wind_speed, wind_angle, pixelsPerMeter)
 
 x0 = int(np.ceil(x0))
 y0 = int(np.ceil(y0))
 
 print(x0,y0)
 
-full_mask[(x0-mx):x0,(y0-my):y0] = mask
+full_mask[y0:(H+y0),x0:(W+x0)] = mask
 dx_mask = np.roll(full_mask,128*2,axis=1)
 dy_mask = np.roll(full_mask,128*2,axis=0)
 
@@ -73,7 +71,7 @@ y = np.zeros(N)
 for i in range(N):
     tt = i*dt
     image = move_mask_on_phasescreen(screen, mask, tt, wind_speed, wind_angle, pixelsPerMeter)
-    x[i],y[i] = update_coordinates_on_phasescreen(screen, mask.shape, tt, wind_speed, wind_angle, pixelsPerMeter)
+    x[i],y[i] = update_coordinates_on_phasescreen(screen.shape, mask.shape, tt, wind_speed, wind_angle, pixelsPerMeter)
     shifted_screens[:,:,i] = image
 
 print(x,y)

@@ -1,7 +1,6 @@
 import numpy as np
 # from arte.types.mask import CircularMask
 
-
 def image_grid(shape, recenter:bool = False, xp=np):
     """
     Define a grid of X and Y coordinates on an image shape
@@ -53,13 +52,13 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
     :param center: tuple (cy, cx) center of the circular mask
     :return: boolean numpy array with the mask
     """
-    if center is None:
-        cx,cy = mask_shape
-        center = (cx/2,cy/2)
+    H,W = mask_shape
+    if mask_center is None:
+        mask_center = (W/2,H/2)
 
     dist = lambda x,y: xp.sqrt((x-mask_center[0])**2+(y-mask_center[1])**2)
-    mask = xp.fromfunction(lambda i,j: dist(j,i) < mask_radius, mask_shape, dtype = bool)
-
+    mask = xp.fromfunction(lambda i,j: dist(j,i) > mask_radius, [H,W])
+    mask = mask.astype(bool)
     return mask
     # mask = CircularMask(shape, maskRadius=radius, maskCenter=center)
     # return (mask.mask()).astype(bool)
