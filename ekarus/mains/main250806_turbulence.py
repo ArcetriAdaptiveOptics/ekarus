@@ -37,7 +37,7 @@ screen = screens[0]
 
 dt = 1e-2
 wind_speed = 7.5
-wind_angle = np.pi/4
+wind_angle = 0
 
 mask_shape = (400,300)
 H,W = mask_shape
@@ -45,7 +45,7 @@ mask = get_circular_mask(mask_shape, 128)
 
 
 full_mask = np.ones_like(screen)
-x0,y0 = update_coordinates_on_phasescreen(screen.shape, mask.shape, 0, wind_speed, wind_angle, pixelsPerMeter)
+x0,y0 = get_start_coordinates_on_phasescreen(screen.shape, mask.shape, wind_angle)
 
 x0 = int(np.ceil(x0))
 y0 = int(np.ceil(y0))
@@ -71,7 +71,6 @@ y = np.zeros(N)
 for i in range(N):
     tt = i*dt
     image = move_mask_on_phasescreen(screen, mask, tt, wind_speed, wind_angle, pixelsPerMeter)
-    x[i],y[i] = update_coordinates_on_phasescreen(screen.shape, mask.shape, tt, wind_speed, wind_angle, pixelsPerMeter)
     shifted_screens[:,:,i] = image
 
 print(x,y)
@@ -80,7 +79,7 @@ print(x,y)
 plt.figure()
 plt.imshow(screen,origin='lower')
 plt.colorbar()
-plt.scatter(x,y,c='red')
+# plt.scatter(x,y,c='red')
 plt.title('Atmo screen')
 
 Nrows = N//6
