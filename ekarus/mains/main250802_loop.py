@@ -7,27 +7,12 @@ from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.e2e.alpao_deformable_mirror import ALPAODM
 from ekarus.e2e.pyramid_wfs import PyramidWFS
 from ekarus.e2e.detector import Detector
+from ekarus.e2e.slope_computer import SlopeComputer
 
 from ekarus.e2e.scao_class import SCAO
 from ekarus.e2e.utils.turbulence_generator import generate_phasescreens, move_mask_on_phasescreen
 
-
-def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0):
-    sz=image2d.shape
-    plt.imshow(image2d, extent=[-sz[0]/2*pixelSize, sz[0]/2*pixelSize,
-                                -sz[1]/2*pixelSize, sz[1]/2*pixelSize],origin='lower')
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    cbar= plt.colorbar(shrink=shrink)
-    cbar.ax.set_ylabel(zlabel)
-
-def showZoomCenter(image, pixelSize, **kwargs):
-    '''show log(image) zoomed around center'''
-    imageHalfSizeInPoints= image.shape[0]/2
-    roi= [int(imageHalfSizeInPoints*0.9), int(imageHalfSizeInPoints*1.1)]
-    imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
-    imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
+from ekarus.e2e.utils.image_utils import showZoomCenter, get_circular_mask
 
 
 # TODO: add cupy acceleration
@@ -37,6 +22,8 @@ lambdaInM = 1000e-9
 pupilSizeInM = 32e-3
 oversampling = 4
 Npix = 128
+
+pupil_mask = get_circular_mask((oversampling*Npix,oversampling*Npix),Npix//2)
 
 pix2rad = lambdaInM/pupilSizeInM/oversampling 
 rad2arcsec = 180/np.pi*3600
@@ -56,9 +43,10 @@ show = False
 print('Initializing sensor, detector and deformable mirror ...')
 wfs = PyramidWFS(apex_angle)
 ccd = Detector(detector_shape=detector_shape)
-dm = ALPAODM(468)
+dm = ALPAODM(468, pupil_mask = pupil_mask)
+slope_computer = SlopeComputer(wfs_type = 'PyrWFS')
 
-scao = SCAO(wfs, ccd, dm, Npix, pupilSizeInM, modulationAngleInLambdaoverD=3, oversampling=oversampling)
+scao = SCAO(wfs, ccd, slope_computer, dm, Npix, pupilSizeInM, oversampling=oversampling)
 
 # Define save directory and data dictionary
 basepath = os.getcwd()
@@ -79,11 +67,13 @@ print('Defining the detector subaperture masks ...')
 
 subap_path = os.path.join(dir_path,'SubapertureMasks.fits')
 try:
-    scao.ccd.subapertures = myfits.read_fits(subap_path, isBool=True)
+    slope_computer._subaperture_masks = myfits.read_fits(subap_path, isBool=True)
 except FileNotFoundError:
-    scao.define_subaperture_masks(lambdaInM, subapertureSizeInPixels=subaperture_size)
-    myfits.save_fits(subap_path, (ccd.subapertures).astype(np.uint8), hdr_dict)
-
+    piston = 1-scao.cmask
+    modulated_intensity = wfs.modulate(piston, 10*alpha, pix2rad)
+    detector_image = ccd.image_on_detector(modulated_intensity)
+    slope_computer.calibrate_sensor(subaperture_image = detector_image, Npix = subaperture_size)
+    myfits.save_fits(subap_path, (slope_computer._subaperture_masks).astype(np.uint8), hdr_dict)
 
 # 2. Define the system modes
 print('Obtaining the Karhunen-Loeve mirror modes ...')
@@ -125,7 +115,7 @@ try:
     Rec = myfits.read_fits(Rec_path)
 
 except FileNotFoundError:
-    IM, Rec = scao.calibrate_modes(KL, lambdaInM, amps = 0.1)
+    IM, Rec = scao.calibrate_modes(KL, lambdaInM, alpha, amps = 0.1)
 
     myfits.save_fits(IM_path, IM, hdr_dict)
     myfits.save_fits(Rec_path, Rec, hdr_dict)
@@ -171,7 +161,55 @@ mask_shape = (Npix*oversampling,Npix*oversampling)
 dm_shape = np.zeros(np.sum(1-dm.mask))
 dm_cmd = np.zeros(dm.Nacts)
 
-# for i in range(5):
+Nits = 6
+
+for i in range(Nits):
+    tt = dt*i
+    input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter)
+
+    dm_phase = np.zeros_like(dm.mask,dtype=np.float32)
+    dm_phase[~dm.mask] = dm_shape#/pupilSizeInM*(2*np.pi)
+    dm_phase = np.pad(dm_phase, (Npix*(oversampling-1))//2)
+
+    phase = input_phase - dm_phase
+
+    cmd, ccd_image = scao.perform_loop_iteration(phase, Rec, lambdaInM, alpha, m2c=m2c)
+    dm_cmd += cmd*g
+    dm_shape += dm.IFF @ dm_cmd
+    
+    electric_field = scao.cmask * np.exp(1j*phase)
+    field_on_focal_plane = np.fft.fftshift(np.fft.fft2(electric_field))
+    psf = np.abs(field_on_focal_plane)**2
+    
+    plt.figure(figsize=(12,12))
+    plt.subplot(2,2,1)
+    plt.imshow(np.ma.masked_array(input_phase, mask = scao.cmask.mask()),origin='lower')
+    plt.colorbar()
+    plt.title('Input phase')
+
+    plt.subplot(2,2,2)
+    showZoomCenter(psf, pix2rad*rad2arcsec)
+
+    plt.subplot(2,2,3)
+    plt.imshow(ccd_image,origin='lower')
+    plt.colorbar()
+    plt.title('Detector image')
+
+    plt.subplot(2,2,4)
+    dm.plot_position(dm_cmd)
+    plt.title('Mirror command')
+
+plt.show()
+
+
+# input_phases = []
+# psfs = []
+# ccd_images = []
+# dm_cmds = []
+
+# Nit = 10
+
+# for i in range(Nit):
 #     tt = dt*i
 #     input_phase = move_mask_on_phasescreen(screen, scao.cmask.mask(), tt, wind_speed, wind_angle, pixelsPerMeter)
 
@@ -187,100 +225,52 @@ dm_cmd = np.zeros(dm.Nacts)
     
 #     electric_field = scao.cmask.mask() * np.exp(1j*phase)
 #     field_on_focal_plane = np.fft.fftshift(np.fft.fft2(electric_field))
-#     psf = np.abs(field_on_focal_plane)**2
+#     psf = np.abs(field_on_focal_plane**2)
     
-#     plt.figure(figsize=(12,12))
+#     input_phases.append(np.ma.masked_array(input_phase, mask = scao.cmask.mask()))
+#     psfs.append(psf)
+#     ccd_images.append(ccd_image)
+#     dm_cmds.append(dm_cmd)
+
+# fig = plt.figure(figsize=(12,12))
+# plt.subplot(2,2,1)
+# plt.imshow(input_phases[0],origin='lower')
+# plt.colorbar()
+# plt.title('Input phase')
+
+# plt.subplot(2,2,2)
+# showZoomCenter(psfs[0],pix2rad*rad2arcsec, title='PSF')
+
+# plt.subplot(2,2,3)
+# plt.imshow(ccd_images[0],origin='lower')
+# plt.colorbar()
+# plt.title('Detector image')
+
+# plt.subplot(2,2,4)
+# plt.scatter(dm.act_coords[0],dm.act_coords[1],c=dm_cmds[0])
+# plt.axis('equal')
+# plt.colorbar()
+# plt.title('Mirror command')
+
+# from matplotlib.animation import FuncAnimation
+
+# def animate(frame):
+#     ff = frame+1
+
 #     plt.subplot(2,2,1)
-#     plt.imshow(np.ma.masked_array(input_phase, mask = scao.cmask.mask()),origin='lower')
-#     plt.colorbar()
-#     plt.title('Input phase')
+#     plt.imshow(input_phases[ff],origin='lower')
 
 #     plt.subplot(2,2,2)
-#     showZoomCenter(psf, pix2rad*rad2arcsec)
+#     showZoomCenter(psfs[ff],pix2rad*rad2arcsec, title='PSF')
 
 #     plt.subplot(2,2,3)
-#     plt.imshow(ccd_image,origin='lower')
-#     plt.colorbar()
-#     plt.title('Detector image')
+#     plt.imshow(ccd_images[ff],origin='lower')
 
 #     plt.subplot(2,2,4)
-#     dm.plot_position(dm_cmd)
-#     plt.title('Mirror command')
+#     plt.scatter(dm.act_coords[0],dm.act_coords[1],c=dm_cmds[ff])
 
+# ani = FuncAnimation(fig, animate, interval = 30, frames = Nit-1)
 # plt.show()
-
-
-input_phases = []
-psfs = []
-ccd_images = []
-dm_cmds = []
-
-Nit = 10
-
-for i in range(Nit):
-    tt = dt*i
-    input_phase = move_mask_on_phasescreen(screen, scao.cmask.mask(), tt, wind_speed, wind_angle, pixelsPerMeter)
-
-    dm_phase = np.zeros_like(dm.mask,dtype=np.float32)
-    dm_phase[~dm.mask] = dm_shape/pupilSizeInM*(2*np.pi)
-    dm_phase = np.pad(dm_phase, (Npix*(oversampling-1))//2)
-
-    phase = input_phase - dm_phase
-
-    cmd, ccd_image = scao.perform_loop_iteration(phase, Rec, lambdaInM, m2c)
-    dm_cmd += cmd*g
-    dm_shape += dm.IFF @ dm_cmd
-    
-    electric_field = scao.cmask.mask() * np.exp(1j*phase)
-    field_on_focal_plane = np.fft.fftshift(np.fft.fft2(electric_field))
-    psf = np.abs(field_on_focal_plane**2)
-    
-    input_phases.append(np.ma.masked_array(input_phase, mask = scao.cmask.mask()))
-    psfs.append(psf)
-    ccd_images.append(ccd_image)
-    dm_cmds.append(dm_cmd)
-
-
-
-fig = plt.figure(figsize=(12,12))
-plt.subplot(2,2,1)
-plt.imshow(input_phases[0],origin='lower')
-plt.colorbar()
-plt.title('Input phase')
-
-plt.subplot(2,2,2)
-showZoomCenter(psfs[0],pix2rad*rad2arcsec, title='PSF')
-
-plt.subplot(2,2,3)
-plt.imshow(ccd_images[0],origin='lower')
-plt.colorbar()
-plt.title('Detector image')
-
-plt.subplot(2,2,4)
-plt.scatter(dm.act_coords[0],dm.act_coords[1],c=dm_cmds[0])
-plt.axis('equal')
-plt.colorbar()
-plt.title('Mirror command')
-
-from matplotlib.animation import FuncAnimation
-
-def animate(frame):
-    ff = frame+1
-
-    plt.subplot(2,2,1)
-    plt.imshow(input_phases[ff],origin='lower')
-
-    plt.subplot(2,2,2)
-    showZoomCenter(psfs[ff],pix2rad*rad2arcsec, title='PSF')
-
-    plt.subplot(2,2,3)
-    plt.imshow(ccd_images[ff],origin='lower')
-
-    plt.subplot(2,2,4)
-    plt.scatter(dm.act_coords[0],dm.act_coords[1],c=dm_cmds[ff])
-
-ani = FuncAnimation(fig, animate, interval = 30, frames = Nit-1)
-plt.show()
 
 
 

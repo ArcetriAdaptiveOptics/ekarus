@@ -5,13 +5,18 @@ from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circul
 
 class SlopeComputer():
 
-    def __init__(self, sensor, **kwargs):
+    def __init__(self, wfs_type):
 
-        if hasattr(sensor,'apex_angle'):
-            self.wfs_type = 'PyrWFS'
-            self._define_subaperture_masks(**kwargs)
-        else:
-            raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
+        self.wfs_type = wfs_type
+
+
+    def calibrate_sensor(self, **kwargs):
+
+        match self.wfs_type:
+            case 'PyrWFS':
+                self._define_subaperture_masks(**kwargs)
+            case _:
+                raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
         
 
 
@@ -33,13 +38,11 @@ class SlopeComputer():
         """
         Compute slopes from the detector image
         """
-        
-        # TODO add rebin factor computation from detector image and self.subapertures shape comparison
 
-        A = detector_image[~self.subapertures[0]]
-        B = detector_image[~self.subapertures[1]]
-        C = detector_image[~self.subapertures[2]]
-        D = detector_image[~self.subapertures[3]]
+        A = detector_image[~self._subaperture_masks[0]]
+        B = detector_image[~self._subaperture_masks[1]]
+        C = detector_image[~self._subaperture_masks[2]]
+        D = detector_image[~self._subaperture_masks[3]]
 
         up_down = (A+B) - (C+D)
         left_right = (A+C) - (B+D)
@@ -48,14 +51,13 @@ class SlopeComputer():
 
         if use_diagonal:
             ccd_lr = np.fliplr(detector_image)
-            maskAlr = np.fliplr(self.subapertures[0])
-            maskClr = np.fliplr(self.subapertures[2])
+            maskAlr = np.fliplr(self._subaperture_masks[0])
+            maskClr = np.fliplr(self._subaperture_masks[2])
             Alr = ccd_lr[~maskAlr]
             Clr = ccd_lr[~maskClr]
             diag = (B+Clr) - (Alr+D)
             slopes = np.hstack((up_down, left_right, diag))
 
-        # Normalize slopes by the mean intensity
         mean_intensity = np.mean(np.hstack((A,B,C,D)))
         slopes *= 1/mean_intensity
 
@@ -74,9 +76,9 @@ class SlopeComputer():
 
         for i in range(4):
             qy,qx = self.find_subaperture_center(subaperture_image,quad_n=i+1)
-            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, radius=Npix//2, center=(qy,qx))
+            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qy,qx))
 
-        self.subapertures = subaperture_masks
+        self._subaperture_masks = subaperture_masks
 
     
     @staticmethod

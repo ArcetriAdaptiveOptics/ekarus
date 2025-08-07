@@ -4,13 +4,13 @@ import os
 
 from ekarus.e2e.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
-from ekarus.e2e.utils.image_utils import get_circular_mask
+from ekarus.e2e.utils.image_utils import image_grid
 from ekarus.e2e.utils import my_fits_package as myfits
 
 
 class ALPAODM(DeformableMirror):
 
-    def __init__(self, input):
+    def __init__(self, input, **kwargs):
         """
         ALPAO DM constructor
 
@@ -28,11 +28,11 @@ class ALPAODM(DeformableMirror):
         self.config.read(config_path)
 
         if isinstance(input, int):
-            self._init_ALPAO_from_Nacts(input)
+            self._init_ALPAO_from_Nacts(input, **kwargs)
         elif isinstance(input, str):
-            self._init_ALPAO_from_tn_data(input)
+            self._init_ALPAO_from_tn_data(input, **kwargs)
         elif isinstance(input, np.array):
-            self._init_ALPAO_from_act_coords(input)
+            self._init_ALPAO_from_act_coords(input, **kwargs)
         else:
             raise NotImplementedError(f'Initialization method for {input} not implemented, please pass a data tracking number or the number of actuators')
         
@@ -79,7 +79,7 @@ class ALPAODM(DeformableMirror):
         return coords
 
 
-    def _init_ALPAO_from_Nacts(self, Nacts:int, Npix:int = 128):
+    def _init_ALPAO_from_Nacts(self, Nacts:int, pupil_mask):
         """ 
         Initializes the ALPAO DM mask and actuator coordinates
 
@@ -87,9 +87,8 @@ class ALPAODM(DeformableMirror):
         ----------
         Nacts : int
             The number of actuators in the DM.
-        Npix : int (Optional)
-            The number of pixels across the mask diameter.
-            Defaults to 128.
+        pupil_mask : ndarray(bool)
+            The mask over which to define the IFFs
         """
         self.Nacts = Nacts
 
@@ -102,7 +101,10 @@ class ALPAODM(DeformableMirror):
         self.pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
         # Define mask & pixel scale
-        self.mask = get_circular_mask((Npix,Npix),Npix//2)
+        self.mask = pupil_mask #get_circular_mask((Npix,Npix),Npix//2)
+        X,Y = image_grid(pupil_mask.shape, recenter=True)
+        R = np.sqrt(X[~pupil_mask]**2+Y[~pupil_mask]**2)
+        Npix = np.max(R)
         self.pixel_scale = Npix/self.pupil_size
 
         # Define coordinates in meters, centering in (0,0)

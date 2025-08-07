@@ -1,5 +1,6 @@
 import numpy as np
 # from arte.types.mask import CircularMask
+import matplotlib.pyplot as plt
 
 def image_grid(shape, recenter:bool = False, xp=np):
     """
@@ -78,6 +79,24 @@ def reshape_on_mask(flat_array, mask, xp=np):
     return image
 
 
-def compute_pixel_size(wavelength, pupil_diameter_in_m, padding:int=1):
-    """ Get the number of pixels per radian """
-    return wavelength/pupil_diameter_in_m/padding
+# def compute_pixel_size(wavelength, pupil_diameter_in_m, padding:int=1):
+#     """ Get the number of pixels per radian """
+#     return wavelength/pupil_diameter_in_m/padding
+
+
+def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0):
+    sz=image2d.shape
+    plt.imshow(image2d, extent=[-sz[0]/2*pixelSize, sz[0]/2*pixelSize,
+                                -sz[1]/2*pixelSize, sz[1]/2*pixelSize],origin='lower')
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    cbar= plt.colorbar(shrink=shrink)
+    cbar.ax.set_ylabel(zlabel)
+
+def showZoomCenter(image, pixelSize, **kwargs):
+    '''show log(image) zoomed around center'''
+    imageHalfSizeInPoints= image.shape[0]/2
+    roi= [int(imageHalfSizeInPoints*0.9), int(imageHalfSizeInPoints*1.1)]
+    imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
+    imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
