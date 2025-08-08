@@ -34,6 +34,8 @@ class Detector:
         if photon_flux is not None:
             ccd_intensity = self.add_electron_noise(ccd_intensity, photon_flux)
 
+        self.last_frame = ccd_intensity
+
         return ccd_intensity
 
 

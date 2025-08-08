@@ -1,6 +1,5 @@
 import numpy as np
 from functools import cache
-# from scipy.special import factorial
 from scipy.special import jacobi
 
 

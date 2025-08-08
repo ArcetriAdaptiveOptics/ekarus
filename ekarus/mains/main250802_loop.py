@@ -12,7 +12,7 @@ from ekarus.e2e.slope_computer import SlopeComputer
 from ekarus.e2e.scao_class import SCAO
 from ekarus.e2e.utils.turbulence_generator import generate_phasescreens, move_mask_on_phasescreen
 
-from ekarus.e2e.utils.image_utils import showZoomCenter#, get_circular_mask
+from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask#, get_circular_mask
 
 
 # TODO: add cupy acceleration
@@ -22,8 +22,6 @@ lambdaInM = 1000e-9
 pupilSizeInM = 32e-3
 oversampling = 4
 Npix = 128
-
-# pupil_mask = get_circular_mask((oversampling*Npix,oversampling*Npix),Npix//2)
 
 pix2rad = lambdaInM/pupilSizeInM/oversampling 
 rad2arcsec = 180/np.pi*3600
@@ -37,7 +35,7 @@ subaperture_size = 63.5
 r0 = 5e-2
 L0 = 25
 
-show = True
+show = False
 
 # Sensor, detector, DM
 print('Initializing sensor, detector and deformable mirror ...')
@@ -72,6 +70,10 @@ except FileNotFoundError:
     piston = 1-scao.cmask
     modulated_intensity = wfs.modulate(piston, 10*alpha, pix2rad)
     detector_image = ccd.image_on_detector(modulated_intensity)
+    plt.figure()
+    plt.imshow(detector_image,origin='lower')
+    plt.colorbar()
+    plt.show()
     slope_computer.calibrate_sensor(subaperture_image = detector_image, Npix = subaperture_size)
     myfits.save_fits(subap_path, (slope_computer._subaperture_masks).astype(np.uint8), hdr_dict)
 
@@ -101,8 +103,6 @@ if show:
         dm.plot_surface(KL[-i-1-N,:],title=f'KL Mode {np.shape(KL)[0]-i-1-N}')
         plt.subplot(4,N,i+1+N*3)
         dm.plot_surface(KL[-i-1,:],title=f'KL Mode {np.shape(KL)[0]-i-1}')
-
-
 
 # 3. Calibrate the system
 print('Calibrating the KL modes ...')
@@ -146,7 +146,7 @@ screen = screens[0]
 
 dt = 1e-3
 wind_speed = 20
-wind_angle = np.pi/2
+wind_angle = np.pi/4
 
 if show:
     plt.figure()
@@ -156,20 +156,23 @@ if show:
 
 
 # 5. Perform the iteration
-g = 0.005
+g = 0.5
 mask_shape = (Npix*oversampling,Npix*oversampling)
 dm_shape = np.zeros(np.sum(1-dm.mask))
 dm_cmd = np.zeros(dm.Nacts)
 
+compression = telescopeSizeInM/pupilSizeInM
+
 Nits = 6
+electric_field_amp = 1-scao.cmask
 
 for i in range(Nits):
     tt = dt*i
     input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter)
 
-    dm_phase = np.zeros_like(dm.mask,dtype=np.float32)
-    dm_phase[~dm.mask] = dm_shape#/pupilSizeInM*(2*np.pi)
-    dm_phase = np.pad(dm_phase, (Npix*(oversampling-1))//2)
+    dm_phase = np.zeros_like(dm.mask, dtype=np.float32)
+    dm_phase[~dm.mask] = dm_shape #/compression*(2*np.pi) #/pupilSizeInM*(2*np.pi)
+    dm_phase = np.pad(np.reshape(dm_phase,dm.mask.shape), (Npix*(oversampling-1))//2)
 
     phase = input_phase - dm_phase
 
@@ -177,13 +180,13 @@ for i in range(Nits):
     dm_cmd += cmd*g
     dm_shape += dm.IFF @ dm_cmd
     
-    electric_field = scao.cmask * np.exp(1j*phase)
+    electric_field = electric_field_amp * np.exp(1j*phase)
     field_on_focal_plane = np.fft.fftshift(np.fft.fft2(electric_field))
     psf = np.abs(field_on_focal_plane)**2
     
     plt.figure(figsize=(12,12))
     plt.subplot(2,2,1)
-    plt.imshow(np.ma.masked_array(input_phase, mask = scao.cmask.mask()),origin='lower')
+    plt.imshow(np.ma.masked_array(input_phase, mask = scao.cmask),origin='lower')
     plt.colorbar()
     plt.title('Input phase')
 
@@ -195,11 +198,16 @@ for i in range(Nits):
     plt.colorbar()
     plt.title('Detector image')
 
+    # plt.subplot(2,2,4)
+    # plt.imshow(np.ma.masked_array(dm_phase, mask = scao.cmask),origin='lower')
+    # plt.colorbar()
+    # plt.title('DM phase')
+
     plt.subplot(2,2,4)
     dm.plot_position(dm_cmd)
     plt.title('Mirror command')
 
-plt.show()
+    plt.show()
 
 
 # input_phases = []

@@ -50,8 +50,6 @@ x0,y0 = get_start_coordinates_on_phasescreen(screen.shape, mask.shape, wind_angl
 x0 = int(np.ceil(x0))
 y0 = int(np.ceil(y0))
 
-print(x0,y0)
-
 full_mask[y0:(H+y0),x0:(W+x0)] = mask
 dx_mask = np.roll(full_mask,128*2,axis=1)
 dy_mask = np.roll(full_mask,128*2,axis=0)
@@ -60,8 +58,6 @@ plt.figure()
 plt.imshow(np.ma.masked_array(screen,full_mask),origin='lower')
 plt.imshow(np.ma.masked_array(screen,dx_mask),origin='lower')
 plt.imshow(np.ma.masked_array(screen,dy_mask),origin='lower')
-plt.show()
-
 
 N = 21
 shifted_screens = np.zeros([400,300,N])
@@ -73,14 +69,12 @@ for i in range(N):
     image = move_mask_on_phasescreen(screen, mask, tt, wind_speed, wind_angle, pixelsPerMeter)
     shifted_screens[:,:,i] = image
 
-print(x,y)
 
-
-plt.figure()
-plt.imshow(screen,origin='lower')
-plt.colorbar()
-# plt.scatter(x,y,c='red')
-plt.title('Atmo screen')
+# plt.figure()
+# plt.imshow(screen,origin='lower')
+# plt.colorbar()
+# # plt.scatter(x,y,c='red')
+# plt.title('Atmo screen')
 
 Nrows = N//6
 Ncols = int(np.ceil(N/Nrows))

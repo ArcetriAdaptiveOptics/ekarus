@@ -29,8 +29,12 @@ def move_mask_on_phasescreen(screen, mask, dt, wind_speed, wind_direction_angle,
     x_start, y_start = get_start_coordinates_on_phasescreen(screen.shape, mask.shape, wind_direction_angle)
 
     dpix = wind_speed*dt*pixelsPerMeter
-    x = x_start + dpix*np.cos(-wind_direction_angle)
+    x = x_start + dpix*np.cos(wind_direction_angle)
     y = y_start + dpix*np.sin(-wind_direction_angle)
+
+    if x > screen.shape[1]-mask.shape[1] or y > screen.shape[0]-mask.shape[0] or x < 0 or y < 0:
+        raise ValueError(f'A displacement of {dpix:1.2f} for a time {dt:1.3f} [s] with wind {wind_speed:1.1f} [m/s] yields\
+                         ({y:1.0f},{x:1.0f}), which is outside the bounds for a {screen.shape} screen and a {mask.shape} mask.')
 
     x_floor = int(np.floor(x))
     y_floor = int(np.floor(y))
@@ -73,9 +77,9 @@ def get_start_coordinates_on_phasescreen(screen_shape, mask_shape, wind_directio
     h,w = mask_shape
 
     sin_phi = np.sin(-wind_direction_angle)
-    cos_phi = np.cos(-wind_direction_angle)
+    cos_phi = np.cos(wind_direction_angle)
 
-    Delta = min((W-w)/(2*cos_phi), (H-h)/(2*sin_phi))
+    Delta = min(abs((W-w)/(2*cos_phi)), abs((H-h)/(2*sin_phi)))
     x = (W-w)/2 - Delta * cos_phi
     y = (H-h)/2 - Delta * sin_phi
 
