@@ -37,11 +37,12 @@ modulated_piston = wfs.modulate(piston, 4*alpha, pixel_scale)
 calibration_image = ccd.image_on_detector(modulated_piston)
 slope_computer.calibrate_sensor(subaperture_image=calibration_image, Npix=subaperture_size)
 
-
 N = 4
 Nzern = N*(N+1)//2 - 1
 zg = ZernikeGenerator(cmask, Npix//2)
 amp = 1
+
+slope_mat = None
 
 for i in range(Nzern):
     noll = i + 2
@@ -58,6 +59,11 @@ for i in range(Nzern):
     pull_slope = slope_computer.compute_slopes(detector_image)/amp
 
     slopes = (push_slope-pull_slope)/2
+
+    if slope_mat is None:
+        slope_mat = slopes
+    else:
+        slope_mat = np.vstack((slope_mat,slopes))
 
     plt.figure(figsize=(17,3.5))
     plt.subplot(1,4,1)
@@ -82,6 +88,42 @@ for i in range(Nzern):
     plt.grid()
     plt.title('Push-Pull difference')
 
+plt.show()
+
+# Determine interaction matrix and reconstructor
+IM = slope_mat.T
+Rec = np.linalg.pinv(IM)
+
+Namps = 16
+amp_vec = np.linspace(-3,3,Namps)
+zern_rec = np.zeros([Nzern,Namps])
+
+plt.figure()
+
+for i in range(Nzern):
+    noll = i + 2
+
+    for j,amp in enumerate(amp_vec):
+        phase = zg.getZernike(noll)*amp
+        input_field = (1-cmask) * np.exp(1j*phase)
+
+        modulated_intensity = wfs.modulate(input_field, alpha, pixel_scale)
+        detector_image = ccd.image_on_detector(modulated_intensity)
+        slope = slope_computer.compute_slopes(detector_image)
+        zvec = Rec @ slope
+
+        zern_rec[i,j] = zvec[i]
+
+    plt.plot(amp_vec, zern_rec[i],'-o',label=f'Noll = {noll}')
+
+plt.legend()
+plt.grid()
+plt.xlabel('True amplitude')
+plt.ylabel('Measured amplitude')    
 
 plt.show()
+
+
+
+
 

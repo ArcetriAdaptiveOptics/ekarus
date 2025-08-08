@@ -12,7 +12,7 @@ from ekarus.e2e.slope_computer import SlopeComputer
 from ekarus.e2e.scao_class import SCAO
 from ekarus.e2e.utils.turbulence_generator import generate_phasescreens, move_mask_on_phasescreen
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask#, get_circular_mask
+from ekarus.e2e.utils.image_utils import showZoomCenter #, reshape_on_mask#, get_circular_mask
 
 
 # TODO: add cupy acceleration
@@ -33,7 +33,7 @@ subaperture_size = 63.5
 
 # Atmospheric data
 r0 = 5e-2
-L0 = 25
+L0 = 8
 
 show = False
 
@@ -142,7 +142,7 @@ except FileNotFoundError:
     myfits.save_fits(atmo_path, screens, hdr_dict)
 
 
-screen = screens[0]*2e-2
+screen = screens[0]
 
 dt = 1e-3
 wind_speed = 20
@@ -156,25 +156,30 @@ if show:
 
 
 # 5. Perform the iteration
-g = 0.05
+print('Running the loop ...')
+g = 1e-3
 mask_shape = (Npix*oversampling,Npix*oversampling)
 dm_shape = np.zeros(np.sum(1-dm.mask))
 dm_cmd = np.zeros(dm.Nacts)
 
 compression = telescopeSizeInM/pupilSizeInM
 
-Nits = 30
+Nits = 100
 electric_field_amp = 1-scao.cmask
 
 input_res = np.zeros(Nits)
 res = np.zeros(Nits)
 
+alpha *= 4 # do I decrease it as I converge?
+
 for i in range(Nits):
+    print(f'\rIteration {i+1}/{Nits}', end='')
     tt = dt*i
     input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter)
+    input_phase *= 1/compression
 
     dm_phase = np.zeros_like(dm.mask, dtype=np.float32)
-    dm_phase[~dm.mask] = dm_shape/compression*(2*np.pi) #/pupilSizeInM*(2*np.pi)
+    dm_phase[~dm.mask] = dm_shape #/lambdaInM*(2*np.pi) #/pupilSizeInM*(2*np.pi)
     dm_phase = np.pad(np.reshape(dm_phase,dm.mask.shape), (Npix*(oversampling-1))//2)
 
     phase = input_phase - dm_phase
@@ -189,15 +194,6 @@ for i in range(Nits):
     field_on_focal_plane = np.fft.fftshift(np.fft.fft2(electric_field))
     psf = np.abs(field_on_focal_plane)**2
 
-plt.figure()
-plt.plot(input_res,'-o',label='open loop')
-plt.plot(res,'-o',label='closed loop')
-plt.legend()
-plt.grid()
-plt.ylabel('$\sigma^2$ [$rad^2$]')
-plt.xlabel('\# iteration')
-plt.xticks(np.arange(Nits))
-plt.xlim([-0.5,Nits-0.5])
     
 plt.figure(figsize=(12,12))
 plt.subplot(2,2,1)
@@ -221,6 +217,19 @@ plt.title('Detector image')
 plt.subplot(2,2,4)
 dm.plot_position(dm_cmd)
 plt.title('Mirror command')
+
+
+
+plt.figure(figsize=(4*Nits/10,3))
+plt.plot(input_res,'-o',label='open loop')
+plt.plot(res,'-o',label='closed loop')
+plt.legend()
+plt.grid()
+plt.ylabel('$\sigma^2$ [$rad^2$]')
+plt.xlabel('# iteration')
+plt.xticks(np.arange(Nits))
+plt.xlim([-0.5,Nits-0.5])
+
 
 plt.show()
 
