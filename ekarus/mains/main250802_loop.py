@@ -142,7 +142,7 @@ except FileNotFoundError:
     myfits.save_fits(atmo_path, screens, hdr_dict)
 
 
-screen = screens[0]
+screen = screens[0]*2e-2
 
 dt = 1e-3
 wind_speed = 20
@@ -156,25 +156,30 @@ if show:
 
 
 # 5. Perform the iteration
-g = 0.5
+g = 0.05
 mask_shape = (Npix*oversampling,Npix*oversampling)
 dm_shape = np.zeros(np.sum(1-dm.mask))
 dm_cmd = np.zeros(dm.Nacts)
 
 compression = telescopeSizeInM/pupilSizeInM
 
-Nits = 6
+Nits = 30
 electric_field_amp = 1-scao.cmask
+
+input_res = np.zeros(Nits)
+res = np.zeros(Nits)
 
 for i in range(Nits):
     tt = dt*i
     input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter)
 
     dm_phase = np.zeros_like(dm.mask, dtype=np.float32)
-    dm_phase[~dm.mask] = dm_shape #/compression*(2*np.pi) #/pupilSizeInM*(2*np.pi)
+    dm_phase[~dm.mask] = dm_shape/compression*(2*np.pi) #/pupilSizeInM*(2*np.pi)
     dm_phase = np.pad(np.reshape(dm_phase,dm.mask.shape), (Npix*(oversampling-1))//2)
 
     phase = input_phase - dm_phase
+    input_res[i] = np.std(input_phase[~scao.cmask])
+    res[i] = np.std(phase[~scao.cmask])
 
     cmd, ccd_image = scao.perform_loop_iteration(phase, Rec, lambdaInM, alpha, m2c=m2c)
     dm_cmd += cmd*g
@@ -183,31 +188,41 @@ for i in range(Nits):
     electric_field = electric_field_amp * np.exp(1j*phase)
     field_on_focal_plane = np.fft.fftshift(np.fft.fft2(electric_field))
     psf = np.abs(field_on_focal_plane)**2
+
+plt.figure()
+plt.plot(input_res,'-o',label='open loop')
+plt.plot(res,'-o',label='closed loop')
+plt.legend()
+plt.grid()
+plt.ylabel('$\sigma^2$ [$rad^2$]')
+plt.xlabel('\# iteration')
+plt.xticks(np.arange(Nits))
+plt.xlim([-0.5,Nits-0.5])
     
-    plt.figure(figsize=(12,12))
-    plt.subplot(2,2,1)
-    plt.imshow(np.ma.masked_array(input_phase, mask = scao.cmask),origin='lower')
-    plt.colorbar()
-    plt.title('Input phase')
+plt.figure(figsize=(12,12))
+plt.subplot(2,2,1)
+plt.imshow(np.ma.masked_array(input_phase, mask = scao.cmask),origin='lower')
+plt.colorbar()
+plt.title(f'Input: $\sigma^2$ = {input_res[-1]**2:1.3f} [$rad^2$]')
 
-    plt.subplot(2,2,2)
-    showZoomCenter(psf, pix2rad*rad2arcsec)
+plt.subplot(2,2,2)
+showZoomCenter(psf, pix2rad*rad2arcsec, title = f'PSF: $\sigma^2$ = {res[-1]**2:1.3f} [$rad^2$]')
 
-    plt.subplot(2,2,3)
-    plt.imshow(ccd_image,origin='lower')
-    plt.colorbar()
-    plt.title('Detector image')
+plt.subplot(2,2,3)
+plt.imshow(ccd_image,origin='lower')
+plt.colorbar()
+plt.title('Detector image')
 
-    # plt.subplot(2,2,4)
-    # plt.imshow(np.ma.masked_array(dm_phase, mask = scao.cmask),origin='lower')
-    # plt.colorbar()
-    # plt.title('DM phase')
+# plt.subplot(2,2,4)
+# plt.imshow(np.ma.masked_array(phase, mask = scao.cmask),origin='lower')
+# plt.colorbar()
+# plt.title('Corrected phase')
 
-    plt.subplot(2,2,4)
-    dm.plot_position(dm_cmd)
-    plt.title('Mirror command')
+plt.subplot(2,2,4)
+dm.plot_position(dm_cmd)
+plt.title('Mirror command')
 
-    plt.show()
+plt.show()
 
 
 # input_phases = []

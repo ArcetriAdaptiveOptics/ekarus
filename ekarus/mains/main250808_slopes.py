@@ -59,27 +59,29 @@ for i in range(Nzern):
 
     slopes = (push_slope-pull_slope)/2
 
-    plt.figure(figsize=(16,3))
+    plt.figure(figsize=(17,3.5))
     plt.subplot(1,4,1)
     plt.imshow(np.ma.masked_array(np.angle(input_field),mask=cmask),origin='lower')
-    plt.colorbar()
-    plt.title('Input field')
+    plt.colorbar(shrink=0.7)
+    plt.title(f'Noll = {noll}')
 
     plt.subplot(1,4,2)
-    plt.imshow(modulated_intensity,origin='lower')
-    plt.colorbar()
-    plt.title('Modulated intensity')
+    plt.imshow(detector_image,origin='lower')
+    plt.colorbar(shrink=0.7)
+    plt.title('Detector image')
 
     plt.subplot(1,4,3)
-    plt.imshow(detector_image,origin='lower')
-    plt.colorbar()
-    plt.title('Detector image')
+    plt.plot(push_slope,label='push')
+    plt.plot(pull_slope,label='pull')
+    plt.legend()
+    plt.grid()
+    plt.title('Measured slopes')
 
     plt.subplot(1,4,4)
     plt.plot(slopes)
     plt.grid()
-    plt.title('Measured slope')
+    plt.title('Push-Pull difference')
 
 
-    plt.show()
+plt.show()
 

@@ -98,7 +98,7 @@ class SCAO():
         if m2c is None:
             m2c = self._xp.eye((self.dm.Nacts,self._xp.shape(Rec)[0]))
 
-        input_field = self.cmask * self._xp.exp(1j*input_phase)
+        input_field = (1-self.cmask) * self._xp.exp(1j*input_phase)
         slopes = self.get_slopes(input_field, lambdaInM, starMagnitude, modulationAngle)
         modes = Rec @ slopes
         cmd = m2c @ modes
