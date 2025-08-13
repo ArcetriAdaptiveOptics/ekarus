@@ -21,7 +21,7 @@ class ALPAODM(DeformableMirror):
             str: tracking number of the DM measured iff
         """
 
-        super.__init__(xp)
+        super().__init__(xp)
 
         basepath = os.getcwd()
         self.config = configparser.ConfigParser()
@@ -108,7 +108,7 @@ class ALPAODM(DeformableMirror):
         self.pixel_scale = Npix/self.pupil_size
 
         # Define coordinates in meters, centering in (0,0)
-        coords = (self._getALPAOcoordinates(nacts_row_sequence)).astype(float)
+        coords = self._getALPAOcoordinates(nacts_row_sequence, xp=self._xp)
         coords[0] -= (max(coords[0])-min(coords[0]))/2
         coords[1] -= (max(coords[1])-min(coords[1]))/2    
         radii =self._xp.sqrt(coords[0]**2+coords[1]**2)/2
@@ -124,10 +124,13 @@ class ALPAODM(DeformableMirror):
 
         try:
             self.IFF = myfits.read_fits(iff_path)
+            if self._xp.__name__ == 'cupy':
+                self.IFF = self._xp.asarray(self.IFF, dtype=self.dtype)
         except FileNotFoundError:
             self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask, self.pixel_scale, xp=self._xp)
             hdr_dict = {'N_ACTS': self.Nacts, 'PUP_SIZE': self.pupil_size}
-            myfits.save_fits(iff_path, self.IFF, hdr_dict)
+            IFFs = self.IFF.get() if self._xp.__name__ == 'cupy' else self.IFF.copy()
+            myfits.save_fits(iff_path, IFFs, hdr_dict)
 
 
 

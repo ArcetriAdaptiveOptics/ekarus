@@ -98,8 +98,10 @@ class DeformableMirror():
         
         plt_mask = self._xp.logical_or(self.mask, plt_mask) if plt_mask is not None else self.mask.copy()
 
-        if self._xp.__name__ == 'cupy':
+        if hasattr(image, 'get'):
             image = image.get()
+
+        if hasattr(plt_mask, 'get'):
             plt_mask = plt_mask.get()
         
         image = masked_array(image, plt_mask)
@@ -134,11 +136,14 @@ class DeformableMirror():
             pos = self.act_pos.copy()
         x,y = self.act_coords[0,:], self.act_coords[1,:] 
         
-        act_pix_size = 12 if self._xp.sum(self.Nacts) < 100 else 3
+        act_pix_size = 12 if self.Nacts < 100 else 3
 
-        if self._xp.__name__ == 'cupy':
+        if hasattr(pos, 'get'):
             pos = pos.get()
-            x,y = x.get(), y.get()
+
+        if hasattr(x, 'get'):
+            x = x.get()
+            y = y.get()
         
         plt.scatter(x,y, c=pos, s=act_pix_size**2, cmap='hot')
         plt.axis('equal')

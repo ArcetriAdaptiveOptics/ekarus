@@ -55,7 +55,7 @@ class SCAO():
 
     def define_KL_modal_base(self, r0, L0, telescopeDiameterInM, zern2remove:int = 5):
 
-        KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels,
+        KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.dm.mask, self.pupilSizeInPixels,
         telescopeDiameterInM, self.dm.IFF.T, r0, L0, zern_modes=zern2remove,
         oversampling=self.oversampling, verbose = True, xp=self._xp, dtype=self.dtype)
 
@@ -74,7 +74,7 @@ class SCAO():
         for i in range(Nmodes):
             print(f'\rMode {i+1}/{Nmodes}', end='')
             amp = amps[i]
-            mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
+            mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask, xp=self._xp)
             input_field = self._xp.exp(1j*mode_phase) * electric_field_amp
             push_slope = self.get_slopes(input_field, lambdaInM, starMagnitude, modulation_angle)/amp
 

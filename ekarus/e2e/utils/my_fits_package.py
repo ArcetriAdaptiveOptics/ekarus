@@ -11,7 +11,7 @@ def read_fits(filename, isBool:bool = False):
     return data_out
 
 
-def save_fits(filename, data, header_dictionary = None):
+def save_fits(filename, data, data_type = None, header_dictionary = None):
 
     hdr = pyfits.Header()
     if header_dictionary is not None:

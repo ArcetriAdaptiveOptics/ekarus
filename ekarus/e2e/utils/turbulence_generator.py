@@ -21,7 +21,7 @@ def generate_phasescreens(lambdaInM, r0, L0, Nscreens, screenSizeInPixels, scree
     if savepath is not None :
         phs.save_normalized_phase_screens(savepath)
 
-    phase_screens = xp.asarray(phs._phaseScreens,dtpe=dtype)
+    phase_screens = xp.asarray(phs._phaseScreens, dtype=dtype)
 
     return phase_screens
 

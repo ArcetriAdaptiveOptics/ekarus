@@ -127,26 +127,31 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float = 1.0, 
     """ Simulate the influence functions by 
     imposing 'perfect' zonal commands """
     
-    # n_acts = np.max(np.shape(act_coords))
-    # H,W = np.shape(local_mask)
+    if xp.__name__ == 'cupy':
+        local_mask = local_mask.get()
+        act_coords = act_coords.get()
+
     n_acts = max(act_coords.shape)
 
-    mask_ids = xp.arange(xp.size(local_mask))
+    mask_ids = np.arange(np.size(local_mask))
     pix_ids = mask_ids[~(local_mask).flatten()]
     
     pix_coords = getMaskPixelCoords(local_mask).T
     act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale).T
     
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
-    IFF = xp.zeros([len(pix_ids),n_acts], dtyep=dtype)
+    IFF = np.zeros([len(pix_ids),n_acts])
 
     for k in range(n_acts):
-        act_data = xp.zeros(n_acts, dtype=dtype)
+        print(f'\rSimulationg influence functions: {k+1}/{n_acts}', end='')
+        act_data = np.zeros(n_acts)
         act_data[k] = 1e-6
         tps = ThinPlateSpline(alpha=0.0)
         tps.fit(act_pix_coords, act_data)
         img = tps.transform(pix_coords[pix_ids,:])
         IFF[:,k] = img[:,0]
+
+    if xp.__name__ == 'cupy':
+        IFF = xp.asarray(IFF,dtype=xp.float32)
 
     return IFF
 

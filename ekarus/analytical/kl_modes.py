@@ -116,7 +116,6 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
     if zern_modes > 0:
         zern_mask = pupil_mask.get() if xp.__name__ == 'cupy' else pupil_mask.copy()
         zg = ZernikeGenerator(zern_mask, pupil_pix_radius)
-        # zern_modes_cube = xp.stack([(zg.getZernike(z)).astype(dtype) for z in range(2, zern_modes + 2)])
         zern_modes_cube = xp.stack([xp.array(zg.getZernike(z), dtype=dtype) for z in range(2, zern_modes + 2)])
 
         if verbose:
@@ -291,7 +290,6 @@ def compute_ifs_covmat(pupil_mask, diameter, influence_functions, r0, L0, oversa
 
     # Fourier transform of the influence functions 3D array
     ft_shape = (oversampling * mask_size, oversampling * mask_size)
-
     ft_influence_functions = xp.zeros((ft_shape[0], ft_shape[1], n_actuators), dtype=cdtype)
 
     for act_idx in range(n_actuators):
