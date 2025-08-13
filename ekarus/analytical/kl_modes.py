@@ -1,6 +1,7 @@
 import numpy as np
 from ekarus.analytical.zernike_generator import ZernikeGenerator
 
+
 def make_ortho_modes(array, xp, dtype):
     """
     Return an orthogonal 2D array
@@ -20,7 +21,6 @@ def make_ortho_modes(array, xp, dtype):
         Orthogonal matrix
     """
     # return an orthogonal 2D array
-    
     size_array = xp.shape(array)
 
     if len(size_array) != 2:
@@ -35,6 +35,7 @@ def make_ortho_modes(array, xp, dtype):
     Q = xp.asarray(Q, dtype=dtype)
 
     return Q
+
 
 def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influence_functions, r0, L0,
                             zern_modes=0, oversampling=2, filt_modes=None,
@@ -113,8 +114,10 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
     modes_to_be_removed[0, :] = 1.0
 
     if zern_modes > 0:
-        zg = ZernikeGenerator(pupil_mask, pupil_pix_radius)#, xp=xp, dtype=dtype)
-        zern_modes_cube = xp.stack([(zg.getZernike(z)).astype(dtype) for z in range(2, zern_modes + 2)])
+        zern_mask = pupil_mask.get() if xp.__name__ == 'cupy' else pupil_mask.copy()
+        zg = ZernikeGenerator(zern_mask, pupil_pix_radius)
+        # zern_modes_cube = xp.stack([(zg.getZernike(z)).astype(dtype) for z in range(2, zern_modes + 2)])
+        zern_modes_cube = xp.stack([xp.array(zg.getZernike(z), dtype=dtype) for z in range(2, zern_modes + 2)])
 
         if verbose:
             print(f"Generated Zernike modes shape: {zern_modes_cube.shape}")
