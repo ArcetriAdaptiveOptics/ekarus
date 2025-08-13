@@ -18,7 +18,9 @@ class PyramidWFS:
         :param apex_angle: pyramid vertex angle in radians
         """
         self.apex_angle = apex_angle
+
         self._xp = xp
+        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
         
 
     def pyramid_phase_delay(self, shape):
@@ -30,8 +32,10 @@ class PyramidWFS:
         :return: array numpy 2D float (phase delay in pixels)
         """
         X,Y = image_grid(shape, recenter=True)
-        D = self._xp.max(shape)
-        phi = 2*self._xp.pi*self.apex_angle*(1 - 1/D*(self._xp.abs(X)+self._xp.abs(Y)))
+        D = max(shape)
+        phi = 2*self._xp.pi*self.apex_angle*(1 - 1/D*(abs(X)+abs(Y)))
+
+        phi = self._xp.asarray(phi,dtype=self.dtype)
 
         return phi
     
@@ -70,14 +74,14 @@ class PyramidWFS:
         :return: array numpy 2D representing the average intensity after modulation
         """
 
-        tiltX,tiltY = image_grid(input_field.shape, recenter=True)
+        tiltX,tiltY = image_grid(input_field.shape, recenter=True, xp=self._xp)
         L = max(input_field.shape)
 
         alpha_pix = alpha/pix2rad*(2*self._xp.pi)
         N_steps = int((alpha_pix//20+1)*4)
         phi_vec = 2*self._xp.pi*self._xp.arange(N_steps)/N_steps
 
-        intensity = self._xp.zeros(input_field.shape, dtype = self._xp.float32)
+        intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)
 
         for phi in phi_vec:
             tilt = (tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi))/L

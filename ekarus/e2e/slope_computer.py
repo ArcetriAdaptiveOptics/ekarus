@@ -5,9 +5,12 @@ from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circul
 
 class SlopeComputer():
 
-    def __init__(self, wfs_type):
+    def __init__(self, wfs_type, xp=np):
 
         self.wfs_type = wfs_type
+
+        self._xp = xp
+        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
 
     def calibrate_sensor(self, **kwargs):
@@ -47,18 +50,18 @@ class SlopeComputer():
         up_down = (A+B) - (C+D)
         left_right = (A+C) - (B+D)
 
-        slopes = np.hstack((up_down, left_right))
+        slopes = self._xp.hstack((up_down, left_right))
 
         if use_diagonal:
-            ccd_lr = np.fliplr(detector_image)
-            maskAlr = np.fliplr(self._subaperture_masks[0])
-            maskClr = np.fliplr(self._subaperture_masks[2])
+            ccd_lr = self._xp.fliplr(detector_image)
+            maskAlr = self._xp.fliplr(self._subaperture_masks[0])
+            maskClr = self._xp.fliplr(self._subaperture_masks[2])
             Alr = ccd_lr[~maskAlr]
             Clr = ccd_lr[~maskClr]
             diag = (B+Clr) - (Alr+D)
-            slopes = np.hstack((up_down, left_right, diag))
+            slopes = self._xp.hstack((up_down, left_right, diag))
 
-        mean_intensity = np.mean(np.hstack((A,B,C,D)))
+        mean_intensity = self._xp.mean(self._xp.hstack((A,B,C,D)))
         slopes *= 1/mean_intensity
 
         return slopes
@@ -72,36 +75,36 @@ class SlopeComputer():
         """
 
         ny,nx = subaperture_image.shape
-        subaperture_masks = np.zeros((4, ny, nx), dtype=bool)
+        subaperture_masks = self._xp.zeros((4, ny, nx), dtype=bool)
 
         for i in range(4):
-            qy,qx = self.find_subaperture_center(subaperture_image,quad_n=i+1)
-            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qy,qx))
+            qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
+            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qy,qx), xp=self._xp)
 
         self._subaperture_masks = subaperture_masks
 
     
     @staticmethod
-    def find_subaperture_center(detector_image, quad_n:int = 1):
+    def find_subaperture_center(detector_image, quad_n:int = 1, xp=np, dtype=np.float32):
 
-        X,Y = image_grid(detector_image.shape, recenter=True)
-        quadrant_mask = np.zeros_like(detector_image)
+        X,Y = image_grid(detector_image.shape, recenter=True, xp=xp)
+        quadrant_mask = xp.zeros_like(detector_image, dtype=dtype)
 
         match quad_n:
             case 1:
-                quadrant_mask[np.logical_and(X < 0, Y >= 0)] = 1
+                quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
             case 2:
-                quadrant_mask[np.logical_and(X >= 0, Y >= 0)] = 1
+                quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
             case 3:
-                quadrant_mask[np.logical_and(X < 0, Y < 0)] = 1
+                quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
             case 4:
-                quadrant_mask[np.logical_and(X >= 0, Y < 0)] = 1
+                quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
             case _:
                 raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
 
-        quadrant_mask = np.reshape(quadrant_mask, detector_image.shape)
+        quadrant_mask = xp.reshape(quadrant_mask, detector_image.shape)
         intensity = detector_image * quadrant_mask
-        qy,qx = get_photocenter(intensity)
+        qy,qx = get_photocenter(intensity, xp=xp)
 
         # return qy,qx
-        return np.round(qy),np.round(qx)
+        return xp.round(qy), xp.round(qx)

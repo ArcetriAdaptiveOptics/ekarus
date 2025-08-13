@@ -4,7 +4,7 @@ from tps import ThinPlateSpline # for the simulated IFF
 from scipy.interpolate import griddata
 
 
-def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None):
+def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None, xp=np):
     """ 
     Clip the command to avoid saturation
 
@@ -34,12 +34,12 @@ def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None):
     """
     # Define master ids
     n_acts = len(cmd)
-    act_ids = np.arange(n_acts)
+    act_ids = xp.arange(n_acts)
 
     if cmd_thr is None:
-        master_ids = act_ids[np.abs(cmd-np.mean(cmd)) <= 3*np.std(cmd)]
+        master_ids = act_ids[abs(cmd-xp.mean(cmd)) <= 3*xp.std(cmd)]
     else:
-        master_ids = act_ids[np.abs(cmd) <= cmd_thr]
+        master_ids = act_ids[abs(cmd) <= cmd_thr]
     
     match slaving_method:
 
@@ -50,13 +50,13 @@ def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None):
             slaved_cmd = rescaled_cmd[:,0]
 
         case 'zero':
-            pad_cmd = np.zeros_like(cmd)
+            pad_cmd = xp.zeros_like(cmd)
             pad_cmd[master_ids] = cmd[master_ids]
             slaved_cmd = pad_cmd
 
         case 'clip':
-            slaved_cmd = np.minimum(np.abs(cmd), cmd_thr)
-            slaved_cmd *= np.sign(cmd)
+            slaved_cmd = xp.minimum(abs(cmd), cmd_thr)
+            slaved_cmd *= xp.sign(cmd)
 
         case 'nearest':
             master_coords = coords[:,master_ids]
@@ -66,14 +66,14 @@ def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None):
             master_coords = coords[:,master_ids]
             master_cmd = cmd[master_ids]
             dist2 = lambda xy: (xy[0]-master_coords[0])**2 + (xy[1]-master_coords[1])**2 
-            is_slave = np.ones_like(cmd, dtype=bool)
+            is_slave = xp.ones_like(cmd, dtype=bool)
             is_slave[master_ids] = False
             slave_ids = act_ids[is_slave]
             slaved_cmd = cmd.copy()
             for slave in slave_ids:
                 d2_slave = dist2(coords[:,slave])
                 weighted_cmd = master_cmd / d2_slave
-                slaved_cmd[slave] = np.sum(weighted_cmd)*np.sum(d2_slave)/n_acts
+                slaved_cmd[slave] = xp.sum(weighted_cmd)*xp.sum(d2_slave)/n_acts
 
         # case 'exclude':
         #     masked_IFF = self.IFF[valid_ids,:]
@@ -90,7 +90,7 @@ def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None):
     return slaved_cmd
     
 
-def compute_reconstructor(M, thr:float= 1e-12):
+def compute_reconstructor(M, thr:float= 1e-12, xp=np):
     """
     Computes the reconstructor (pseudo-inverse) 
     for the interaction matrix M.
@@ -115,7 +115,7 @@ def compute_reconstructor(M, thr:float= 1e-12):
 
     """
 
-    U,S,V = np.linalg.svd(M, full_matrices=False)
+    U,S,V = xp.linalg.svd(M, full_matrices=False)
     Sinv = 1/S
     Sinv[Sinv < thr] = 0
     Rec = (V.T * Sinv) @ U.T
@@ -123,25 +123,25 @@ def compute_reconstructor(M, thr:float= 1e-12):
     return Rec, U
     
     
-def simulate_influence_functions(act_coords, local_mask, pix_scale:float = 1.0):
+def simulate_influence_functions(act_coords, local_mask, pix_scale:float = 1.0, xp=np):
     """ Simulate the influence functions by 
     imposing 'perfect' zonal commands """
     
-    n_acts = np.max(np.shape(act_coords))
+    # n_acts = np.max(np.shape(act_coords))
     # H,W = np.shape(local_mask)
+    n_acts = max(act_coords.shape)
 
-    mask_ids = np.arange(np.size(local_mask))
+    mask_ids = xp.arange(xp.size(local_mask))
     pix_ids = mask_ids[~(local_mask).flatten()]
     
     pix_coords = getMaskPixelCoords(local_mask).T
     act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale).T
     
-    # img_cube = np.zeros([H,W,n_acts])
-    # flat_img = np.zeros(H*W)
-    IFF = np.zeros([len(pix_ids),n_acts])
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    IFF = xp.zeros([len(pix_ids),n_acts], dtyep=dtype)
 
     for k in range(n_acts):
-        act_data = np.zeros(n_acts)
+        act_data = xp.zeros(n_acts, dtype=dtype)
         act_data[k] = 1e-6
         tps = ThinPlateSpline(alpha=0.0)
         tps.fit(act_pix_coords, act_data)
@@ -151,7 +151,7 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float = 1.0):
     return IFF
 
 
-def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
+def get_pixel_coords(mask, coords, pix_scale:float = 1.0, xp=np):
     """ 
     Convert x,y coordinates in coords to pixel coordinates
     or get the pixel coordinates of a mask
@@ -175,16 +175,16 @@ def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
         The obtained pixel coordinates.
     """
     
-    H,W = np.shape(mask)
-
-    pix_coords = np.zeros([2,np.shape(coords)[-1]])
+    H,W = mask.shape
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    pix_coords = xp.zeros([2,xp.shape(coords)[-1]], dtype=dtype)
     pix_coords[0,:] = (coords[1,:]*pix_scale/2 + H)/2
     pix_coords[1,:] = (coords[0,:]*pix_scale/2 + W)/2
     
     return pix_coords
 
 
-def get_coords_from_IFF(IFF, mask, use_peak=True):
+def get_coords_from_IFF(IFF, mask, use_peak=True, xp=np):
     """
     Get the coordinates of the actuators from the influence functions matrix.
 
@@ -219,37 +219,39 @@ def get_coords_from_IFF(IFF, mask, use_peak=True):
 
     # Get the coordinates of the actuators
     n_acts = IFF.shape[1]
-    act_coords = np.zeros([2, n_acts])
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    act_coords = xp.zeros([2, n_acts], dtype=dtype)
 
     for k in range(n_acts):
         act_data = IFF[:, k]
         if use_peak:
-            max_id = np.argmax(act_data)
+            max_id = xp.argmax(act_data)
             act_coords[0,k] = x_coords[max_id]
             act_coords[1,k] = y_coords[max_id] 
         else:
-            act_coords[0,k] = np.sum(x_coords * act_data) / np.sum(act_data)
-            act_coords[1,k] = np.sum(y_coords * act_data) / np.sum(act_data)
+            act_coords[0,k] = xp.sum(x_coords * act_data) / xp.sum(act_data)
+            act_coords[1,k] = xp.sum(y_coords * act_data) / xp.sum(act_data)
 
     return act_coords
 
 
-def cube2mat(cube):
+def cube2mat(cube, xp=np):
     """ Get influence functions matrix 
     from the image cube """
     
-    n_acts = np.shape(cube)[2]
-    valid_len = int(np.sum(1-cube.mask)/n_acts)
+    n_acts = cube.shape[2]
+    valid_len = int(xp.sum(1-cube.mask)/n_acts)
     
     flat_cube = cube.data[~cube.mask]
-    local_IFF = np.reshape(flat_cube, [valid_len, n_acts])
-    
-    IFF = np.array(local_IFF)
+    local_IFF = xp.reshape(flat_cube, [valid_len, n_acts])
+
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    IFF = xp.array(local_IFF, dtype=dtype)
     
     return IFF
 
 
-def getMaskPixelCoords(mask):
+def getMaskPixelCoords(mask, xp=np):
     """ 
     Get the pixel coordinates of a mask
 
@@ -264,9 +266,10 @@ def getMaskPixelCoords(mask):
         The obtained pixel coordinates.
     """
     
-    H,W = np.shape(mask)
-    pix_coords = np.zeros([2,H*W])
-    pix_coords[0,:] = np.repeat(np.arange(H),W)
-    pix_coords[1,:] = np.tile(np.arange(W),H)
+    H,W = mask.shape
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    pix_coords = xp.zeros([2,H*W], dtype=dtype)
+    pix_coords[0,:] = xp.repeat(xp.arange(H),W)
+    pix_coords[1,:] = xp.tile(xp.arange(W),H)
     
     return pix_coords

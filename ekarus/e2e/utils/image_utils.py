@@ -2,6 +2,8 @@ import numpy as np
 # from arte.types.mask import CircularMask
 import matplotlib.pyplot as plt
 
+
+
 def image_grid(shape, recenter:bool = False, xp=np):
     """
     Define a grid of X and Y coordinates on an image shape
@@ -15,13 +17,14 @@ def image_grid(shape, recenter:bool = False, xp=np):
     """
 
     ny, nx = shape
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
     cy, cx = (0,0)
     if recenter:
         cy, cx = ny//2, nx//2
 
-    x = xp.arange(nx) - cx
-    y = xp.arange(ny) - cy
+    x = xp.arange(nx, dtype=dtype) - cx
+    y = xp.arange(ny, dtype=dtype) - cy
     X,Y = xp.meshgrid(x, y)
 
     return X,Y
@@ -35,7 +38,7 @@ def get_photocenter(image, xp=np):
     :param xp: (optional) numpy or cupy for GPU acceleration
     :return: y,x coordinates of the photocenter
     """
-    X,Y = image_grid(image.shape)
+    X,Y = image_grid(image.shape, xp=xp)
     qy = xp.sum(Y * image) / xp.sum(image)
     qx = xp.sum(X * image) / xp.sum(image)
 
@@ -57,31 +60,26 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
     if mask_center is None:
         mask_center = (W/2,H/2)
 
-    dist = lambda x,y: xp.sqrt((x-mask_center[0])**2+(y-mask_center[1])**2)
+    dist = lambda x,y: xp.sqrt((xp.asarray(x)-mask_center[0])**2+(xp.asarray(y)-mask_center[1])**2)
     mask = xp.fromfunction(lambda i,j: dist(j,i) >= mask_radius, [H,W])
-    mask = mask.astype(bool)
+    mask = xp.asarray(mask,dtype=bool)  #mask.astype(bool)
     return mask
+
     # mask = CircularMask(shape, maskRadius=radius, maskCenter=center)
     # return (mask.mask()).astype(bool)
 
 
-def reshape_on_mask(flat_array, mask, xp=np):
+def reshape_on_mask(flat_array, mask, xp=np, dtype=np.float32):
     """
     Reshape a given array on a 2D mask.
     :param flat_array: array of shape sum(1-mask)
     :param mask: boolean 2D mask
     :return: 2D array with flat_array in ~mask
     """
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
     image = xp.zeros(mask.shape,dtype=dtype)
     image[~mask] = flat_array
     image = xp.reshape(image, mask.shape)
     return image
-
-
-# def compute_pixel_size(wavelength, pupil_diameter_in_m, padding:int=1):
-#     """ Get the number of pixels per radian """
-#     return wavelength/pupil_diameter_in_m/padding
 
 
 def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0):
@@ -100,3 +98,8 @@ def showZoomCenter(image, pixelSize, **kwargs):
     roi= [int(imageHalfSizeInPoints*0.9), int(imageHalfSizeInPoints*1.1)]
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
+
+
+# def compute_pixel_size(wavelength, pupil_diameter_in_m, padding:int=1):
+#     """ Get the number of pixels per radian """
+#     return wavelength/pupil_diameter_in_m/padding

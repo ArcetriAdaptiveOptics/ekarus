@@ -29,7 +29,7 @@ slope_computer = SlopeComputer(wfs_type = 'PyrWFS')
 cmask = get_circular_mask((Npix*oversampling,Npix*oversampling), Npix//2)
 
 # Define modulation angle
-alpha = 3*lambdaInM/pupilSizeInM 
+alpha = 2*lambdaInM/pupilSizeInM 
 
 # Calibrate sensor
 piston = 1-cmask

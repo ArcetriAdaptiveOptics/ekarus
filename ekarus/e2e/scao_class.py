@@ -3,7 +3,7 @@ import numpy as np
 # from arte.types.mask import CircularMask
 
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
-from ekarus.e2e.utils.kl_modes import make_modal_base_from_ifs_fft
+from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
 
 
 class SCAO():
@@ -11,7 +11,7 @@ class SCAO():
     def __init__(self, wfs, ccd, slope_computer, dm, pupil_pixel_size, pupil_size, throughput = None, oversampling:int = 4, xp=np):
 
         mask_shape = (oversampling * pupil_pixel_size, oversampling * pupil_pixel_size)
-        self.cmask = get_circular_mask(mask_shape, mask_radius=pupil_pixel_size//2)
+        self.cmask = get_circular_mask(mask_shape, mask_radius=pupil_pixel_size//2, xp=xp)
 
         self.oversampling = oversampling
 
@@ -53,11 +53,11 @@ class SCAO():
         return slopes
 
 
-    def define_KL_modal_base(self, r0, L0, zern2remove:int = 5):
+    def define_KL_modal_base(self, r0, L0, telescopeDiameterInM, zern2remove:int = 5):
 
         KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels,
-        self.pupilSizeInM, self.dm.IFF.T, r0, L0, zern_modes=zern2remove,
-        oversampling=self.oversampling, verbose = True)
+        telescopeDiameterInM, self.dm.IFF.T, r0, L0, zern_modes=zern2remove,
+        oversampling=self.oversampling, verbose = True, xp=self._xp, dtype=self.dtype)
 
         return KL, m2c
     

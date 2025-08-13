@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from numpy.ma import masked_array
+
 
 class DeformableMirror():
     """ 
@@ -17,8 +19,9 @@ class DeformableMirror():
 
     """
     
-    def __init__(self):
-        pass
+    def __init__(self, xp=np):
+        self._xp = xp
+        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
 
     def get_position(self):
@@ -47,18 +50,15 @@ class DeformableMirror():
         """
         
         if modal: # convert modal to zonal
-            
-            # length check
             mode_amps = cmd_amps.copy()
-            n_modes = np.shape(self.U)[1]
+            n_modes = self._xp.shape(self.U)[1]
             if len(mode_amps) < n_modes:
-                mode_amps = np.zeros(n_modes)
+                mode_amps = self._xp.zeros(n_modes, dtype = self.dtype)
                 mode_amps[:len(cmd_amps)] = cmd_amps
         
             shape = self.U @ mode_amps
             cmd_amps = self.R @ shape
         
-        # Position (zonal) command
         if absolute:
             cmd_amps -= self.act_pos
 
@@ -89,21 +89,20 @@ class DeformableMirror():
         if surf2plot is None:
             surf2plot = self.surface
         
-        mask_ids = np.arange(np.size(self.mask))
+        mask_ids = self._xp.arange(self._xp.size(self.mask))
         pix_ids = mask_ids[~(self.mask).flatten()]
             
-        image = np.zeros(np.size(self.mask))
+        image = self._xp.zeros(self._xp.size(self.mask), dtype = self.dtype)
         image[pix_ids] = surf2plot
-        image = np.reshape(image, np.shape(self.mask))
+        image = self._xp.reshape(image, self.mask.shape)
         
-        if plt_mask is None:
-            plt_mask = self.mask
-        else:
-            plt_mask = np.logical_or(self.mask, plt_mask)
+        plt_mask = self._xp.logical_or(self.mask, plt_mask) if plt_mask is not None else self.mask.copy()
+
+        if self._xp.__name__ == 'cupy':
+            image = image.get()
+            plt_mask = plt_mask.get()
         
-        image = np.ma.masked_array(image, plt_mask)
-        
-        #plt.figure(figsize=(10,10))  
+        image = masked_array(image, plt_mask)
         plt.imshow(image, origin = 'lower', cmap = 'hot')
         
         img_rms = np.std(image.data[~image.mask])
@@ -135,11 +134,12 @@ class DeformableMirror():
             pos = self.act_pos.copy()
         x,y = self.act_coords[0,:], self.act_coords[1,:] 
         
-        act_pix_size = 3
-        if np.sum(self.Nacts) < 100:
-            act_pix_size = 12
+        act_pix_size = 12 if self._xp.sum(self.Nacts) < 100 else 3
+
+        if self._xp.__name__ == 'cupy':
+            pos = pos.get()
+            x,y = x.get(), y.get()
         
-        #plt.figure(figsize = (10,10))
         plt.scatter(x,y, c=pos, s=act_pix_size**2, cmap='hot')
         plt.axis('equal')
         plt.colorbar()
