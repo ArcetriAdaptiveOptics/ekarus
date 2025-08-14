@@ -17,6 +17,9 @@ def save_fits(filename, data, data_type = None, header_dictionary = None):
     if header_dictionary is not None:
         for key in header_dictionary:
             hdr[str(key)] = header_dictionary[key]
+
+    if hasattr(data, 'get'):
+        data = data.get()
     
     pyfits.writeto(filename, data, hdr, overwrite=True)
 

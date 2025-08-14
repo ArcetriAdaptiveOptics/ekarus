@@ -21,6 +21,7 @@ class PyramidWFS:
 
         self._xp = xp
         self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+        self.cdtype = xp.complex64 if xp.__name__ == 'cupy' else xp.complex128
         
 
     def pyramid_phase_delay(self, shape):
@@ -55,7 +56,7 @@ class PyramidWFS:
         self.field_on_focal_plane = self._xp.fft.fftshift(self._xp.fft.fft2(input_field))
 
         phase_delay = self.pyramid_phase_delay(self.field_on_focal_plane.shape) / pix2rad
-        self._ef_focal_plane_delayed = self.field_on_focal_plane * self._xp.exp(1j*phase_delay)
+        self._ef_focal_plane_delayed = self.field_on_focal_plane * self._xp.exp(1j*phase_delay, dtype = self.cdtype)
 
         output_field = self._xp.fft.ifft2(self._xp.fft.ifftshift(self._ef_focal_plane_delayed))
 
@@ -85,9 +86,9 @@ class PyramidWFS:
 
         for phi in phi_vec:
             tilt = (tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi))/L
-            tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix)
+            tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
 
             output = self.propagate(tilted_input, pix2rad)
-            intensity += (self._xp.abs(output**2))/N_steps
+            intensity += (abs(output**2))/N_steps
 
         return intensity

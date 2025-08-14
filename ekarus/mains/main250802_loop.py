@@ -22,7 +22,6 @@ except:
     import numpy as xp
     xptype = xp.float64
 
-    
 
 # System data
 lambdaInM = 1000e-9
@@ -46,7 +45,7 @@ telescopeSizeInM = 1.8
 show = False
 
 # Sensor, detector, DM
-print('Initializing sensor, detector and deformable mirror ...')
+print('Initializing devices ...')
 wfs = PyramidWFS(apex_angle, xp=xp)
 ccd = Detector(detector_shape=detector_shape, xp=xp)
 dm = ALPAODM(468, Npix=Npix, xp=xp)
@@ -70,7 +69,6 @@ except FileExistsError:
 
 # 1. Define the subapertures using a piston input wavefront
 print('Defining the detector subaperture masks ...')
-
 subap_path = os.path.join(dir_path,'SubapertureMasks.fits')
 try:
     slope_computer._subaperture_masks = myfits.read_fits(subap_path, isBool=True)
@@ -174,7 +172,7 @@ except FileNotFoundError:
 screen = screens[0]
 
 dt = 1e-3
-wind_speed = 20
+wind_speed = 10
 wind_angle = xp.pi/4
 
 if show:
@@ -186,166 +184,136 @@ if show:
 
 # 5. Perform the iteration
 print('Running the loop ...')
-g = 0.5
-mask_shape = (Npix*oversampling,Npix*oversampling)
+compression = telescopeSizeInM/pupilSizeInM
+electric_field_amp = 1-scao.cmask
+
+g = 1e-6
+Nits = 100
+
 mask_len = int(xp.sum(1-dm.mask))
 dm_shape = xp.zeros(mask_len, dtype=xptype)
 dm_cmd = xp.zeros(dm.Nacts, dtype=xptype)
+dm_phase = xp.zeros_like(scao.cmask, dtype=xptype)
 
-compression = telescopeSizeInM/pupilSizeInM
+# Save telemetry
+dm_cmds = xp.zeros([Nits,dm.Nacts])
+dm_phases = xp.zeros([Nits,mask_len])
+input_phases = xp.zeros([Nits,mask_len])
+ccd_images = xp.zeros([Nits,ccd.detector_shape[0],ccd.detector_shape[1]])
 
-Nits = 10
-electric_field_amp = 1-scao.cmask
-
-input_sig = xp.zeros(Nits)
-sig = xp.zeros(Nits)
 
 for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
     tt = dt*i
     input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter, xp=xp)
-    # input_phase *= compression
+    input_phase *= compression
 
-    dm_phase = xp.zeros_like(dm.mask, dtype=xptype)
-    dm_phase[~dm.mask] = dm_shape/lambdaInM*(2*xp.pi)
-    dm_phase = xp.pad(xp.reshape(dm_phase,dm.mask.shape), (Npix*(oversampling-1))//2)
+    dm_phase[~scao.cmask] = dm_shape/lambdaInM*(2*xp.pi)
+    dm_phase = xp.reshape(dm_phase, scao.cmask.shape)
 
     phase = input_phase - dm_phase
-
-    masked_phase = phase[~scao.cmask]
-    masked_input_phase = input_phase[~scao.cmask]
-    input_sig[i] = xp.mean(masked_input_phase**2)
-    sig[i] = xp.mean(masked_phase**2)
 
     cmd, ccd_image = scao.perform_loop_iteration(phase, Rec, lambdaInM, alpha, m2c=m2c)
     dm_cmd += cmd*g
     dm_shape += dm.IFF @ dm_cmd
-    
-    electric_field = electric_field_amp * xp.exp(1j*phase)
-    field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-    psf = xp.abs(field_on_focal_plane)**2
+
+    # Save telemetry
+    input_phases[i,:] = input_phase[~scao.cmask]
+    dm_phases[i,:] = dm_phase[~scao.cmask]
+    ccd_images[i,:,:] = ccd_image
+    dm_cmds[i,:] = dm_cmd
+
+
+#################### Post-processing ##############################
+electric_field_amp = 1-scao.cmask
+electric_field = electric_field_amp * xp.exp(-1j*phase)
+field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
+psf = abs(field_on_focal_plane)**2
+
+sig2 = xp.mean((input_phases-dm_phases)**2, axis=-1)
+input_sig2 = xp.mean((input_phases)**2, axis=-1)
+
+print('Saving telemetry to .fits ...')
+cmask = scao.cmask.get() if xp.__name__ == 'cupy' else scao.cmask.copy()
+from ekarus.e2e.utils.image_utils import reshape_on_mask
+
+masked_input_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
+masked_dm_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
+
+aux = xp.zeros_like(scao.cmask,dtype=xptype)
 
 if xp.__name__ == 'cupy':
+    masked_input_phases = masked_input_phases.get()
+    masked_dm_phases = masked_dm_phases.get()
+    input_phases = input_phases.get()
+    dm_phases = dm_phases.get()
+    aux = aux.get()
+
+for i in range(Nits):
+    aux[~cmask] = input_phases[i,:]
+    aux = (aux).reshape(cmask.shape)
+    # aux = aux.get() if xp.__name__ == 'cupy' else aux
+    masked_input_phases[i,:,:] = masked_array(aux, cmask)
+
+    aux[~cmask] = dm_phases[i,:]
+    aux = (aux).reshape(cmask.shape)
+    masked_dm_phases[i,:,:]= masked_array(aux, cmask)
+
+atmo_phases_path = os.path.join(dir_path,'AtmoPhase.fits')
+dm_phases_path = os.path.join(dir_path,'DMphase.fits')
+
+myfits.save_fits(atmo_phases_path, masked_input_phases, hdr_dict)
+myfits.save_fits(dm_phases_path, masked_dm_phases, hdr_dict)
+
+########################## Plotting ###############################
+if xp.__name__ == 'cupy': # Convert to numpy for plotting
     input_phase = input_phase.get()
-    psf = psf.get()
+    phase = phase.get()
     ccd_image = ccd_image.get()
     dm_cmd = dm_cmd.get()
-    phase = phase.get()
-    input_sig = input_sig.get()
-    sig = sig.get()
+    dm_phase = dm_phase.get()
+    psf = psf.get()
+    input_sig2 = input_sig2.get()
+    sig2 = sig2.get()
 
-cmask = scao.cmask.get() if xp.__name__ == 'cupy' else scao.cmask.copy()
     
 plt.figure(figsize=(12,12))
 plt.subplot(2,2,1)
 plt.imshow(masked_array(input_phase, mask = cmask),origin='lower')
 plt.colorbar()
-plt.title(f'Input: Strehl ratio = {xp.exp(-input_sig[-1]**2):1.3f}')
+plt.title(f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}')
 
 plt.subplot(2,2,2)
-showZoomCenter(psf, pix2rad*rad2arcsec, title = f'PSF: Strehl ratio = {xp.exp(-sig[-1]**2):1.3f}')
+plt.imshow(masked_array(phase, mask = cmask),origin='lower')
+plt.colorbar()
+plt.title(f'Output: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}')
+
+# plt.subplot(2,2,2)
+# showZoomCenter(psf, pix2rad*rad2arcsec, title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]**2):1.3f}')
 
 plt.subplot(2,2,3)
 plt.imshow(ccd_image,origin='lower')
 plt.colorbar()
 plt.title('Detector image')
 
-# plt.subplot(2,2,4)
-# plt.imshow(masked_array(phase, mask = scao.cmask),origin='lower')
-# plt.colorbar()
-# plt.title('Corrected phase')
-
 plt.subplot(2,2,4)
-dm.plot_position(dm_cmd)
-plt.title('Mirror command')
+plt.imshow(masked_array(dm_phase, mask = cmask),origin='lower')
+plt.colorbar()
+plt.title('DM phase')
 
+# plt.subplot(2,2,4)
+# dm.plot_position(dm_cmd)
+# plt.title('Mirror command')
 
 plt.figure(figsize=(4*Nits/10,3))
-plt.plot(input_sig,'-o',label='open loop')
-plt.plot(sig,'-o',label='closed loop')
+plt.plot(input_sig2,'-o',label='open loop')
+plt.plot(sig2,'-o',label='closed loop')
 plt.legend()
 plt.grid()
-plt.ylabel('Strehl ratio')
+plt.ylabel(r'$\sigma^2 [rad^2]$')
 plt.xlabel('# iteration')
 x_ticks = (xp.arange(Nits//4)*4).get() if xp.__name__ == 'cupy' else xp.arange(Nits//4)*4
 plt.xticks(x_ticks)
 plt.xlim([-0.5,Nits-0.5])
 
-
 plt.show()
-
-
-# input_phases = []
-# psfs = []
-# ccd_images = []
-# dm_cmds = []
-
-# Nit = 10
-
-# for i in range(Nit):
-#     tt = dt*i
-#     input_phase = move_mask_on_phasescreen(screen, scao.cmask.mask(), tt, wind_speed, wind_angle, pixelsPerMeter)
-
-#     dm_phase = xp.zeros_like(dm.mask,dtype=xp.float32)
-#     dm_phase[~dm.mask] = dm_shape/pupilSizeInM*(2*xp.pi)
-#     dm_phase = xp.pad(dm_phase, (Npix*(oversampling-1))//2)
-
-#     phase = input_phase - dm_phase
-
-#     cmd, ccd_image = scao.perform_loop_iteration(phase, Rec, lambdaInM, m2c)
-#     dm_cmd += cmd*g
-#     dm_shape += dm.IFF @ dm_cmd
-    
-#     electric_field = scao.cmask.mask() * xp.exp(1j*phase)
-#     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-#     psf = xp.abs(field_on_focal_plane**2)
-    
-#     input_phases.append(xp.ma.masked_array(input_phase, mask = scao.cmask.mask()))
-#     psfs.append(psf)
-#     ccd_images.append(ccd_image)
-#     dm_cmds.append(dm_cmd)
-
-# fig = plt.figure(figsize=(12,12))
-# plt.subplot(2,2,1)
-# plt.imshow(input_phases[0],origin='lower')
-# plt.colorbar()
-# plt.title('Input phase')
-
-# plt.subplot(2,2,2)
-# showZoomCenter(psfs[0],pix2rad*rad2arcsec, title='PSF')
-
-# plt.subplot(2,2,3)
-# plt.imshow(ccd_images[0],origin='lower')
-# plt.colorbar()
-# plt.title('Detector image')
-
-# plt.subplot(2,2,4)
-# plt.scatter(dm.act_coords[0],dm.act_coords[1],c=dm_cmds[0])
-# plt.axis('equal')
-# plt.colorbar()
-# plt.title('Mirror command')
-
-# from matplotlib.animation import FuncAnimation
-
-# def animate(frame):
-#     ff = frame+1
-
-#     plt.subplot(2,2,1)
-#     plt.imshow(input_phases[ff],origin='lower')
-
-#     plt.subplot(2,2,2)
-#     showZoomCenter(psfs[ff],pix2rad*rad2arcsec, title='PSF')
-
-#     plt.subplot(2,2,3)
-#     plt.imshow(ccd_images[ff],origin='lower')
-
-#     plt.subplot(2,2,4)
-#     plt.scatter(dm.act_coords[0],dm.act_coords[1],c=dm_cmds[ff])
-
-# ani = FuncAnimation(fig, animate, interval = 30, frames = Nit-1)
-# plt.show()
-
-
-
-
-
