@@ -1,6 +1,8 @@
 from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 import numpy as np
 
+from ekarus.e2e.utils.image_utils import reshape_on_mask
+
 # class Turbulence():
 
 #     def __init__(self, r0, L0):
@@ -32,43 +34,43 @@ def move_mask_on_phasescreen(screen, mask, dt, wind_speed, wind_direction_angle,
 
     dpix = wind_speed*dt*pixelsPerMeter
     x = x_start + dpix*xp.cos(wind_direction_angle)
-    y = y_start + dpix*xp.sin(-wind_direction_angle)
+    y = y_start + dpix*xp.sin(wind_direction_angle)
 
     if x > screen.shape[1]-mask.shape[1] or y > screen.shape[0]-mask.shape[0] or x < 0 or y < 0:
         raise ValueError(f'A displacement of {dpix:1.2f} for a time {dt:1.3f} [s] with wind {wind_speed:1.1f} [m/s] yields\
                          ({y:1.0f},{x:1.0f}), which is outside the bounds for a {screen.shape} screen and a {mask.shape} mask.')
 
-    x_floor = int(xp.floor(x))
-    y_floor = int(xp.floor(y))
+    x_round = int(xp.floor(x) * (x>=x_start) + xp.ceil(x) * (x<x_start))
+    y_round = int(xp.floor(y) * (y>=y_start) + xp.ceil(y) * (y<y_start))
+
+    dx, dy = abs(x-x_round), abs(y-y_round)
+    sdx, sdy = int(xp.sign(x-x_start)), int(xp.sign(y-y_start))
 
     H,W = mask.shape
 
     full_mask = xp.ones_like(screen, dtype=bool)
-    full_mask[y_floor:(y_floor+H),x_floor:(x_floor+W)] = mask
-    phase = screen[~full_mask]
+    full_mask[y_round:(y_round+H),x_round:(x_round+W)] = mask
+    phase = reshape_on_mask(screen[~full_mask], mask, xp=xp)
 
     thr = 1e-4
-    interp_phase = phase.copy()
+    phase_mask = phase.copy()
 
-    if x-x_floor > thr and y-y_floor > thr:
-        dx, dy = x-x_floor, y-y_floor
-        dx_phase = screen[~xp.roll(full_mask,1,axis=1)]
-        dy_phase = screen[~xp.roll(full_mask,1,axis=0)]
-        dxdy_phase = screen[~xp.roll(full_mask,(1,1),axis=(0,1))]
-        interp_phase = (phase * dx + (1-dx) * dx_phase) * dy + (dy_phase * dx + (1-dx) * dxdy_phase) * (1-dy)
+    if dx > thr and dy > thr:
+        dx_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
+        dy_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
+        dxdy_phase = reshape_on_mask(screen[~xp.roll(full_mask,(sdx,sdy),axis=(0,1))], mask, xp=xp)
+        phase_mask = (phase * dx + (1-dx) * dx_phase) * dy + (dy_phase * dx + (1-dx) * dxdy_phase) * (1-dy)
 
-    elif x-x_floor > thr:
-        dx = x-x_floor
-        dx_phase = screen[~xp.roll(full_mask,1,axis=1)]
-        interp_phase *= dx + dx_phase * (1-dx)
+    elif dx > thr:
+        dx_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
+        phase_mask *= dx + dx_phase * (1-dx)
 
-    elif y-y_floor > thr:
-        dy = y-y_floor
-        dy_phase = screen[~xp.roll(full_mask,1,axis=0)]
-        interp_phase *= dy + dy_phase * (1-dy)
+    elif dy > thr:
+        dy_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
+        phase_mask *= dy + dy_phase * (1-dy)
 
-    phase_mask = xp.zeros(mask.shape)
-    phase_mask[~mask] = interp_phase
+    # phase_mask = xp.zeros(mask.shape)
+    # phase_mask[~mask] = interp_phase
 
     return phase_mask
 
