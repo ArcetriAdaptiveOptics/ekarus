@@ -103,11 +103,10 @@ try:
         m2c = xp.asarray(m2c, dtype=xp.float32)
 except FileNotFoundError:
     KL, m2c = scao.define_KL_modal_base(r0, L0, telescopeDiameterInM = telescopeSizeInM, zern2remove = 5)
-    if xp.__name__ == 'cupy':
-        KL = KL.get()
-        m2c = m2c.get()
-    myfits.save_fits(KL_path, KL, hdr_dict)
-    myfits.save_fits(m2c_path, m2c, hdr_dict)
+    KLmat = KL.get if xp.__name__ == 'cupy' else KL.copy()
+    m2c_mat = m2c.get if xp.__name__ == 'cupy' else m2c.copy()
+    myfits.save_fits(KL_path, KLmat, hdr_dict)
+    myfits.save_fits(m2c_path, m2c_mat, hdr_dict)
 
 if show:
     N=9
@@ -136,12 +135,16 @@ try:
         Rec = xp.asarray(Rec, dtype=xp.float32)
 
 except FileNotFoundError:
-    IM, Rec = scao.calibrate_modes(KL, lambdaInM, alpha, amps = 0.1)
-    if xp.__name__ == 'cupy':
-        IM = IM.get()
-        Rec = Rec.get()
-    myfits.save_fits(IM_path, IM, hdr_dict)
-    myfits.save_fits(Rec_path, Rec, hdr_dict)
+    IM, Rec = scao.calibrate_modes(KL, lambdaInM, alpha, amps = 0.2)
+    new_amp = 1/xp.std(IM,axis=0)
+    plt.figure()
+    plt.plot(new_amp.get(),'-o')
+    plt.grid()
+    plt.show()
+    IMmat = IM.get if xp.__name__ == 'cupy' else IM.copy()
+    Rec_mat = Rec.get if xp.__name__ == 'cupy' else Rec.copy()
+    myfits.save_fits(IM_path, IMmat, hdr_dict)
+    myfits.save_fits(Rec_path, Rec_mat, hdr_dict)
 
 
 # 4. Get atmospheric phase screen
@@ -164,16 +167,15 @@ except FileNotFoundError:
     screens = generate_phasescreens(lambdaInM, r0, L0, Nscreens, \
      screenSizeInPixels=screenPixels, screenSizeInMeters=screenMeters, \
      savepath=atmo_path, xp=xp, dtype=xptype)
-    if xp.__name__ == 'cupy':
-        screens = screens.get()
-    myfits.save_fits(atmo_path, screens, hdr_dict)
+    screen2save = screens.get if xp.__name__ == 'cupy' else screens.copy()
+    myfits.save_fits(atmo_path, screen2save, hdr_dict)
 
 
-screen = screens[0]
+screen = screens[0]*2e-2
 
 dt = 1e-3
-wind_speed = 10
-wind_angle = xp.pi/4
+wind_speed = 5
+wind_angle = 1/4 * xp.pi
 
 if show:
     plt.figure()
@@ -187,7 +189,7 @@ print('Running the loop ...')
 compression = telescopeSizeInM/pupilSizeInM
 electric_field_amp = 1-scao.cmask
 
-g = 1e-6
+g = 1e-8
 Nits = 100
 
 mask_len = int(xp.sum(1-dm.mask))
@@ -199,8 +201,8 @@ dm_phase = xp.zeros_like(scao.cmask, dtype=xptype)
 dm_cmds = xp.zeros([Nits,dm.Nacts])
 dm_phases = xp.zeros([Nits,mask_len])
 input_phases = xp.zeros([Nits,mask_len])
+reconstructed_phases = xp.zeros([Nits,mask_len])
 ccd_images = xp.zeros([Nits,ccd.detector_shape[0],ccd.detector_shape[1]])
-
 
 for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
@@ -220,6 +222,7 @@ for i in range(Nits):
     # Save telemetry
     input_phases[i,:] = input_phase[~scao.cmask]
     dm_phases[i,:] = dm_phase[~scao.cmask]
+    reconstructed_phases[i,:] = dm.IFF @ cmd
     ccd_images[i,:,:] = ccd_image
     dm_cmds[i,:] = dm_cmd
 
@@ -239,31 +242,39 @@ from ekarus.e2e.utils.image_utils import reshape_on_mask
 
 masked_input_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 masked_dm_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
+masked_rec_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 
 aux = xp.zeros_like(scao.cmask,dtype=xptype)
 
 if xp.__name__ == 'cupy':
     masked_input_phases = masked_input_phases.get()
+    masked_rec_phases = masked_rec_phases.get()
     masked_dm_phases = masked_dm_phases.get()
     input_phases = input_phases.get()
     dm_phases = dm_phases.get()
+    reconstructed_phases = reconstructed_phases.get()
     aux = aux.get()
 
 for i in range(Nits):
     aux[~cmask] = input_phases[i,:]
     aux = (aux).reshape(cmask.shape)
-    # aux = aux.get() if xp.__name__ == 'cupy' else aux
     masked_input_phases[i,:,:] = masked_array(aux, cmask)
 
     aux[~cmask] = dm_phases[i,:]
     aux = (aux).reshape(cmask.shape)
     masked_dm_phases[i,:,:]= masked_array(aux, cmask)
 
+    aux[~cmask] = reconstructed_phases[i,:]
+    aux = (aux).reshape(cmask.shape)
+    masked_rec_phases[i,:,:]= masked_array(aux, cmask)
+
 atmo_phases_path = os.path.join(dir_path,'AtmoPhase.fits')
 dm_phases_path = os.path.join(dir_path,'DMphase.fits')
+rec_phases_path = os.path.join(dir_path,'RecPhase.fits')
 
 myfits.save_fits(atmo_phases_path, masked_input_phases, hdr_dict)
 myfits.save_fits(dm_phases_path, masked_dm_phases, hdr_dict)
+myfits.save_fits(rec_phases_path, masked_rec_phases, hdr_dict)
 
 ########################## Plotting ###############################
 if xp.__name__ == 'cupy': # Convert to numpy for plotting
@@ -283,27 +294,27 @@ plt.imshow(masked_array(input_phase, mask = cmask),origin='lower')
 plt.colorbar()
 plt.title(f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}')
 
-plt.subplot(2,2,2)
-plt.imshow(masked_array(phase, mask = cmask),origin='lower')
-plt.colorbar()
-plt.title(f'Output: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}')
-
 # plt.subplot(2,2,2)
-# showZoomCenter(psf, pix2rad*rad2arcsec, title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]**2):1.3f}')
+# plt.imshow(masked_array(phase, mask = cmask),origin='lower')
+# plt.colorbar()
+# plt.title(f'Output: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}')
+
+plt.subplot(2,2,2)
+showZoomCenter(psf, pix2rad*rad2arcsec, title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]**2):1.3f}')
 
 plt.subplot(2,2,3)
 plt.imshow(ccd_image,origin='lower')
 plt.colorbar()
 plt.title('Detector image')
 
-plt.subplot(2,2,4)
-plt.imshow(masked_array(dm_phase, mask = cmask),origin='lower')
-plt.colorbar()
-plt.title('DM phase')
-
 # plt.subplot(2,2,4)
-# dm.plot_position(dm_cmd)
-# plt.title('Mirror command')
+# plt.imshow(masked_array(dm_phase, mask = cmask),origin='lower')
+# plt.colorbar()
+# plt.title('DM phase')
+
+plt.subplot(2,2,4)
+dm.plot_position(dm_cmd)
+plt.title('Mirror command')
 
 plt.figure(figsize=(4*Nits/10,3))
 plt.plot(input_sig2,'-o',label='open loop')

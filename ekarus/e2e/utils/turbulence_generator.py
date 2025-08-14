@@ -2,6 +2,7 @@ from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 import numpy as np
 
 from ekarus.e2e.utils.image_utils import reshape_on_mask
+import matplotlib.pyplot as plt
 
 # class Turbulence():
 
@@ -49,28 +50,59 @@ def move_mask_on_phasescreen(screen, mask, dt, wind_speed, wind_direction_angle,
     H,W = mask.shape
 
     full_mask = xp.ones_like(screen, dtype=bool)
-    full_mask[y_round:(y_round+H),x_round:(x_round+W)] = mask
+    full_mask[y_round:(y_round+H),x_round:(x_round+W)] = mask.copy()
     phase = reshape_on_mask(screen[~full_mask], mask, xp=xp)
 
-    thr = 1e-4
-    phase_mask = phase.copy()
+    thr = 1e-2
 
     if dx > thr and dy > thr:
         dx_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
         dy_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
         dxdy_phase = reshape_on_mask(screen[~xp.roll(full_mask,(sdx,sdy),axis=(0,1))], mask, xp=xp)
-        phase_mask = (phase * dx + (1-dx) * dx_phase) * dy + (dy_phase * dx + (1-dx) * dxdy_phase) * (1-dy)
+        phase_mask = (phase * (1-dx) + dx * dx_phase) * (1-dy) + (dy_phase * (1-dx) + dx * dxdy_phase) * dy
 
     elif dx > thr:
         dx_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
-        phase_mask *= dx + dx_phase * (1-dx)
+        phase_mask = phase * (1-dx) + dx_phase * dx
 
     elif dy > thr:
         dy_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
-        phase_mask *= dy + dy_phase * (1-dy)
+        phase_mask = phase * (1-dy) + dy_phase * dy
 
-    # phase_mask = xp.zeros(mask.shape)
-    # phase_mask[~mask] = interp_phase
+    else:
+        phase_mask = phase.copy()
+
+    # if dx > thr:
+    #     plt.figure(figsize=(20,3.5))
+    #     plt.subplot(1,4,1)
+    #     plt.imshow(phase.get(),origin='lower')
+    #     plt.xlim([256-64,256+64])
+    #     plt.ylim([256-64,256+64])
+    #     plt.colorbar()
+    #     plt.title('Start')
+
+    #     plt.subplot(1,4,2)
+    #     plt.imshow(phase_mask.get(),origin='lower')
+    #     plt.xlim([256-64,256+64])
+    #     plt.ylim([256-64,256+64])
+    #     plt.colorbar()
+    #     plt.title('Interpolated')
+
+    #     plt.subplot(1,4,3)
+    #     plt.imshow((phase_mask-phase).get(),origin='lower')
+    #     plt.xlim([256-64,256+64])
+    #     plt.ylim([256-64,256+64])
+    #     plt.colorbar()
+    #     plt.title(f'Interpolated - Start: {dx*1e+2:1.0f}%')
+
+    #     plt.subplot(1,4,4)
+    #     plt.imshow((phase_mask-dx_phase).get(),origin='lower')
+    #     plt.xlim([256-64,256+64])
+    #     plt.ylim([256-64,256+64])
+    #     plt.colorbar()
+    #     plt.title(f'Interpolated - Shift: {(1-dx)*1e+2:1.0f}%')
+
+    #     plt.show()
 
     return phase_mask
 
@@ -80,7 +112,7 @@ def get_start_coordinates_on_phasescreen(screen_shape, mask_shape, wind_directio
     H,W = screen_shape
     h,w = mask_shape
 
-    sin_phi = xp.sin(-wind_direction_angle)
+    sin_phi = xp.sin(wind_direction_angle)
     cos_phi = xp.cos(wind_direction_angle)
 
     Delta = min(abs((W-w)/(2*cos_phi)), abs((H-h)/(2*sin_phi)))
