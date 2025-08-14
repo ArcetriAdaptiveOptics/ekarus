@@ -103,8 +103,8 @@ try:
         m2c = xp.asarray(m2c, dtype=xp.float32)
 except FileNotFoundError:
     KL, m2c = scao.define_KL_modal_base(r0, L0, telescopeDiameterInM = telescopeSizeInM, zern2remove = 5)
-    KLmat = KL.get if xp.__name__ == 'cupy' else KL.copy()
-    m2c_mat = m2c.get if xp.__name__ == 'cupy' else m2c.copy()
+    KLmat = KL.get() if xp.__name__ == 'cupy' else KL.copy()
+    m2c_mat = m2c.get() if xp.__name__ == 'cupy' else m2c.copy()
     myfits.save_fits(KL_path, KLmat, hdr_dict)
     myfits.save_fits(m2c_path, m2c_mat, hdr_dict)
 
@@ -136,13 +136,13 @@ try:
 
 except FileNotFoundError:
     IM, Rec = scao.calibrate_modes(KL, lambdaInM, alpha, amps = 0.2)
-    new_amp = 1/xp.std(IM,axis=0)
+    IM_std = xp.std(IM,axis=0)
     plt.figure()
-    plt.plot(new_amp.get(),'-o')
+    plt.plot(IM_std.get(),'-o')
     plt.grid()
     plt.show()
-    IMmat = IM.get if xp.__name__ == 'cupy' else IM.copy()
-    Rec_mat = Rec.get if xp.__name__ == 'cupy' else Rec.copy()
+    IMmat = IM.get() if xp.__name__ == 'cupy' else IM.copy()
+    Rec_mat = Rec.get() if xp.__name__ == 'cupy' else Rec.copy()
     myfits.save_fits(IM_path, IMmat, hdr_dict)
     myfits.save_fits(Rec_path, Rec_mat, hdr_dict)
 
@@ -167,7 +167,7 @@ except FileNotFoundError:
     screens = generate_phasescreens(lambdaInM, r0, L0, Nscreens, \
      screenSizeInPixels=screenPixels, screenSizeInMeters=screenMeters, \
      savepath=atmo_path, xp=xp, dtype=xptype)
-    screen2save = screens.get if xp.__name__ == 'cupy' else screens.copy()
+    screen2save = screens.get() if xp.__name__ == 'cupy' else screens.copy()
     myfits.save_fits(atmo_path, screen2save, hdr_dict)
 
 
