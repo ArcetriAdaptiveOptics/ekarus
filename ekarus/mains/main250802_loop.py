@@ -23,6 +23,14 @@ except:
     xptype = xp.float64
 
 
+# def myimshow(image, title = ''):
+#     if hasattr(image,'get'):
+#         image = image.get()
+#     plt.imshow(image,origin='lower')
+#     plt.colorbar()
+#     plt.title(title)
+
+
 # System data
 lambdaInM = 1000e-9
 pupilSizeInM = 32e-3
@@ -52,6 +60,7 @@ dm = ALPAODM(468, Npix=Npix, xp=xp)
 slope_computer = SlopeComputer(wfs_type = 'PyrWFS', xp=xp)
 
 scao = SCAO(wfs, ccd, slope_computer, dm, Npix, pupilSizeInM, oversampling=oversampling, xp=xp)
+scao.set_wavelength(lambdaInM=lambdaInM)
 
 # Define save directory and data dictionary
 basepath = os.getcwd()
@@ -102,7 +111,7 @@ try:
         KL = xp.asarray(KL, dtype=xp.float32)
         m2c = xp.asarray(m2c, dtype=xp.float32)
 except FileNotFoundError:
-    KL, m2c = scao.define_KL_modal_base(r0, L0, telescopeDiameterInM = telescopeSizeInM, zern2remove = 5)
+    KL, m2c = scao.define_KL_modal_base(r0, L0, zern2remove = 5)
     KLmat = KL.get() if xp.__name__ == 'cupy' else KL.copy()
     m2c_mat = m2c.get() if xp.__name__ == 'cupy' else m2c.copy()
     myfits.save_fits(KL_path, KLmat, hdr_dict)
@@ -135,7 +144,7 @@ try:
         Rec = xp.asarray(Rec, dtype=xp.float32)
 
 except FileNotFoundError:
-    IM, Rec = scao.calibrate_modes(KL, lambdaInM, alpha, amps = 0.2)
+    IM, Rec = scao.calibrate_modes(KL, alpha, amps = 0.2)
     IM_std = xp.std(IM,axis=0)
     plt.figure()
     plt.plot(IM_std.get(),'-o')
@@ -215,9 +224,11 @@ for i in range(Nits):
 
     phase = input_phase - dm_phase
 
-    cmd, ccd_image = scao.perform_loop_iteration(phase, Rec, lambdaInM, alpha, m2c=m2c)
+    cmd = scao.perform_loop_iteration(phase, Rec, alpha, m2c=m2c)
     dm_cmd += cmd*g
     dm_shape += dm.IFF @ dm_cmd
+
+    ccd_image = scao.ccd.last_frame
 
     # Save telemetry
     input_phases[i,:] = input_phase[~scao.cmask]
