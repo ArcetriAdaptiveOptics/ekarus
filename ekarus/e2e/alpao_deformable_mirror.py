@@ -49,55 +49,6 @@ class ALPAODM(DeformableMirror):
         slaved_cmd = dmutils.slaving(self.act_coords, cmd, slaving_method = 'interp', cmd_thr = max_cmd, xp=self._xp)
         return slaved_cmd
     
-    def plot_surface(self, surf2plot = None, title:str = '', plt_mask = None):
-        """
-        Plots surf2plot or (default) the segment's
-        current shape on the DM mask
-
-        Parameters
-        ----------
-        surf2plot : ndarray(float) [Npix], optional
-            The shape to plot. Defaults to the DM current shape.
-            
-        plt_title : str, optional
-            The plot title. The default is no title.
-            
-        plt_mask : ndarray(bool), optional
-            The mask to use on the plot. Default is None.
-
-        """
-        
-        if surf2plot is None:
-            surf2plot = self.surface
-        
-        mask_ids = self._xp.arange(self._xp.size(self.mask))
-        pix_ids = mask_ids[~(self.mask).flatten()]
-            
-        image = self._xp.zeros(self._xp.size(self.mask), dtype = self.dtype)
-        image[pix_ids] = surf2plot
-        image = self._xp.reshape(image, self.mask.shape)
-        
-        plt_mask = self._xp.logical_or(self.mask, plt_mask) if plt_mask is not None else self.mask.copy()
-
-        if hasattr(image, 'get'):
-            image = image.get()
-
-        if hasattr(plt_mask, 'get'):
-            plt_mask = plt_mask.get()
-        
-        image = masked_array(image, plt_mask)
-        plt.imshow(image, origin = 'lower', cmap = 'hot')
-        
-        img_rms = np.std(image.data[~image.mask])
-        
-        if title == '':
-            title = f"RMS: {img_rms:.2e}"
-            
-        plt.axis('off')
-        plt.title(title)
-        
-        return img_rms
-    
     
     @staticmethod
     def _getALPAOcoordinates(nacts_row_sequence, xp=np):

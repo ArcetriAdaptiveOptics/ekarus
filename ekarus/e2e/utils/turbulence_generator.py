@@ -2,7 +2,9 @@ from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 import numpy as np
 
 from ekarus.e2e.utils.image_utils import reshape_on_mask
-import matplotlib.pyplot as plt
+from functools import lru_cache
+
+# import matplotlib.pyplot as plt
 
 # class Turbulence():
 
@@ -72,41 +74,9 @@ def move_mask_on_phasescreen(screen, mask, dt, wind_speed, wind_direction_angle,
     else:
         phase_mask = phase.copy()
 
-    # if dx > thr:
-    #     plt.figure(figsize=(20,3.5))
-    #     plt.subplot(1,4,1)
-    #     plt.imshow(phase.get(),origin='lower')
-    #     plt.xlim([256-64,256+64])
-    #     plt.ylim([256-64,256+64])
-    #     plt.colorbar()
-    #     plt.title('Start')
-
-    #     plt.subplot(1,4,2)
-    #     plt.imshow(phase_mask.get(),origin='lower')
-    #     plt.xlim([256-64,256+64])
-    #     plt.ylim([256-64,256+64])
-    #     plt.colorbar()
-    #     plt.title('Interpolated')
-
-    #     plt.subplot(1,4,3)
-    #     plt.imshow((phase_mask-phase).get(),origin='lower')
-    #     plt.xlim([256-64,256+64])
-    #     plt.ylim([256-64,256+64])
-    #     plt.colorbar()
-    #     plt.title(f'Interpolated - Start: {dx*1e+2:1.0f}%')
-
-    #     plt.subplot(1,4,4)
-    #     plt.imshow((phase_mask-dx_phase).get(),origin='lower')
-    #     plt.xlim([256-64,256+64])
-    #     plt.ylim([256-64,256+64])
-    #     plt.colorbar()
-    #     plt.title(f'Interpolated - Shift: {(1-dx)*1e+2:1.0f}%')
-
-    #     plt.show()
-
     return phase_mask
 
-
+@lru_cache(maxsize=5)
 def get_start_coordinates_on_phasescreen(screen_shape, mask_shape, wind_direction_angle, xp=np):
 
     H,W = screen_shape

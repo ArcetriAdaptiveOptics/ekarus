@@ -1,7 +1,5 @@
 import numpy as np
 
-# from arte.types.mask import CircularMask
-
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
 
@@ -27,7 +25,6 @@ class SCAO():
 
         self.lambdaInM = None
         self.starMagnitude = None
-        self.modulationAngleInLambdaOverD = None
 
         self._xp = xp
         self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
@@ -39,25 +36,31 @@ class SCAO():
     def set_wavelength(self, lambdaInM):
         self.lambdaInM = lambdaInM
 
+    def get_star_magnitude(self):
+        return self.starMagnitude
+    
+    def set_star_magnitude(self, starMagnitude):
+        self.starMagnitude = starMagnitude
 
-    def _pixel_size(self):
+
+    def get_pixel_size(self):
         return self.lambdaInM/self.pupilSizeInM/self.oversampling
 
     
-    def _photon_flux(self, starMagnitude, B0 = 1e+10):
+    def get_photon_flux(self, B0 = 1e+10):
         Nphot = None
-        if starMagnitude is not None:
-            total_flux = B0 * 10**(-starMagnitude/2.5)
+        if self.starMagnitude is not None:
+            total_flux = B0 * 10**(-self.starMagnitude/2.5)
             Nphot = total_flux * self.throughput
         return Nphot
     
     
-    def get_slopes(self, input_field, starMagnitude, modulation_angle):
+    def get_slopes(self, input_field, **kwargs):
         
-        pix_scale = self._pixel_size()
-        Nphot = self._photon_flux(starMagnitude=starMagnitude)
+        pix_scale = self.get_pixel_size()
+        Nphot = self.get_photon_flux()
 
-        modulated_intensity = self.wfs.modulate(input_field, modulation_angle, pix_scale)
+        modulated_intensity = self.wfs.modulate(input_field, **kwargs, pixel_scale=pix_scale)
         detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphot)
         slopes = self.slope_computer.compute_slopes(detector_image)
 
@@ -73,7 +76,7 @@ class SCAO():
         return KL, m2c
     
     
-    def calibrate_modes(self, MM, modulation_angle, amps:float = 0.1, starMagnitude = None):
+    def calibrate_modes(self, MM, amps:float = 0.1, **kwargs):
 
         Nmodes = self._xp.shape(MM)[0]
         slopes = None
@@ -87,10 +90,10 @@ class SCAO():
             amp = amps[i]
             mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask, xp=self._xp)
             input_field = self._xp.exp(1j*mode_phase) * electric_field_amp
-            push_slope = self.get_slopes(input_field, starMagnitude, modulation_angle)/amp
+            push_slope = self.get_slopes(input_field, **kwargs)/amp
 
             input_field = self._xp.conj(input_field)
-            pull_slope = self.get_slopes(input_field, starMagnitude, modulation_angle)/amp
+            pull_slope = self.get_slopes(input_field, **kwargs)/amp
 
             if slopes is None:
                 slopes = (push_slope-pull_slope)/2
@@ -104,13 +107,13 @@ class SCAO():
         return IM, Rec
 
 
-    def perform_loop_iteration(self, input_phase, Rec, modulationAngle, m2c = None, starMagnitude = None):
+    def perform_loop_iteration(self, input_phase, Rec, m2c = None, **kwargs):
 
         if m2c is None:
             m2c = self._xp.eye((self.dm.Nacts,self._xp.shape(Rec)[0]))
 
         input_field = (1-self.cmask) * self._xp.exp(1j*input_phase)
-        slopes = self.get_slopes(input_field, starMagnitude, modulationAngle)
+        slopes = self.get_slopes(input_field, **kwargs)
         modes = Rec @ slopes
         cmd = m2c @ modes
 

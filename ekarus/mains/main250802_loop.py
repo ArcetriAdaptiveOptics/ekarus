@@ -144,7 +144,7 @@ try:
         Rec = xp.asarray(Rec, dtype=xp.float32)
 
 except FileNotFoundError:
-    IM, Rec = scao.calibrate_modes(KL, alpha, amps = 0.2)
+    IM, Rec = scao.calibrate_modes(KL, amps = 0.2, modulation_angle=alpha)
     IM_std = xp.std(IM,axis=0)
     plt.figure()
     plt.plot(IM_std.get(),'-o')
@@ -180,10 +180,10 @@ except FileNotFoundError:
     myfits.save_fits(atmo_path, screen2save, hdr_dict)
 
 
-screen = screens[0]*2e-2
+screen = screens[0]
 
 dt = 1e-3
-wind_speed = 5
+wind_speed = 20
 wind_angle = 1/4 * xp.pi
 
 if show:
@@ -198,8 +198,10 @@ print('Running the loop ...')
 compression = telescopeSizeInM/pupilSizeInM
 electric_field_amp = 1-scao.cmask
 
-g = 1e-8
-Nits = 100
+g = 1e-9
+Nits = 200
+
+Nmodes = 300
 
 mask_len = int(xp.sum(1-dm.mask))
 dm_shape = xp.zeros(mask_len, dtype=xptype)
@@ -217,14 +219,14 @@ for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
     tt = dt*i
     input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter, xp=xp)
-    input_phase *= compression
+    # input_phase *= compression
 
     dm_phase[~scao.cmask] = dm_shape/lambdaInM*(2*xp.pi)
     dm_phase = xp.reshape(dm_phase, scao.cmask.shape)
 
     phase = input_phase - dm_phase
 
-    cmd = scao.perform_loop_iteration(phase, Rec, alpha, m2c=m2c)
+    cmd = scao.perform_loop_iteration(phase, Rec[:Nmodes,:], m2c=m2c[:,:Nmodes], modulation_angle=alpha)
     dm_cmd += cmd*g
     dm_shape += dm.IFF @ dm_cmd
 
@@ -236,7 +238,7 @@ for i in range(Nits):
     reconstructed_phases[i,:] = dm.IFF @ cmd
     ccd_images[i,:,:] = ccd_image
     dm_cmds[i,:] = dm_cmd
-
+print('')
 
 #################### Post-processing ##############################
 electric_field_amp = 1-scao.cmask
@@ -249,7 +251,7 @@ input_sig2 = xp.mean((input_phases)**2, axis=-1)
 
 print('Saving telemetry to .fits ...')
 cmask = scao.cmask.get() if xp.__name__ == 'cupy' else scao.cmask.copy()
-from ekarus.e2e.utils.image_utils import reshape_on_mask
+# from ekarus.e2e.utils.image_utils import reshape_on_mask
 
 masked_input_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 masked_dm_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
@@ -282,10 +284,12 @@ for i in range(Nits):
 atmo_phases_path = os.path.join(dir_path,'AtmoPhase.fits')
 dm_phases_path = os.path.join(dir_path,'DMphase.fits')
 rec_phases_path = os.path.join(dir_path,'RecPhase.fits')
+err_phases_path = os.path.join(dir_path,'DeltaPhase.fits')
 
 myfits.save_fits(atmo_phases_path, masked_input_phases, hdr_dict)
 myfits.save_fits(dm_phases_path, masked_dm_phases, hdr_dict)
 myfits.save_fits(rec_phases_path, masked_rec_phases, hdr_dict)
+myfits.save_fits(err_phases_path, masked_input_phases-masked_rec_phases, hdr_dict)
 
 ########################## Plotting ###############################
 if xp.__name__ == 'cupy': # Convert to numpy for plotting
