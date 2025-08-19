@@ -48,7 +48,6 @@ subaperture_size = 63.5
 # Atmospheric data
 r0 = 5e-2
 L0 = 8
-telescopeSizeInM = 1.8
 
 show = False
 
@@ -80,11 +79,16 @@ except FileExistsError:
 print('Defining the detector subaperture masks ...')
 subap_path = os.path.join(dir_path,'SubapertureMasks.fits')
 try:
-    slope_computer._subaperture_masks = myfits.read_fits(subap_path, isBool=True)
+    subaperture_masks = myfits.read_fits(subap_path, isBool=True)
+    if xp.__name__ == 'cupy':
+        subaperture_masks = xp.asarray(subaperture_masks)
+    slope_computer._subaperture_masks = subaperture_masks
 except FileNotFoundError:
     piston = 1-scao.cmask
     modulated_intensity = wfs.modulate(piston, 10*alpha, pix2rad)
     detector_image = ccd.image_on_detector(modulated_intensity)
+    slope_computer.calibrate_sensor(subaperture_image = detector_image, Npix = subaperture_size)
+    subaperture_masks = slope_computer._subaperture_masks
     if xp.__name__ == 'cupy':
         detector_image = detector_image.get()
     plt.figure()
@@ -92,10 +96,6 @@ except FileNotFoundError:
     plt.colorbar()
     plt.title('Subaperture masks')
     plt.show()
-    slope_computer.calibrate_sensor(subaperture_image = detector_image, Npix = subaperture_size)
-    subaperture_masks = slope_computer._subaperture_masks
-    if xp.__name__ == 'cupy':
-        subaperture_masks = subaperture_masks.get()
     myfits.save_fits(subap_path, (subaperture_masks).astype(xp.uint8), hdr_dict)
 
 # 2. Define the system modes
@@ -112,10 +112,8 @@ try:
         m2c = xp.asarray(m2c, dtype=xp.float32)
 except FileNotFoundError:
     KL, m2c = scao.define_KL_modal_base(r0, L0, zern2remove = 5)
-    KLmat = KL.get() if xp.__name__ == 'cupy' else KL.copy()
-    m2c_mat = m2c.get() if xp.__name__ == 'cupy' else m2c.copy()
-    myfits.save_fits(KL_path, KLmat, hdr_dict)
-    myfits.save_fits(m2c_path, m2c_mat, hdr_dict)
+    myfits.save_fits(KL_path, KL, hdr_dict)
+    myfits.save_fits(m2c_path, m2c, hdr_dict)
 
 if show:
     N=9
@@ -146,14 +144,15 @@ try:
 except FileNotFoundError:
     IM, Rec = scao.calibrate_modes(KL, amps = 0.2, modulation_angle=alpha)
     IM_std = xp.std(IM,axis=0)
+    if xp.__name__ == 'cupy':
+        IM_std = IM_std.get()
     plt.figure()
-    plt.plot(IM_std.get(),'-o')
+    plt.plot(IM_std,'-o')
     plt.grid()
+    plt.title('Interaction matrix standard deviation')
     plt.show()
-    IMmat = IM.get() if xp.__name__ == 'cupy' else IM.copy()
-    Rec_mat = Rec.get() if xp.__name__ == 'cupy' else Rec.copy()
-    myfits.save_fits(IM_path, IMmat, hdr_dict)
-    myfits.save_fits(Rec_path, Rec_mat, hdr_dict)
+    myfits.save_fits(IM_path, IM, hdr_dict)
+    myfits.save_fits(Rec_path, Rec, hdr_dict)
 
 
 # 4. Get atmospheric phase screen
@@ -162,6 +161,7 @@ print('Generating phase screens ...')
 Nscreens = 1
 N = 10
 
+telescopeSizeInM = 1.8
 screenPixels = Npix*oversampling*N
 screenMeters = N*oversampling*telescopeSizeInM
 
@@ -176,8 +176,7 @@ except FileNotFoundError:
     screens = generate_phasescreens(lambdaInM, r0, L0, Nscreens, \
      screenSizeInPixels=screenPixels, screenSizeInMeters=screenMeters, \
      savepath=atmo_path, xp=xp, dtype=xptype)
-    screen2save = screens.get() if xp.__name__ == 'cupy' else screens.copy()
-    myfits.save_fits(atmo_path, screen2save, hdr_dict)
+    myfits.save_fits(atmo_path, screens, hdr_dict)
 
 
 screen = screens[0]
@@ -198,7 +197,7 @@ print('Running the loop ...')
 compression = telescopeSizeInM/pupilSizeInM
 electric_field_amp = 1-scao.cmask
 
-g = 1e-9
+g = 1e-11
 Nits = 200
 
 Nmodes = 300
@@ -211,15 +210,27 @@ dm_phase = xp.zeros_like(scao.cmask, dtype=xptype)
 # Save telemetry
 dm_cmds = xp.zeros([Nits,dm.Nacts])
 dm_phases = xp.zeros([Nits,mask_len])
+phases = xp.zeros([Nits,mask_len])
 input_phases = xp.zeros([Nits,mask_len])
 reconstructed_phases = xp.zeros([Nits,mask_len])
 ccd_images = xp.zeros([Nits,ccd.detector_shape[0],ccd.detector_shape[1]])
 
+Nzern = 10
+from ekarus.analytical.zernike_generator import ZernikeGenerator
+zg = ZernikeGenerator(scao.cmask.get(), Npix)
+zern_mat = xp.stack([xp.array(zg.getZernike(i+2),dtype=xp.float32) for i in range(Nzern)])
+zern_mix = xp.zeros([zern_mat.shape[1],zern_mat.shape[2]])
+zern_amps = xp.array([0.2,-0.4,0.3,0.12,-0.15,0.1,0.13,-0.11,0.1,0.05])*20
+for i in range(Nzern):
+    zern_mix += zern_mat[i,:,:] * zern_amps[i]
+zern_mix += xp.ones_like(zern_mix)*0
+
 for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
     tt = dt*i
-    input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter, xp=xp)
+    # input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter, xp=xp)
     # input_phase *= compression
+    input_phase = zern_mix
 
     dm_phase[~scao.cmask] = dm_shape/lambdaInM*(2*xp.pi)
     dm_phase = xp.reshape(dm_phase, scao.cmask.shape)
@@ -238,6 +249,7 @@ for i in range(Nits):
     reconstructed_phases[i,:] = dm.IFF @ cmd
     ccd_images[i,:,:] = ccd_image
     dm_cmds[i,:] = dm_cmd
+    phases[i,:] = phase[~scao.cmask]
 print('')
 
 #################### Post-processing ##############################
@@ -256,6 +268,7 @@ cmask = scao.cmask.get() if xp.__name__ == 'cupy' else scao.cmask.copy()
 masked_input_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 masked_dm_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 masked_rec_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
+masked_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 
 aux = xp.zeros_like(scao.cmask,dtype=xptype)
 
@@ -263,8 +276,10 @@ if xp.__name__ == 'cupy':
     masked_input_phases = masked_input_phases.get()
     masked_rec_phases = masked_rec_phases.get()
     masked_dm_phases = masked_dm_phases.get()
+    masked_phases = masked_phases.get()
     input_phases = input_phases.get()
     dm_phases = dm_phases.get()
+    phases = phases.get()
     reconstructed_phases = reconstructed_phases.get()
     aux = aux.get()
 
@@ -281,6 +296,10 @@ for i in range(Nits):
     aux = (aux).reshape(cmask.shape)
     masked_rec_phases[i,:,:]= masked_array(aux, cmask)
 
+    aux[~cmask] = phases[i,:]
+    aux = (aux).reshape(cmask.shape)
+    masked_phases[i,:,:]= masked_array(aux, cmask)
+
 atmo_phases_path = os.path.join(dir_path,'AtmoPhase.fits')
 dm_phases_path = os.path.join(dir_path,'DMphase.fits')
 rec_phases_path = os.path.join(dir_path,'RecPhase.fits')
@@ -289,7 +308,7 @@ err_phases_path = os.path.join(dir_path,'DeltaPhase.fits')
 myfits.save_fits(atmo_phases_path, masked_input_phases, hdr_dict)
 myfits.save_fits(dm_phases_path, masked_dm_phases, hdr_dict)
 myfits.save_fits(rec_phases_path, masked_rec_phases, hdr_dict)
-myfits.save_fits(err_phases_path, masked_input_phases-masked_rec_phases, hdr_dict)
+myfits.save_fits(err_phases_path, masked_phases-masked_rec_phases, hdr_dict)
 
 ########################## Plotting ###############################
 if xp.__name__ == 'cupy': # Convert to numpy for plotting

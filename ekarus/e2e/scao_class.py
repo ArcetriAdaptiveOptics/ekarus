@@ -35,12 +35,14 @@ class SCAO():
     
     def set_wavelength(self, lambdaInM):
         self.lambdaInM = lambdaInM
+        self.pixelScale = self.get_pixel_size()
 
     def get_star_magnitude(self):
         return self.starMagnitude
     
     def set_star_magnitude(self, starMagnitude):
         self.starMagnitude = starMagnitude
+        self.Nphot = self.get_photon_flux()
 
 
     def get_pixel_size(self):
@@ -56,12 +58,9 @@ class SCAO():
     
     
     def get_slopes(self, input_field, **kwargs):
-        
-        pix_scale = self.get_pixel_size()
-        Nphot = self.get_photon_flux()
 
-        modulated_intensity = self.wfs.modulate(input_field, **kwargs, pixel_scale=pix_scale)
-        detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphot)
+        modulated_intensity = self.wfs.modulate(input_field, **kwargs, pixel_scale=self.pixelScale)
+        detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = self.Nphot)
         slopes = self.slope_computer.compute_slopes(detector_image)
 
         return slopes
@@ -100,6 +99,7 @@ class SCAO():
             else:
                 slopes = self._xp.vstack((slopes,(push_slope-pull_slope)/2))
 
+        print(' ')
         IM = slopes.T
         U,S,Vt = self._xp.linalg.svd(IM, full_matrices=False)
         Rec = (Vt.T*1/S) @ U.T
@@ -118,23 +118,7 @@ class SCAO():
         cmd = m2c @ modes
 
         return cmd
-    
 
-
-    # def define_subaperture_masks(self, lambdaInM, subaperture_pixels, star_magnitude = None, modulation_in_lambda_over_d = 20):
-
-    #     pix_scale = self._pixel_size(lambdaInM=lambdaInM)
-    #     alpha = pix_scale * self.oversampling * modulation_in_lambda_over_d
-
-    #     piston = 1-self.cmask
-    #     modulated_intensity = self.wfs.modulate(piston, alpha, pix_scale)
-
-    #     Nphot = self.photon_flux(starMagnitude=star_magnitude)
-
-    #     self.ccd.define_subaperture_masks(modulated_intensity, Npix = subaperture_pixels, photon_flux = Nphot)
-
-    #     # image = self.ccd.resize_on_detector(modulated_intensity, photon_flux = Nphot)
-    #     #self.clope_computer = SlopeComputer(self.wfs, subaperture_image=image, Npix=subapertureSizeInpixels)
 
 
 

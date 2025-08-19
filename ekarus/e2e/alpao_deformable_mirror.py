@@ -82,7 +82,7 @@ class ALPAODM(DeformableMirror):
         return coords
 
 
-    def _init_ALPAO_from_Nacts(self, Nacts:int, Npix:int):
+    def _init_ALPAO_from_Nacts(self, Nacts:int, Npix:int): #, multiprocessing:bool=False):
         """ 
         Initializes the ALPAO DM mask and actuator coordinates
 
@@ -135,6 +135,9 @@ class ALPAODM(DeformableMirror):
             if self._xp.__name__ == 'cupy':
                 self.IFF = self._xp.asarray(self.IFF, dtype=self.dtype)
         except FileNotFoundError:
+            # if multiprocessing:
+            #     self.IFF = dmutils.simulate_influence_functions_with_multiprocessing(self.act_coords, self.mask, self.pixel_scale, xp=self._xp)
+            # else:
             self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask, self.pixel_scale, xp=self._xp)
             IFFs = self.IFF.get() if self._xp.__name__ == 'cupy' else self.IFF.copy()
             myfits.save_fits(iff_path, IFFs, hdr_dict)
