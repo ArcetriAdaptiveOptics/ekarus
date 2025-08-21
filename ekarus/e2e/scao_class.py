@@ -6,7 +6,7 @@ from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
 
 class SCAO():
 
-    def __init__(self, wfs, ccd, slope_computer, dm, pupil_pixel_size, pupil_size, throughput = None, oversampling:int = 4, xp=np):
+    def __init__(self, wfs, ccd, slope_computer, dm, pupil_pixel_size, pupil_size, telescope_area = None, throughput = None, oversampling:int = 4, xp=np):
 
         mask_shape = (oversampling * pupil_pixel_size, oversampling * pupil_pixel_size)
         self.cmask = get_circular_mask(mask_shape, mask_radius=pupil_pixel_size//2, xp=xp)
@@ -22,9 +22,11 @@ class SCAO():
         self.slope_computer = slope_computer
 
         self.throughput = throughput
+        self.collectingArea = telescope_area
 
         self.lambdaInM = None
         self.starMagnitude = None
+        self.timeStep = 1.0
 
         self._xp = xp
         self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
@@ -42,25 +44,30 @@ class SCAO():
     
     def set_star_magnitude(self, starMagnitude):
         self.starMagnitude = starMagnitude
-        self.Nphot = self.get_photon_flux()
+        self.photon_flux = self.get_photons_per_second()
+
+    def get_integration_time(self):
+        return self.timeStep
+    
+    def set_integration_time(self, timeStep):
+        self.timeStep = timeStep
 
 
     def get_pixel_size(self):
         return self.lambdaInM/self.pupilSizeInM/self.oversampling
 
-    
-    def get_photon_flux(self, B0 = 1e+10):
-        Nphot = None
+    def get_photons_per_second(self, B0 = 1e+10):
+        collected_flux = None
         if self.starMagnitude is not None:
             total_flux = B0 * 10**(-self.starMagnitude/2.5)
-            Nphot = total_flux * self.throughput
-        return Nphot
+            collected_flux = total_flux * self.throughput * self.collectingArea
+        return collected_flux
     
     
     def get_slopes(self, input_field, **kwargs):
 
         modulated_intensity = self.wfs.modulate(input_field, **kwargs, pixel_scale=self.pixelScale)
-        detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = self.Nphot)
+        detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = self.photon_flux*self.timeStep)
         slopes = self.slope_computer.compute_slopes(detector_image)
 
         return slopes
@@ -109,13 +116,14 @@ class SCAO():
 
     def perform_loop_iteration(self, input_phase, Rec, m2c = None, **kwargs):
 
-        if m2c is None:
-            m2c = self._xp.eye((self.dm.Nacts,self._xp.shape(Rec)[0]))
-
         input_field = (1-self.cmask) * self._xp.exp(1j*input_phase)
         slopes = self.get_slopes(input_field, **kwargs)
         modes = Rec @ slopes
-        cmd = m2c @ modes
+
+        if m2c is None:
+            cmd = modes
+        else:
+            cmd = m2c @ modes
 
         return cmd
 

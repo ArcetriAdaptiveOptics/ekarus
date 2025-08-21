@@ -45,6 +45,11 @@ apex_angle = 0.005859393655500168/(2*xp.pi)*30/32
 detector_shape = (256,256)
 subaperture_size = 63.5
 
+# Telescope data
+throughput = 0.06
+telescopeSizeInM = 1.8
+telescopeArea = telescopeSizeInM**2/4*xp.pi
+
 # Atmospheric data
 r0 = 5e-2
 L0 = 8
@@ -58,8 +63,9 @@ ccd = Detector(detector_shape=detector_shape, xp=xp)
 dm = ALPAODM(468, Npix=Npix, xp=xp)
 slope_computer = SlopeComputer(wfs_type = 'PyrWFS', xp=xp)
 
-scao = SCAO(wfs, ccd, slope_computer, dm, Npix, pupilSizeInM, oversampling=oversampling, xp=xp)
+scao = SCAO(wfs, ccd, slope_computer, dm, Npix, pupilSizeInM, oversampling=oversampling, telescope_area=telescopeArea, throughput=throughput, xp=xp)
 scao.set_wavelength(lambdaInM=lambdaInM)
+scao.set_star_magnitude(6)
 
 # Define save directory and data dictionary
 basepath = os.getcwd()
@@ -67,7 +73,7 @@ dir_path = os.path.join(basepath,'ekarus/mains/250802_sim_data/')
 
 hdr_dict = {'WAVELEN': lambdaInM*1e+9, 'PUP_SIZE': pupilSizeInM, 'OVERSAMP': oversampling, 'N_PIX': Npix, \
 'MOD_ANG': alpha, 'APEX_ANG': apex_angle, 'CCD_SIZE': max(detector_shape), 'SUBAPPIX': subaperture_size, \
-'FR_PAR': r0, 'ATMO_LEN': L0}
+'FR_PAR': r0, 'ATMO_LEN': L0, 'TEL_THR': throughput}
 
 try:
     os.mkdir(dir_path)
@@ -161,7 +167,6 @@ print('Generating phase screens ...')
 Nscreens = 1
 N = 10
 
-telescopeSizeInM = 1.8
 screenPixels = Npix*oversampling*N
 screenMeters = N*oversampling*telescopeSizeInM
 
@@ -179,7 +184,7 @@ except FileNotFoundError:
     myfits.save_fits(atmo_path, screens, hdr_dict)
 
 
-screen = screens[0]
+screen = screens[0]/4
 
 dt = 1e-3
 wind_speed = 20
@@ -197,7 +202,7 @@ print('Running the loop ...')
 compression = telescopeSizeInM/pupilSizeInM
 electric_field_amp = 1-scao.cmask
 
-g = 1e-11
+g = 2
 Nits = 200
 
 Nmodes = 300
@@ -215,38 +220,40 @@ input_phases = xp.zeros([Nits,mask_len])
 reconstructed_phases = xp.zeros([Nits,mask_len])
 ccd_images = xp.zeros([Nits,ccd.detector_shape[0],ccd.detector_shape[1]])
 
-Nzern = 10
-from ekarus.analytical.zernike_generator import ZernikeGenerator
-zg = ZernikeGenerator(scao.cmask.get(), Npix)
-zern_mat = xp.stack([xp.array(zg.getZernike(i+2),dtype=xp.float32) for i in range(Nzern)])
-zern_mix = xp.zeros([zern_mat.shape[1],zern_mat.shape[2]])
-zern_amps = xp.array([0.2,-0.4,0.3,0.12,-0.15,0.1,0.13,-0.11,0.1,0.05])*20
-for i in range(Nzern):
-    zern_mix += zern_mat[i,:,:] * zern_amps[i]
-zern_mix += xp.ones_like(zern_mix)*0
+scao.set_integration_time(timeStep=dt)
+
+# Nzern = 10
+# from ekarus.analytical.zernike_generator import ZernikeGenerator
+# zg = ZernikeGenerator(scao.cmask.get(), Npix)
+# zern_mat = xp.stack([xp.array(zg.getZernike(i+2),dtype=xp.float32) for i in range(Nzern)])
+# zern_mix = xp.zeros([zern_mat.shape[1],zern_mat.shape[2]])
+# zern_amps = xp.array([0.2,-0.4,0.3,0.12,-0.15,0.1,0.13,-0.11,0.1,0.05])*100
+# for i in range(Nzern):
+#     zern_mix += zern_mat[i,:,:] * zern_amps[i]
+# zern_mix += xp.ones_like(zern_mix)*0
 
 for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
     tt = dt*i
-    # input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter, xp=xp)
+    input_phase = move_mask_on_phasescreen(screen, scao.cmask, tt, wind_speed, wind_angle, pixelsPerMeter, xp=xp)
     # input_phase *= compression
-    input_phase = zern_mix
+    # input_phase = zern_mix
 
-    dm_phase[~scao.cmask] = dm_shape/lambdaInM*(2*xp.pi)
+    dm_phase[~scao.cmask] = dm_shape
     dm_phase = xp.reshape(dm_phase, scao.cmask.shape)
 
     phase = input_phase - dm_phase
 
     cmd = scao.perform_loop_iteration(phase, Rec[:Nmodes,:], m2c=m2c[:,:Nmodes], modulation_angle=alpha)
     dm_cmd += cmd*g
-    dm_shape += dm.IFF @ dm_cmd
+    dm_shape = dm.IFF @ dm_cmd
+    # dm_shape += dm.IFF @ cmd
 
     ccd_image = scao.ccd.last_frame
 
     # Save telemetry
     input_phases[i,:] = input_phase[~scao.cmask]
     dm_phases[i,:] = dm_phase[~scao.cmask]
-    reconstructed_phases[i,:] = dm.IFF @ cmd
     ccd_images[i,:,:] = ccd_image
     dm_cmds[i,:] = dm_cmd
     phases[i,:] = phase[~scao.cmask]
@@ -258,8 +265,8 @@ electric_field = electric_field_amp * xp.exp(-1j*phase)
 field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
 psf = abs(field_on_focal_plane)**2
 
-sig2 = xp.mean((input_phases-dm_phases)**2, axis=-1)
-input_sig2 = xp.mean((input_phases)**2, axis=-1)
+sig2 = xp.std(input_phases-dm_phases,axis=-1)**2 #xp.mean((input_phases-dm_phases)**2, axis=-1)
+input_sig2 = xp.std(input_phases,axis=-1)**2 #xp.mean((input_phases)**2, axis=-1)
 
 print('Saving telemetry to .fits ...')
 cmask = scao.cmask.get() if xp.__name__ == 'cupy' else scao.cmask.copy()
@@ -267,14 +274,12 @@ cmask = scao.cmask.get() if xp.__name__ == 'cupy' else scao.cmask.copy()
 
 masked_input_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 masked_dm_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
-masked_rec_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 masked_phases = xp.zeros([Nits,scao.cmask.shape[0],scao.cmask.shape[1]], dtype=xptype)
 
 aux = xp.zeros_like(scao.cmask,dtype=xptype)
 
 if xp.__name__ == 'cupy':
     masked_input_phases = masked_input_phases.get()
-    masked_rec_phases = masked_rec_phases.get()
     masked_dm_phases = masked_dm_phases.get()
     masked_phases = masked_phases.get()
     input_phases = input_phases.get()
@@ -292,23 +297,17 @@ for i in range(Nits):
     aux = (aux).reshape(cmask.shape)
     masked_dm_phases[i,:,:]= masked_array(aux, cmask)
 
-    aux[~cmask] = reconstructed_phases[i,:]
-    aux = (aux).reshape(cmask.shape)
-    masked_rec_phases[i,:,:]= masked_array(aux, cmask)
-
     aux[~cmask] = phases[i,:]
     aux = (aux).reshape(cmask.shape)
     masked_phases[i,:,:]= masked_array(aux, cmask)
 
 atmo_phases_path = os.path.join(dir_path,'AtmoPhase.fits')
 dm_phases_path = os.path.join(dir_path,'DMphase.fits')
-rec_phases_path = os.path.join(dir_path,'RecPhase.fits')
 err_phases_path = os.path.join(dir_path,'DeltaPhase.fits')
 
 myfits.save_fits(atmo_phases_path, masked_input_phases, hdr_dict)
 myfits.save_fits(dm_phases_path, masked_dm_phases, hdr_dict)
-myfits.save_fits(rec_phases_path, masked_rec_phases, hdr_dict)
-myfits.save_fits(err_phases_path, masked_phases-masked_rec_phases, hdr_dict)
+myfits.save_fits(err_phases_path, masked_phases-masked_dm_phases, hdr_dict)
 
 ########################## Plotting ###############################
 if xp.__name__ == 'cupy': # Convert to numpy for plotting
@@ -347,7 +346,7 @@ plt.title('Detector image')
 # plt.title('DM phase')
 
 plt.subplot(2,2,4)
-dm.plot_position(dm_cmd)
+dm.plot_position(dm_cmd*lambdaInM/(2*xp.pi))
 plt.title('Mirror command')
 
 plt.figure(figsize=(4*Nits/10,3))
