@@ -49,10 +49,12 @@ subaperture_size = 63.5
 throughput = 0.06
 telescopeSizeInM = 1.8
 telescopeArea = telescopeSizeInM**2/4*xp.pi
+starMagnitude = 4
 
 # Atmospheric data
 r0 = 5e-2
 L0 = 8
+
 
 show = False
 
@@ -65,7 +67,7 @@ slope_computer = SlopeComputer(wfs_type = 'PyrWFS', xp=xp)
 
 scao = SCAO(wfs, ccd, slope_computer, dm, Npix, pupilSizeInM, oversampling=oversampling, telescope_area=telescopeArea, throughput=throughput, xp=xp)
 scao.set_wavelength(lambdaInM=lambdaInM)
-scao.set_star_magnitude(6)
+scao.set_star_magnitude(starMagnitude)
 
 # Define save directory and data dictionary
 basepath = os.getcwd()
@@ -106,7 +108,6 @@ except FileNotFoundError:
 
 # 2. Define the system modes
 print('Obtaining the Karhunen-Loeve mirror modes ...')
-
 KL_path = os.path.join(dir_path,'KLmatrix.fits')
 m2c_path = os.path.join(dir_path,'m2c.fits')
 
@@ -136,7 +137,6 @@ if show:
 
 # 3. Calibrate the system
 print('Calibrating the KL modes ...')
-
 IM_path = os.path.join(dir_path,'IMmatrix.fits')
 Rec_path = os.path.join(dir_path,'Rec.fits')
 
@@ -165,7 +165,7 @@ except FileNotFoundError:
 print('Generating phase screens ...')
 
 Nscreens = 1
-N = 10
+N = 20
 
 screenPixels = Npix*oversampling*N
 screenMeters = N*oversampling*telescopeSizeInM
@@ -184,10 +184,10 @@ except FileNotFoundError:
     myfits.save_fits(atmo_path, screens, hdr_dict)
 
 
-screen = screens[0]/4
+screen = screens[0]
 
 dt = 1e-3
-wind_speed = 20
+wind_speed = 10
 wind_angle = 1/4 * xp.pi
 
 if show:
@@ -202,10 +202,9 @@ print('Running the loop ...')
 compression = telescopeSizeInM/pupilSizeInM
 electric_field_amp = 1-scao.cmask
 
-g = 2
-Nits = 200
-
-Nmodes = 300
+g = 10
+Nits = 150 
+Nmodes = 100
 
 mask_len = int(xp.sum(1-dm.mask))
 dm_shape = xp.zeros(mask_len, dtype=xptype)
@@ -232,6 +231,9 @@ scao.set_integration_time(timeStep=dt)
 #     zern_mix += zern_mat[i,:,:] * zern_amps[i]
 # zern_mix += xp.ones_like(zern_mix)*0
 
+mod_angle = alpha
+
+
 for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
     tt = dt*i
@@ -244,17 +246,21 @@ for i in range(Nits):
 
     phase = input_phase - dm_phase
 
-    cmd = scao.perform_loop_iteration(phase, Rec[:Nmodes,:], m2c=m2c[:,:Nmodes], modulation_angle=alpha)
+    # if xp.std(phase)**2 > 100:
+    #     mod_angle = alpha*4
+    #     Nmodes = 100
+    # else:
+    #     Nmodes = 300
+    #     mod_angle = alpha
+
+    cmd = scao.perform_loop_iteration(phase, Rec[:Nmodes,:], m2c=m2c[:,:Nmodes], modulation_angle=mod_angle)
     dm_cmd += cmd*g
     dm_shape = dm.IFF @ dm_cmd
-    # dm_shape += dm.IFF @ cmd
-
-    ccd_image = scao.ccd.last_frame
 
     # Save telemetry
     input_phases[i,:] = input_phase[~scao.cmask]
     dm_phases[i,:] = dm_phase[~scao.cmask]
-    ccd_images[i,:,:] = ccd_image
+    ccd_images[i,:,:] = scao.ccd.last_frame
     dm_cmds[i,:] = dm_cmd
     phases[i,:] = phase[~scao.cmask]
 print('')
@@ -308,6 +314,8 @@ err_phases_path = os.path.join(dir_path,'DeltaPhase.fits')
 myfits.save_fits(atmo_phases_path, masked_input_phases, hdr_dict)
 myfits.save_fits(dm_phases_path, masked_dm_phases, hdr_dict)
 myfits.save_fits(err_phases_path, masked_phases-masked_dm_phases, hdr_dict)
+
+ccd_image = scao.ccd.last_frame
 
 ########################## Plotting ###############################
 if xp.__name__ == 'cupy': # Convert to numpy for plotting

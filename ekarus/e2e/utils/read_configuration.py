@@ -22,7 +22,8 @@ class ConfigReader():
     def read_sensor_pars(self):
         sensor_conf = self._config['WFS']
         apex_angle = sensor_conf['apex_angle']
-        return apex_angle
+        subaperture_size = sensor_conf['subaperture_size']
+        return apex_angle, subaperture_size
     
     def read_dm_pars(self):
         dm_conf = self._config['DM']
@@ -34,6 +35,14 @@ class ConfigReader():
         detector_shape = detector_conf['detector_shape']
         RON = detector_conf['RON']
         return detector_shape, RON
+    
+    def read_atmo_pars(self):
+        atmo_conf = self._config['ATMO']
+        r0 = atmo_conf['r0']
+        L0 = atmo_conf['L0']
+        windSpeed = atmo_conf['windSpeed']
+        windAngle = atmo_conf['windAngle']
+        return r0, L0, windSpeed, windAngle
 
 
         
