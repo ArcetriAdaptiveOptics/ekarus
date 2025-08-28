@@ -68,7 +68,7 @@ if show:
 
 # 3. Calibrate the system
 print('Calibrating the KL modes ...')
-IM, Rec = ssao.calibrate_modes(KL, amps = 0.2, modulation_angle = alpha)
+Rec, IM = ssao.calibrate_modes(KL, amps = 0.2, modulation_angle = alpha)
 if show:
     IM_std = xp.std(IM,axis=0)
     if xp.__name__ == 'cupy':
@@ -131,7 +131,8 @@ for i in range(Nits):
 
     phase = input_phase - dm_phase
 
-    cmd = ssao.perform_loop_iteration(dt, phase, Rec[:Nmodes,:], modulation_angle=alpha)
+    cmd = ssao.perform_loop_iteration(dt, phase, Rec, modulation_angle=alpha)
+    cmd[Nmodes:] = 0
     dm_cmd += cmd*g
     dm_shape = ssao.dm.IFF @ dm_cmd
 

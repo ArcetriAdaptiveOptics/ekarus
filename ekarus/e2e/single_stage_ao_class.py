@@ -19,10 +19,13 @@ class SingleStageAO():
     def __init__(self, tn, xp=np):
 
         self.basepath = os.getcwd()
-        self.savepath = os.path.join(self.basepath,'ekarus/simulations/Results',str(tn))
+        self.savepath = os.path.join(self.basepath,'ekarus','simulations','Results',str(tn))
 
         if not os.path.exists(self.savepath):
             os.mkdir(self.savepath)
+
+        self._xp = xp
+        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
         self.read_configuration(tn)
         self.initialize_devices()
@@ -30,8 +33,6 @@ class SingleStageAO():
         self.lambdaInM = None
         self.starMagnitude = None
 
-        self._xp = xp
-        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
 
     def get_wavelength(self):
@@ -78,7 +79,7 @@ class SingleStageAO():
             subaperture_masks = self.slope_computer._subaperture_masks
             if self._xp.__name__ == 'cupy':
                 detector_image = detector_image.get()
-            hdr_dict = {'APEX_ANG': self.wfs.apex_angle, 'PIX_SCALE': self.pixelScale, 'OVERSAMP': self.oversampling,  'SUBAPPIX': subaperture_size}
+            hdr_dict = {'APEX_ANG': self.wfs.apex_angle, 'PIX_SCAL': self.pixelScale, 'OVERSAMP': self.oversampling,  'SUBAPPIX': subaperture_size}
             myfits.save_fits(subap_path, (subaperture_masks).astype(self._xp.uint8), hdr_dict)
             
     
@@ -91,11 +92,12 @@ class SingleStageAO():
         return slopes
     
     
-    def calibrate_modes(self, MM, amps:float = 0.1, **kwargs):
-
+    def compute_reconstructor(self, MM, amps:float = 0.1, **kwargs):
         Nmodes = self._xp.shape(MM)[0]
         slopes = None
         electric_field_amp = 1-self.cmask
+
+        Nphotons = None # None for 0 noise
 
         if isinstance(amps, float):
             amps *= self._xp.ones(Nmodes)
@@ -105,10 +107,10 @@ class SingleStageAO():
             amp = amps[i]
             mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask, xp=self._xp)
             input_field = self._xp.exp(1j*mode_phase) * electric_field_amp
-            push_slope = self.get_slopes(input_field, **kwargs)/amp
+            push_slope = self.get_slopes(input_field, Nphotons, **kwargs)/amp
 
             input_field = self._xp.conj(input_field)
-            pull_slope = self.get_slopes(input_field, **kwargs)/amp
+            pull_slope = self.get_slopes(input_field, Nphotons, **kwargs)/amp
 
             if slopes is None:
                 slopes = (push_slope-pull_slope)/2
@@ -164,14 +166,14 @@ class SingleStageAO():
                 IM = self._xp.asarray(IM, dtype=self._xp.float32)
                 Rec = self._xp.asarray(Rec, dtype=self._xp.float32)
         except FileNotFoundError:
-            IM, Rec = self.calibrate_modes(MM, amps, **kwargs)
+            Rec, IM, _ = self.compute_reconstructor(MM, amps, **kwargs)
             myfits.save_fits(IM_path, IM)
             myfits.save_fits(Rec_path, Rec)
-        return IM, Rec
+        return Rec, IM
 
     
     def read_configuration(self, tn):
-        config_path = os.path.join(self.basepath,'ekarus/simulations/Config',str(tn))
+        config_path = os.path.join(self.basepath,'ekarus','simulations','Config',str(tn)+'.ini')
         self._config = ConfigReader(config_path)
         self.pupilSizeInM, self.pupilSizeInPixels, self.oversampling = self._config.read_pupil_pars()
         mask_shape = (self.oversampling * self.pupilSizeInPixels, self.oversampling * self.pupilSizeInPixels)
@@ -188,7 +190,7 @@ class SingleStageAO():
         self.ccd = Detector(detector_shape=detector_shape, xp=self._xp)
         self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels, xp=self._xp)
         self.slope_computer = SlopeComputer(wfs_type = 'PyrWFS', xp=self._xp)
-        
+
 
     def generate_phase_screens(self, N:int=10):
         screenPixels = self.pupilSizeInPixels*self.oversampling*N
@@ -196,24 +198,26 @@ class SingleStageAO():
         self.pixelsPerMeter = screenPixels/screenMeters
         atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
         try:
-            screens = myfits.read_fits(atmo_path)
+            phase_screens = myfits.read_fits(atmo_path)
             if self._xp.__name__ == 'cupy':
-                screens = self._xp.asarray(screens, dtype=self._xp.float32)
+                phase_screens = self._xp.asarray(phase_screens, dtype=self._xp.float32)
         except FileNotFoundError:
             r0, L0, _, _ = self._config.read_atmo_pars()
-            if r0 is float:
+            if isinstance(r0, float):
                 Nscreens = 1
             else:
                 Nscreens = len(r0)
+            print(Nscreens)
             phs = PhaseScreenGenerator(screenPixels, screenMeters, outerScaleInMeters=L0, seed=42)
             phs.generate_normalized_phase_screens(Nscreens)
             phs.rescale_to(r0At500nm=r0)
+            phs.get_in_radians_at(self.lambdaInM)
             phs.save_normalized_phase_screens(atmo_path)
             phase_screens = self._xp.asarray(phs._phaseScreens, dtype=self.dtype)
             hdr_dict = {'r0': r0, 'L0': L0, 'N_SCREEN': Nscreens}
             myfits.save_fits(atmo_path, phase_screens, hdr_dict)
 
-            return phase_screens
+        return phase_screens
 
 
 

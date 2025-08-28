@@ -15,7 +15,7 @@ class Turbulence():
         self.savepath = savepath
 
         self._xp = xp
-        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+        self.dtype = self._xp.float32 if self._xp.__name__ == 'cupy' else self._xp.float64
     
 
     def generate_phasescreens(self, lambdaInM, Nscreens, screenSizeInPixels, screenSizeInMeters):
@@ -37,7 +37,7 @@ class Turbulence():
         return phase_screens
 
 
-def move_mask_on_phasescreen(screen, mask, dt, wind_speed, wind_direction_angle):
+def move_mask_on_phasescreen(self, screen, mask, dt, wind_speed, wind_direction_angle):
 
     x_start, y_start = get_start_coordinates_on_phasescreen(screen.shape, mask.shape, wind_direction_angle)
 
@@ -49,32 +49,32 @@ def move_mask_on_phasescreen(screen, mask, dt, wind_speed, wind_direction_angle)
         raise ValueError(f'A displacement of {dpix:1.2f} for a time {dt:1.3f} [s] with wind {wind_speed:1.1f} [m/s] yields\
                          ({y:1.0f},{x:1.0f}), which is outside the bounds for a {screen.shape} screen and a {mask.shape} mask.')
 
-    x_round = int(xp.floor(x) * (x>=x_start) + xp.ceil(x) * (x<x_start))
-    y_round = int(xp.floor(y) * (y>=y_start) + xp.ceil(y) * (y<y_start))
+    x_round = int(self._xp.floor(x) * (x>=x_start) + self._xp.ceil(x) * (x<x_start))
+    y_round = int(self._xp.floor(y) * (y>=y_start) + self._xp.ceil(y) * (y<y_start))
 
     dx, dy = abs(x-x_round), abs(y-y_round)
-    sdx, sdy = int(xp.sign(x-x_start)), int(xp.sign(y-y_start))
+    sdx, sdy = int(self._xp.sign(x-x_start)), int(self._xp.sign(y-y_start))
 
     H,W = mask.shape
 
-    full_mask = xp.ones_like(screen, dtype=bool)
+    full_mask = self._xp.ones_like(screen, dtype=bool)
     full_mask[y_round:(y_round+H),x_round:(x_round+W)] = mask.copy()
     phase = reshape_on_mask(screen[~full_mask], mask, xp=xp)
 
     thr = 1e-2
 
     if dx > thr and dy > thr:
-        dx_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
-        dy_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
-        dxdy_phase = reshape_on_mask(screen[~xp.roll(full_mask,(sdx,sdy),axis=(0,1))], mask, xp=xp)
+        dx_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
+        dy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
+        dxdy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,(sdx,sdy),axis=(0,1))], mask, xp=xp)
         phase_mask = (phase * (1-dx) + dx * dx_phase) * (1-dy) + (dy_phase * (1-dx) + dx * dxdy_phase) * dy
 
     elif dx > thr:
-        dx_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
+        dx_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
         phase_mask = phase * (1-dx) + dx_phase * dx
 
     elif dy > thr:
-        dy_phase = reshape_on_mask(screen[~xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
+        dy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
         phase_mask = phase * (1-dy) + dy_phase * dy
 
     else:
@@ -88,8 +88,8 @@ def get_start_coordinates_on_phasescreen(screen_shape, mask_shape, wind_directio
     H,W = screen_shape
     h,w = mask_shape
 
-    sin_phi = xp.sin(wind_direction_angle)
-    cos_phi = xp.cos(wind_direction_angle)
+    sin_phi = self._xp.sin(wind_direction_angle)
+    cos_phi = self._xp.cos(wind_direction_angle)
 
     Delta = min(abs((W-w)/(2*cos_phi)), abs((H-h)/(2*sin_phi)))
     x = (W-w)/2 - Delta * cos_phi
