@@ -20,14 +20,14 @@ except:
 #     plt.title(title)
 
 
-tn = '20250827_120000'
+tn = '20250829_080000'
 
 print('Initializing devices ...')
 ssao = SingleStageAO(tn)
 
-show = False # boolean to show initialization outputs
+show = True # boolean to show initialization outputs
 lambdaInM = 1000e-9
-starMagnitude = 4
+starMagnitude = 3
 
 alpha = 3*lambdaInM/ssao.pupilSizeInM # modulation angle
 
@@ -39,14 +39,17 @@ ssao.set_star_magnitude(starMagnitude)
 print('Defining the detector subaperture masks ...')
 ssao.define_subaperture_masks()
 if show:
-    detector_image = ssao.ccd.last_frame
-    if xp.__name__ == 'cupy':
-        detector_image = detector_image.get()
-    plt.figure()
-    plt.imshow(detector_image,origin='lower')
-    plt.colorbar()
-    plt.title('Subaperture masks')
-    plt.show()
+    try:
+        detector_image = ssao.ccd.last_frame
+        if xp.__name__ == 'cupy':
+            detector_image = detector_image.get()
+        plt.figure()
+        plt.imshow(detector_image,origin='lower')
+        plt.colorbar()
+        plt.title('Subaperture masks')
+        plt.show()
+    except:
+        pass
 
 
 # 2. Define the system modes
@@ -118,8 +121,10 @@ input_phases = xp.zeros([Nits,mask_len])
 reconstructed_phases = xp.zeros([Nits,mask_len])
 ccd_images = xp.zeros([Nits,ssao.ccd.detector_shape[0],ssao.ccd.detector_shape[1]])
 
-Rec = m2c @ Rec
+# Rec = m2c @ Rec
 from ekarus.e2e.utils.turbulence_generator import move_mask_on_phasescreen
+
+# print(ssao.get_photons_per_second())
 
 for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
@@ -130,9 +135,10 @@ for i in range(Nits):
     dm_phase = xp.reshape(dm_phase, ssao.cmask.shape)
 
     phase = input_phase - dm_phase
+    # phase -= xp.mean(phase)
 
-    cmd = ssao.perform_loop_iteration(dt, phase, Rec, modulation_angle=alpha)
-    cmd[Nmodes:] = 0
+    modes = ssao.perform_loop_iteration(dt, phase, Rec, modulation_angle=3*alpha)
+    cmd = m2c[:,0:Nmodes] @ modes[0:Nmodes]
     dm_cmd += cmd*g
     dm_shape = ssao.dm.IFF @ dm_cmd
 
@@ -197,6 +203,7 @@ myfits.save_fits(dm_phases_path, masked_dm_phases)
 myfits.save_fits(err_phases_path, masked_phases-masked_dm_phases)
 
 ccd_image = ssao.ccd.last_frame
+print(f'Number of collected photons: {xp.sum(ccd_image):1.0f}')
 
 ########################## Plotting ###############################
 if xp.__name__ == 'cupy': # Convert to numpy for plotting

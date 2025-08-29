@@ -34,7 +34,6 @@ class SingleStageAO():
         self.starMagnitude = None
 
 
-
     def get_wavelength(self):
         return self.lambdaInM
     
@@ -57,7 +56,7 @@ class SingleStageAO():
         collected_flux = None
         if self.starMagnitude is not None:
             total_flux = B0 * 10**(-self.starMagnitude/2.5)
-            collecting_area = self.telescopeSizeInM**2/4*self._xp.pi
+            collecting_area = self._xp.pi/4*self.telescopeSizeInM**2
             collected_flux = self.throughput * total_flux * collecting_area
         return collected_flux
     
@@ -178,7 +177,7 @@ class SingleStageAO():
         self.pupilSizeInM, self.pupilSizeInPixels, self.oversampling = self._config.read_pupil_pars()
         mask_shape = (self.oversampling * self.pupilSizeInPixels, self.oversampling * self.pupilSizeInPixels)
         self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels//2, xp=self._xp)
-        self.throughput, self.telescopeSizeInM = self._config.read_telescope_pars()
+        self.telescopeSizeInM, self.throughput = self._config.read_telescope_pars()
     
     
     def initialize_devices(self):
@@ -193,8 +192,8 @@ class SingleStageAO():
 
 
     def generate_phase_screens(self, N:int=10):
-        screenPixels = self.pupilSizeInPixels*self.oversampling*N
-        screenMeters = N*self.oversampling*self.telescopeSizeInM
+        screenPixels = N*self.oversampling*self.pupilSizeInPixels
+        screenMeters = N*self.oversampling*self.telescopeSizeInM#self.pupilSizeInM
         self.pixelsPerMeter = screenPixels/screenMeters
         atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
         try:
@@ -207,7 +206,6 @@ class SingleStageAO():
                 Nscreens = 1
             else:
                 Nscreens = len(r0)
-            print(Nscreens)
             phs = PhaseScreenGenerator(screenPixels, screenMeters, outerScaleInMeters=L0, seed=42)
             phs.generate_normalized_phase_screens(Nscreens)
             phs.rescale_to(r0At500nm=r0)
