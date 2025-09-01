@@ -82,10 +82,10 @@ def reshape_on_mask(flat_array, mask, xp=np, dtype=np.float32):
     return image
 
 
-def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0):
+def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0, **kwargs):
     sz=image2d.shape
     plt.imshow(image2d, extent=[-sz[0]/2*pixelSize, sz[0]/2*pixelSize,
-                                -sz[1]/2*pixelSize, sz[1]/2*pixelSize],origin='lower')
+                                -sz[1]/2*pixelSize, sz[1]/2*pixelSize],origin='lower', **kwargs)
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)

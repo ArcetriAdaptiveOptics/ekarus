@@ -1,9 +1,10 @@
 import configparser
+import numpy as np
 
 class ConfigReader():
 
     def __init__(self, config_path):
-        self._config = configparser.ConfigParser()
+        self._config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
         self._config.read(config_path)
 
     def read_pupil_pars(self):
@@ -41,7 +42,7 @@ class ConfigReader():
         r0 = float(atmo_conf['r0'])
         L0 = float(atmo_conf['L0'])
         windSpeed = float(atmo_conf['windSpeed'])
-        windAngle = float(atmo_conf['windAngle'])
+        windAngle = float(atmo_conf['windAngle'])*np.pi/180 # radians 2 degrees
         return r0, L0, windSpeed, windAngle
 
 
