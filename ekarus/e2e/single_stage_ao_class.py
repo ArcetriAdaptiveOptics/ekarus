@@ -4,6 +4,7 @@ import os
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.e2e.utils.read_configuration import ConfigReader
 from arte.atmo.phase_screen_generator import PhaseScreenGenerator
+from ekarus.analytical.turbulence_layers import TurbulenceLayers
 
 from ekarus.e2e.alpao_deformable_mirror import ALPAODM
 from ekarus.e2e.pyramid_wfs import PyramidWFS
@@ -145,7 +146,9 @@ class SingleStageAO():
                 KL = self._xp.asarray(KL, dtype=self._xp.float32)
                 m2c = self._xp.asarray(m2c, dtype=self._xp.float32)
         except FileNotFoundError:
-            r0, L0, _, _ = self._config.read_atmo_pars()
+            r0s, L0, _, _ = self._config.read_atmo_pars()
+            r0 = self._xp.sqrt(self._xp.sum(r0s**2))
+            print(r0)
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.dm.mask, self.pupilSizeInPixels, \
                 self.pupilSizeInM, self.dm.IFF.T, r0, L0, zern_modes=zern_modes,\
                 oversampling=self.oversampling, verbose = True, xp=self._xp, dtype=self.dtype)
@@ -173,7 +176,7 @@ class SingleStageAO():
     
     def read_configuration(self, tn):
         config_path = os.path.join(self.basepath,'ekarus','simulations','Config',str(tn)+'.ini')
-        self._config = ConfigReader(config_path)
+        self._config = ConfigReader(config_path, self._xp)
         self.pupilSizeInM, self.pupilSizeInPixels, self.oversampling = self._config.read_pupil_pars()
         mask_shape = (self.oversampling * self.pupilSizeInPixels, self.oversampling * self.pupilSizeInPixels)
         self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels//2, xp=self._xp)
@@ -189,6 +192,24 @@ class SingleStageAO():
         self.ccd = Detector(detector_shape=detector_shape, xp=self._xp)
         self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels, xp=self._xp)
         self.slope_computer = SlopeComputer(wfs_type = 'PyrWFS', xp=self._xp)
+
+
+    def initialize_turbulence(self, N:int=10):
+        screenPixels = N*self.oversampling*self.pupilSizeInPixels
+        screenMeters = N*self.oversampling*self.telescopeSizeInM#self.pupilSizeInM
+        atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
+        r0s, L0, windSpeeds, windAngles = self._config.read_atmo_pars()
+        self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
+        print(f'Generating {self.layers.Nscreens:1.0f} phase-screens ...')
+        self.layers.generate_phase_screens(screenPixels, screenMeters)
+        self.layers.rescale_phasescreens(self.lambdaInM)
+        self.layers.update_mask(self.cmask)
+
+
+    def get_phase_screen(self, dt):
+        masked_phases = self.layers.move_mask_on_phasescreens(dt)
+        masked_phase = self._xp.sum(masked_phases,axis=0)
+        return masked_phase
 
 
     def generate_phase_screens(self, N:int=10):

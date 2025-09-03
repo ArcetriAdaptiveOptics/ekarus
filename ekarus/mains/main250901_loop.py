@@ -20,12 +20,12 @@ except:
 #     plt.title(title)
 
 
-tn = '20250829_080000'
+tn = '20250901_230000'
 
 print('Initializing devices ...')
 ssao = SingleStageAO(tn)
 
-show = False # boolean to show initialization outputs
+show = True # boolean to show initialization outputs
 lambdaInM = 1000e-9
 starMagnitude = 3
 
@@ -84,9 +84,9 @@ if show:
 
 
 # 4. Get atmospheric phase screen
-print('Generating phase screens ...')
-screens = ssao.generate_phase_screens(N=20)
-screen = screens[0]
+print('Initializing turbulence ...')
+ssao.initialize_turbulence(N=20)
+screen = ssao.get_phase_screen(dt=0)
 if show:
     plt.figure()
     plt.imshow(screen, cmap='RdBu')
@@ -102,8 +102,8 @@ electric_field_amp = 1-ssao.cmask
 dt = 1e-3
 g = 10
 
-Nits = 150#300 
-Nmodes = 468#100
+Nits = 100
+Nmodes = 100
 wind_speed = 10
 wind_angle = xp.pi/4
 
@@ -121,18 +121,11 @@ input_phases = xp.zeros([Nits,mask_len])
 reconstructed_phases = xp.zeros([Nits,mask_len])
 ccd_images = xp.zeros([Nits,ssao.ccd.detector_shape[0],ssao.ccd.detector_shape[1]])
 
-# Rec = m2c @ Rec
-# from ekarus.e2e.utils.turbulence_generator import move_mask_on_phasescreen
-
-init_scramble = xp.random.randn(ssao.dm.Nacts)*20*ssao.pupilSizeInM/ssao.lambdaInM*2*xp.pi
-init_phase = xp.zeros_like(ssao.cmask, dtype=xptype)
-init_phase[~ssao.cmask] = ssao.dm.IFF @ init_scramble
-input_phase = xp.reshape(init_phase, ssao.cmask.shape)
 
 for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
     tt = dt*i
-    #input_phase = move_mask_on_phasescreen(screen, ssao.cmask, tt, wind_speed, wind_angle, ssao.pixelsPerMeter, xp=xp)
+    input_phase = ssao.get_phase_screen(tt)
 
     dm_phase[~ssao.cmask] = dm_shape
     dm_phase = xp.reshape(dm_phase, ssao.cmask.shape)
@@ -142,7 +135,7 @@ for i in range(Nits):
 
     modes = ssao.perform_loop_iteration(dt, phase, Rec, modulation_angle=alpha)
     cmd = m2c[:,0:Nmodes] @ modes[0:Nmodes]
-    dm_cmd += cmd*0.05
+    dm_cmd += cmd*g
     dm_shape = ssao.dm.IFF @ dm_cmd
 
     # Save telemetry
@@ -234,7 +227,6 @@ plt.ylim([H//2-w//2, H//2+w//2])
 # plt.imshow(masked_array(phase, mask = cmask),origin='lower')
 # plt.colorbar()
 # plt.title(f'Output: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}')
-
 
 plt.subplot(2,2,2)
 showZoomCenter(psf, ssao.pixelScale*180/xp.pi*3600, title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]**2):1.3f}',cmap='inferno')

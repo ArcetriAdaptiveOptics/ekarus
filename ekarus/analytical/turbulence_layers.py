@@ -1,100 +1,149 @@
-from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 import numpy as np
-
+from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 from ekarus.e2e.utils.image_utils import reshape_on_mask
-# from functools import lru_cache
-# import matplotlib.pyplot as plt
 
-class Turbulence():
+# from ekarus.e2e.utils import my_fits_package as myfits
 
-    def __init__(self, r0, L0, savepath:str = None, xp = np):
 
-        self.r0 = r0
+class TurbulenceLayers():
+
+    def __init__(self, r0s, L0, windSpeeds, windAngles, savepath:str, xp = np):
+
+        self.r0s = r0s
         self.L0 = L0
-
-        self.savepath = savepath
+        self.windAngles = windAngles
+        self.windSpeeds = windSpeeds
 
         self._xp = xp
         self.dtype = self._xp.float32 if self._xp.__name__ == 'cupy' else self._xp.float64
-    
 
-    def generate_phasescreens(self, lambdaInM, Nscreens, screenSizeInPixels, screenSizeInMeters):
+        self._check_same_length(r0s, windSpeeds)
+        self._check_same_length(r0s, windAngles)
 
-        phs = PhaseScreenGenerator(screenSizeInPixels, screenSizeInMeters, \
-                                outerScaleInMeters=self.L0, seed=42)
+        self.Nscreens = self._get_len(r0s, xp)
+        self.savepath = savepath
+
+
+    def update_mask(self, mask):
+        self.mask = mask
+        self._define_start_coordinates_on_phasescreens(mask.shape)
+
+
+    def generate_phase_screens(self, screenSizeInPixels, screenSizeInMeters):
         
-        phs.generate_normalized_phase_screens(Nscreens)
-        phs.rescale_to(r0At500nm=self.r0)
-        phs.get_in_radians_at(wavelengthInMeters=lambdaInM)
-
-        if self.savepath is not None :
-            phs.save_normalized_phase_screens(self.savepath)
-
-        phase_screens = self._xp.asarray(phs._phaseScreens, dtype=self.dtype)
-
         self.pixelsPerMeter = screenSizeInPixels/screenSizeInMeters
+        self._phs = PhaseScreenGenerator(screenSizeInPixels, screenSizeInMeters, \
+                            outerScaleInMeters=self.L0, seed=42)
+        try:
+            self._phs = self._phs.load_normalized_phase_screens(self.savepath)
+        except FileNotFoundError:      
+            self._phs.generate_normalized_phase_screens(self.Nscreens)
+            self._phs.save_normalized_phase_screens(self.savepath)
 
-        return phase_screens
-
-
-def move_mask_on_phasescreen(self, screen, mask, dt, wind_speed, wind_direction_angle):
-
-    x_start, y_start = get_start_coordinates_on_phasescreen(screen.shape, mask.shape, wind_direction_angle)
-
-    dpix = wind_speed*dt*self.pixelsPerMeter
-    x = x_start + dpix*self._xp.cos(wind_direction_angle)
-    y = y_start + dpix*self._xp.sin(wind_direction_angle)
-
-    if x > screen.shape[1]-mask.shape[1] or y > screen.shape[0]-mask.shape[0] or x < 0 or y < 0:
-        raise ValueError(f'A displacement of {dpix:1.2f} for a time {dt:1.3f} [s] with wind {wind_speed:1.1f} [m/s] yields\
-                         ({y:1.0f},{x:1.0f}), which is outside the bounds for a {screen.shape} screen and a {mask.shape} mask.')
-
-    x_round = int(self._xp.floor(x) * (x>=x_start) + self._xp.ceil(x) * (x<x_start))
-    y_round = int(self._xp.floor(y) * (y>=y_start) + self._xp.ceil(y) * (y<y_start))
-
-    dx, dy = abs(x-x_round), abs(y-y_round)
-    sdx, sdy = int(self._xp.sign(x-x_start)), int(self._xp.sign(y-y_start))
-
-    H,W = mask.shape
-
-    full_mask = self._xp.ones_like(screen, dtype=bool)
-    full_mask[y_round:(y_round+H),x_round:(x_round+W)] = mask.copy()
-    phase = reshape_on_mask(screen[~full_mask], mask, xp=xp)
-
-    thr = 1e-2
-
-    if dx > thr and dy > thr:
-        dx_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
-        dy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
-        dxdy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,(sdx,sdy),axis=(0,1))], mask, xp=xp)
-        phase_mask = (phase * (1-dx) + dx * dx_phase) * (1-dy) + (dy_phase * (1-dx) + dx * dxdy_phase) * dy
-
-    elif dx > thr:
-        dx_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdx,axis=1)], mask, xp=xp)
-        phase_mask = phase * (1-dx) + dx_phase * dx
-
-    elif dy > thr:
-        dy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdy,axis=0)], mask, xp=xp)
-        phase_mask = phase * (1-dy) + dy_phase * dy
-
-    else:
-        phase_mask = phase.copy()
-
-    return phase_mask
+        # self._phs.rescale_to(r0At500nm=self.r0s)
+        self._normalization_factors = (1/self.pixelsPerMeter / self.r0s) ** (5. / 6)
+        self.screen_shape = self._phs._phaseScreens.shape[1:]
+        # print(self.screen_shape)
 
 
-def get_start_coordinates_on_phasescreen(screen_shape, mask_shape, wind_direction_angle, xp=np):
+    def rescale_phasescreens(self, lambdaInM):
+        # self._phs.get_in_radians_at(wavelengthInMeters=lambdaInM)
+        for k in range(self.Nscreens):
+            self._phs._phaseScreens[k,:,:] *= 500e-9 / lambdaInM * self._normalization_factors[k]
+        self.phase_screens = self._xp.asarray(self._phs._phaseScreens, dtype=self.dtype)
+        
 
-    H,W = screen_shape
-    h,w = mask_shape
+    def move_mask_on_phasescreens(self, dt):
+        masked_phases = self._xp.zeros([self.Nscreens,self.mask_shape[0],self.mask_shape[1]])
+        screen_shape = self.screen_shape
+        mask_shape = self.mask.shape
 
-    sin_phi = self._xp.sin(wind_direction_angle)
-    cos_phi = self._xp.cos(wind_direction_angle)
+        for k in range(self.Nscreens):
 
-    Delta = min(abs((W-w)/(2*cos_phi)), abs((H-h)/(2*sin_phi)))
-    x = (W-w)/2 - Delta * cos_phi
-    y = (H-h)/2 - Delta * sin_phi
+            screen = self.phase_screens[k]
+            windSpeed = self.windSpeeds[k]
+            windAngle = self.windAngles[k]
+            xStart = self.startX[k]
+            yStart = self.startY[k]
 
-    return x,y
+            dpix = windSpeed*dt*self.pixelsPerMeter
+            x = xStart + dpix*self._xp.cos(windAngle)
+            y = yStart + dpix*self._xp.sin(windAngle)
+
+            if x > screen_shape[1]-mask_shape[1] or y > screen_shape[0]-mask_shape[0] or x < 0 or y < 0:
+                raise ValueError(f'A displacement of {dpix:1.2f} for a time {dt:1.3f} [s] with wind {windSpeed:1.1f} [m/s] yields\
+                                ({y:1.0f},{x:1.0f}), which is outside the bounds for a {screen_shape} screen and a {mask_shape} mask.')
+
+            x_round = int(self._xp.floor(x) * (x>=xStart) + self._xp.ceil(x) * (x<xStart))
+            y_round = int(self._xp.floor(y) * (y>=yStart) + self._xp.ceil(y) * (y<yStart))
+
+            dx, dy = abs(x-x_round), abs(y-y_round)
+            sdx, sdy = int(self._xp.sign(x-xStart)), int(self._xp.sign(y-yStart))
+
+            H,W = mask_shape
+
+            full_mask = self._xp.ones_like(screen, dtype=bool)
+            full_mask[y_round:(y_round+H),x_round:(x_round+W)] = self.mask.copy()
+            phase = reshape_on_mask(screen[~full_mask], self.mask, xp=self._xp)
+
+            thr = 1e-2
+
+            if dx > thr and dy > thr:
+                dx_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdx,axis=1)], self.mask, xp=self._xp)
+                dy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdy,axis=0)], self.mask, xp=self._xp)
+                dxdy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,(sdx,sdy),axis=(0,1))], self.mask, xp=self._xp)
+                phase_mask = (phase * (1-dx) + dx * dx_phase) * (1-dy) + (dy_phase * (1-dx) + dx * dxdy_phase) * dy
+
+            elif dx > thr:
+                dx_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdx,axis=1)], self.mask, xp=self._xp)
+                phase_mask = phase * (1-dx) + dx_phase * dx
+
+            elif dy > thr:
+                dy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdy,axis=0)], self.mask, xp=self._xp)
+                phase_mask = phase * (1-dy) + dy_phase * dy
+
+            else:
+                phase_mask = phase.copy()
+
+            masked_phases[k,:,:] = phase_mask
+
+        return masked_phases
+        
+
+    def _define_start_coordinates_on_phasescreens(self, mask_shape):
+
+        self.mask_shape = mask_shape
+
+        H,W = self.screen_shape
+        h,w = self.mask_shape
+
+        self.startX = self._xp.zeros(self.Nscreens)
+        self.startY = self._xp.zeros(self.Nscreens)
+
+        for k in range(self.Nscreens):
+
+            windAngle = self.windAngles[k]
+
+            sin_phi = max(1e-12, self._xp.sin(windAngle)) # avoid division by 0
+            cos_phi = max(1e-12, self._xp.cos(windAngle)) # avoid division by 0
+
+            Delta = min(abs((W-w)/(2*cos_phi)), abs((H-h)/(2*sin_phi)))
+            self.startX[k] = (W-w)/2 - Delta * cos_phi
+            self.startY[k] = (H-h)/2 - Delta * sin_phi
+    
+    def _check_same_length(self, a, b):
+        lenA = self._get_len(a, self._xp)
+        lenB = self._get_len(b, self._xp)
+        if lenA != lenB:
+            raise ValueError(f'Vector {a} of length {lenA} is not compatible with vector {b} of length {lenB}')
+    
+    @staticmethod
+    def _get_len(a, xp=np):
+        length = 1
+        if not isinstance(a, float):
+            length = len(a)
+        return length
+
+
 
 

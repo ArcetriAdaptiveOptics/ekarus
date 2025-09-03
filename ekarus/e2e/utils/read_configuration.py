@@ -3,9 +3,10 @@ import numpy as np
 
 class ConfigReader():
 
-    def __init__(self, config_path):
+    def __init__(self, config_path, xp=np):
         self._config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
         self._config.read(config_path)
+        self.xp = xp
 
     def read_pupil_pars(self):
         pup_conf = self._config['PUPIL']
@@ -39,11 +40,22 @@ class ConfigReader():
     
     def read_atmo_pars(self):
         atmo_conf = self._config['ATMO']
-        r0 = float(atmo_conf['r0'])
+        r0 = self._read_array(atmo_conf['r0'])
         L0 = float(atmo_conf['L0'])
-        windSpeed = float(atmo_conf['windSpeed'])
-        windAngle = float(atmo_conf['windAngle'])*np.pi/180 # radians 2 degrees
+        windSpeed = self._read_array(atmo_conf['windSpeed'])
+        windAngle = self._read_array(atmo_conf['windAngle'])*self.xp.pi/180 # radians 2 degrees
         return r0, L0, windSpeed, windAngle
+    
+    def _read_array(self, a):
+        lenA = len(a.split(','))
+        if lenA > 1:
+            b = self.xp.zeros(lenA,dtype=float)
+            for k in range(lenA):
+                b[k] = float(a.split(',')[k])
+        else:
+            b = float(a)
+        return b
+
 
 
         
