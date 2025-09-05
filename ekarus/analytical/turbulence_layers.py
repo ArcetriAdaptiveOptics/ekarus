@@ -131,6 +131,7 @@ class TurbulenceLayers():
             self.startX[k] = (W-w)/2 - Delta * cos_phi
             self.startY[k] = (H-h)/2 - Delta * sin_phi
     
+    
     def _check_same_length(self, a, b):
         lenA = self._get_len(a, self._xp)
         lenB = self._get_len(b, self._xp)
