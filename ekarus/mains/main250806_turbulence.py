@@ -66,7 +66,7 @@ y = np.zeros(N)
 
 for i in range(N):
     tt = i*dt
-    image = atmo.move_mask_on_phasescreen(tt)
+    image = atmo.move_mask_on_phasescreens(tt)
     shifted_screens[:,:,i] = image
 
 
