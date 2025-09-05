@@ -23,7 +23,7 @@ except:
 tn = '20250901_230000'
 
 print('Initializing devices ...')
-ssao = SingleStageAO(tn)
+ssao = SingleStageAO(tn, xp=xp)
 
 show = True # boolean to show initialization outputs
 lambdaInM = 1000e-9
@@ -74,6 +74,8 @@ print('Calibrating the KL modes ...')
 Rec, IM = ssao.calibrate_modes(KL, amps = 0.2, modulation_angle = alpha)
 if show:
     IM_std = xp.std(IM,axis=0)
+    if xp.__name__ == 'cupy':
+        IM_std = IM_std.get()
     plt.figure()
     plt.plot(IM_std,'-o')
     plt.grid()
@@ -86,6 +88,8 @@ print('Initializing turbulence ...')
 ssao.initialize_turbulence(N=20)
 screen = ssao.get_phase_screen(dt=0)
 if show:
+    if xp.__name__ == 'cupy':
+        screen = screen.get()
     plt.figure()
     plt.imshow(screen, cmap='RdBu')
     plt.colorbar()
@@ -100,7 +104,7 @@ dt = 1e-3
 g = 10
 
 Nits = 100
-Nmodes = 100
+Nmodes = 200
 wind_speed = 10
 wind_angle = xp.pi/4
 

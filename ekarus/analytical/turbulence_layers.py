@@ -36,10 +36,12 @@ class TurbulenceLayers():
                             outerScaleInMeters=self.L0, seed=42)
         try:
             self._phs = self._phs.load_normalized_phase_screens(self.savepath)
-        except FileNotFoundError:      
+        except FileNotFoundError:   
+            print(f'Generating {self.Nscreens:1.0f} phase-screens ...')
             self._phs.generate_normalized_phase_screens(self.Nscreens)
             self._phs.save_normalized_phase_screens(self.savepath)
-
+        
+        self.phase_screens = self._xp.asarray(self._phs._phaseScreens, dtype=self.dtype)
         # self._phs.rescale_to(r0At500nm=self.r0s)
         self._normalization_factors = (1/self.pixelsPerMeter / self.r0s) ** (5. / 6)
         self.screen_shape = self._phs._phaseScreens.shape[1:]
@@ -49,10 +51,9 @@ class TurbulenceLayers():
     def rescale_phasescreens(self, lambdaInM):
         # self._phs.get_in_radians_at(wavelengthInMeters=lambdaInM)
         for k in range(self.Nscreens):
-            self._phs._phaseScreens[k,:,:] *= 500e-9 / lambdaInM * self._normalization_factors[k]
-        self.phase_screens = self._xp.asarray(self._phs._phaseScreens, dtype=self.dtype)
+            self.phase_screens[k,:,:] *= 500e-9 / lambdaInM * self._normalization_factors[k]
         
-
+        
     def move_mask_on_phasescreens(self, dt):
         masked_phases = self._xp.zeros([self.Nscreens,self.mask_shape[0],self.mask_shape[1]])
         screen_shape = self.screen_shape

@@ -20,8 +20,12 @@ class SingleStageAO():
     def __init__(self, tn, xp=np):
 
         self.basepath = os.getcwd()
-        self.savepath = os.path.join(self.basepath,'ekarus','simulations','Results',str(tn))
+        
+        self.resultpath = os.path.join(self.basepath,'ekarus','simulations','Results')
+        if not os.path.exists(self.resultpath):
+            os.mkdir(self.resultpath)
 
+        self.savepath = os.path.join(self.resultpath,str(tn))
         if not os.path.exists(self.savepath):
             os.mkdir(self.savepath)
 
@@ -199,8 +203,7 @@ class SingleStageAO():
         screenMeters = N*self.oversampling*self.telescopeSizeInM#self.pupilSizeInM
         atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
         r0s, L0, windSpeeds, windAngles = self._config.read_atmo_pars()
-        self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
-        print(f'Generating {self.layers.Nscreens:1.0f} phase-screens ...')
+        self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path, xp=self._xp)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens(self.lambdaInM)
         self.layers.update_mask(self.cmask)
