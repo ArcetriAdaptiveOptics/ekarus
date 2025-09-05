@@ -20,12 +20,12 @@ except:
 #     plt.title(title)
 
 
-tn = '20250901_230000'
+tn = '20250905_170000'
 
 print('Initializing devices ...')
 ssao = SingleStageAO(tn, xp=xp)
 
-show = True # boolean to show initialization outputs
+show = False # boolean to show initialization outputs
 lambdaInM = 1000e-9
 starMagnitude = 3
 
@@ -100,13 +100,11 @@ if show:
 print('Running the loop ...')
 electric_field_amp = 1-ssao.cmask
 
-dt = 1e-3
-g = 10
+dt = 5e-4
+g = 2
 
 Nits = 100
-Nmodes = 200
-wind_speed = 10
-wind_angle = xp.pi/4
+Nmodes = 400
 
 mask_len = int(xp.sum(1-ssao.dm.mask))
 dm_shape = xp.zeros(mask_len, dtype=xptype)
@@ -120,7 +118,6 @@ phases = xp.zeros([Nits,mask_len])
 input_phases = xp.zeros([Nits,mask_len])
 reconstructed_phases = xp.zeros([Nits,mask_len])
 ccd_images = xp.zeros([Nits,ssao.ccd.detector_shape[0],ssao.ccd.detector_shape[1]])
-
 
 for i in range(Nits):
     print(f'\rIteration {i+1}/{Nits}', end='')
@@ -146,19 +143,18 @@ for i in range(Nits):
     phases[i,:] = phase[~ssao.cmask]
 print('')
 
+
 #################### Post-processing ##############################
 electric_field_amp = 1-ssao.cmask
 electric_field = electric_field_amp * xp.exp(-1j*phase)
 field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
 psf = abs(field_on_focal_plane)**2
 
-sig2 = xp.std(input_phases-dm_phases,axis=-1)**2 #xp.mean((input_phases-dm_phases)**2, axis=-1)
-input_sig2 = xp.std(input_phases,axis=-1)**2 #xp.mean((input_phases)**2, axis=-1)
+sig2 = xp.std(phases,axis=-1)**2
+input_sig2 = xp.std(input_phases,axis=-1)**2 
 
 print('Saving telemetry to .fits ...')
 cmask = ssao.cmask.get() if xp.__name__ == 'cupy' else ssao.cmask.copy()
-# from ekarus.e2e.utils.image_utils import reshape_on_mask
-
 masked_input_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
 masked_dm_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
 masked_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
@@ -199,7 +195,7 @@ myfits.save_fits(dm_phases_path, masked_dm_phases)
 myfits.save_fits(err_phases_path, masked_phases-masked_dm_phases)
 
 ccd_image = ssao.ccd.last_frame
-print(f'Number of collected photons: {xp.sum(ccd_image):1.0f}')
+# print(f'Number of collected photons: {xp.sum(ccd_image):1.0f}')
 
 ########################## Plotting ###############################
 if xp.__name__ == 'cupy': # Convert to numpy for plotting
@@ -229,7 +225,7 @@ plt.ylim([H//2-w//2, H//2+w//2])
 # plt.title(f'Output: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}')
 
 plt.subplot(2,2,2)
-showZoomCenter(psf, ssao.pixelScale*180/xp.pi*3600, title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]**2):1.3f}',cmap='inferno')
+showZoomCenter(psf, ssao.pixelScale*180/xp.pi*3600, title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno')
 
 plt.subplot(2,2,3)
 plt.imshow(ccd_image,origin='lower')

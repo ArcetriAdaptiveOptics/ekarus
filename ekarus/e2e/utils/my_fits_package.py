@@ -20,7 +20,7 @@ def save_fits(filename, data, header_dictionary = None):
     hdr = pyfits.Header()
     if header_dictionary is not None:
         for key in header_dictionary:
-            hdr[str(key)] = header_dictionary[key]
+            hdr[str(key)] = float(header_dictionary[key])
 
     if hasattr(data, 'get'):
         data = data.get()

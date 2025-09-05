@@ -20,7 +20,7 @@ class SingleStageAO():
     def __init__(self, tn, xp=np):
 
         self.basepath = os.getcwd()
-        
+
         self.resultpath = os.path.join(self.basepath,'ekarus','simulations','Results')
         if not os.path.exists(self.resultpath):
             os.mkdir(self.resultpath)
@@ -152,7 +152,6 @@ class SingleStageAO():
         except FileNotFoundError:
             r0s, L0, _, _ = self._config.read_atmo_pars()
             r0 = self._xp.sqrt(self._xp.sum(r0s**2))
-            print(r0)
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.dm.mask, self.pupilSizeInPixels, \
                 self.pupilSizeInM, self.dm.IFF.T, r0, L0, zern_modes=zern_modes,\
                 oversampling=self.oversampling, verbose = True, xp=self._xp, dtype=self.dtype)
