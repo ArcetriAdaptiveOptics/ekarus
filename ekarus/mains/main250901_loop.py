@@ -74,8 +74,6 @@ print('Calibrating the KL modes ...')
 Rec, IM = ssao.calibrate_modes(KL, amps = 0.2, modulation_angle = alpha)
 if show:
     IM_std = xp.std(IM,axis=0)
-    if xp.__name__ == 'cupy':
-        IM_std = IM_std.get()
     plt.figure()
     plt.plot(IM_std,'-o')
     plt.grid()
@@ -94,7 +92,6 @@ if show:
     plt.title('Atmo screen')
 
 
-
 # 5. Perform the iteration
 print('Running the loop ...')
 electric_field_amp = 1-ssao.cmask
@@ -106,7 +103,6 @@ Nits = 100
 Nmodes = 100
 wind_speed = 10
 wind_angle = xp.pi/4
-
 
 mask_len = int(xp.sum(1-ssao.dm.mask))
 dm_shape = xp.zeros(mask_len, dtype=xptype)
