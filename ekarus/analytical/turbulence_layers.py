@@ -11,7 +11,11 @@ class TurbulenceLayers():
 
         self.r0s = r0s
         self.L0 = L0
-        self.windAngles = windAngles
+
+        # Wrap angles to [-pi,pi)
+        angles = ( windAngles + xp.pi) % (2 * xp.pi ) - xp.pi
+        angles += 2*xp.pi * (angles < 0)
+        self.windAngles = angles
         self.windSpeeds = windSpeeds
 
         self._xp = xp
@@ -139,8 +143,16 @@ class TurbulenceLayers():
             else: 
                 windAngle = self.windAngles
 
-            sin_phi = max(1e-12, self._xp.sin(windAngle)) # avoid division by 0
-            cos_phi = max(1e-12, self._xp.cos(windAngle)) # avoid division by 0
+            sin_phi = self._xp.sin(windAngle) 
+            cos_phi = self._xp.cos(windAngle) 
+
+            # Avoid division by 0
+            if abs(sin_phi) < 1e-12:
+                sin_phi = 1e-12*self._xp.sign(sin_phi)
+            if abs(cos_phi) < 1e-12:
+                cos_phi = 1e-12*self._xp.sign(cos_phi)
+
+            # print(windAngle*180/self._xp.pi, ': ', sin_phi, cos_phi) # debugging
 
             Delta = min(abs((W-w)/(2*cos_phi)), abs((H-h)/(2*sin_phi)))
             self.startX[k] = (W-w)/2 - Delta * cos_phi

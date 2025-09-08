@@ -103,8 +103,8 @@ electric_field_amp = 1-ssao.cmask
 dt = 5e-4
 g = 2
 
-Nits = 100
-Nmodes = 400
+Nits = 250
+Nmodes = 800
 
 mask_len = int(xp.sum(1-ssao.dm.mask))
 dm_shape = xp.zeros(mask_len, dtype=xptype)
