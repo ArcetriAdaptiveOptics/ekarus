@@ -20,7 +20,7 @@ except:
 #     plt.title(title)
 
 
-tn = '20250905_170000'
+tn = '20250908_110000'
 
 print('Initializing devices ...')
 ssao = SingleStageAO(tn, xp=xp)
@@ -100,11 +100,11 @@ if show:
 print('Running the loop ...')
 electric_field_amp = 1-ssao.cmask
 
-dt = 5e-4
+dt = 1e-3
 g = 2
 
 Nits = 250
-Nmodes = 800
+Nmodes = 400
 
 mask_len = int(xp.sum(1-ssao.dm.mask))
 dm_shape = xp.zeros(mask_len, dtype=xptype)
