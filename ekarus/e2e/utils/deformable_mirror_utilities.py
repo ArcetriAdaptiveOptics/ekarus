@@ -125,81 +125,49 @@ def compute_reconstructor(M, thr:float= 1e-12, xp=np):
     return Rec, U
 
 
-def simulate_influence_functions_with_multiprocessing(act_coords, local_mask, pix_scale:float = 1.0, xp=np):
-    """ Simulate the influence functions by 
-    imposing 'perfect' zonal commands """
+# def simulate_influence_functions_with_multiprocessing(act_coords, local_mask, pix_scale:float = 1.0, xp=np):
+#     """ Simulate the influence functions by 
+#     imposing 'perfect' zonal commands """
     
-    if xp.__name__ == 'cupy':
-        local_mask = local_mask.get()
-        act_coords = act_coords.get()
+#     if xp.__name__ == 'cupy':
+#         local_mask = local_mask.get()
+#         act_coords = act_coords.get()
 
-    n_acts = max(act_coords.shape)
+#     n_acts = max(act_coords.shape)
 
-    mask_ids = np.arange(np.size(local_mask))
-    pix_ids = mask_ids[~(local_mask).flatten()]
+#     mask_ids = np.arange(np.size(local_mask))
+#     pix_ids = mask_ids[~(local_mask).flatten()]
     
-    pix_coords = getMaskPixelCoords(local_mask).T
-    act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale).T
+#     pix_coords = getMaskPixelCoords(local_mask).T
+#     act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale).T
 
-    n_cores = multiprocessing.cpu_count() -2
-    print(f'Simulating IFFs on {n_cores:1.0f} cores...')
+#     n_cores = multiprocessing.cpu_count() -2
+#     print(f'Simulating IFFs on {n_cores:1.0f} cores...')
 
-    def get_act_iff(act_id):
-        print(f'\rSimulating influence functions: {act_id}/{n_acts}', end='')
-        act_data = np.zeros(n_acts)
-        act_data[act_id] = 1e-6
-        tps = ThinPlateSpline(alpha=0.0)
-        tps.fit(act_pix_coords, act_data)
-        img = tps.transform(pix_coords[pix_ids,:])
-        return img[:,0]
+#     def get_act_iff(act_id):
+#         print(f'\rSimulating influence functions: {act_id}/{n_acts}', end='')
+#         act_data = np.zeros(n_acts)
+#         act_data[act_id] = 1e-6
+#         tps = ThinPlateSpline(alpha=0.0)
+#         tps.fit(act_pix_coords, act_data)
+#         img = tps.transform(pix_coords[pix_ids,:])
+#         return img[:,0]
     
-    with multiprocessing.Pool(processes=n_cores) as pool:
-        iffs = [pool.apply_async(get_act_iff, j) for j in range(n_acts)]
-        IFF = np.stack([iff.get(timeout=10) for iff in iffs])
+#     with multiprocessing.Pool(processes=n_cores) as pool:
+#         iffs = [pool.apply_async(get_act_iff, j) for j in range(n_acts)]
+#         IFF = np.stack([iff.get(timeout=10) for iff in iffs])
 
-    print(IFF)
-    print(IFF.shape)
+#     print(IFF)
+#     print(IFF.shape)
 
-    if xp.__name__ == 'cupy': # tps seems to only work with numpy
-        IFF = xp.asarray(IFF,dtype=xp.float32)
+#     if xp.__name__ == 'cupy': # tps seems to only work with numpy
+#         IFF = xp.asarray(IFF,dtype=xp.float32)
 
-    return IFF
+#     return IFF
 
-    # iffs_per_core = int(n_acts//n_cores)
-    # extra_iffs = int(n_acts - n_cores*iffs_per_core)
-
-    # def get_iffs(j, q):
-    #     act_ids = np.arange(iffs_per_core,dtype=int) + iffs_per_core*j + min(j+1,extra_iffs)
-    #     mat = np.zeros([n_pix,len(act_ids)])
-    #     for k,act_id in enumerate(act_ids):
-    #         act_data = np.zeros(n_acts)
-    #         act_data[act_id] = 1e-6
-    #         tps = ThinPlateSpline(alpha=0.0)
-    #         tps.fit(act_pix_coords, act_data)
-    #         img = tps.transform(pix_coords[pix_ids,:])
-    #         mat[:,k] = img[:,0]
-    #     q.put(mat)
-
-    # q = multiprocessing.Queue()
-
-    # print(f'Simulating IFFs on {n_cores:1.0f} cores...')
-    # processes = [multiprocessing.Process(target=get_iffs, args=(i,q)) for i in range(n_cores)]
-
-    # for process in processes:
-    #     process.start()
-
-    # for j,process in enumerate(processes):
-    #     process.join()
-    #     act_ids = np.arange(iffs_per_core,dtype=int) + iffs_per_core*j + min(j+1,extra_iffs)
-    #     IFF[:,act_ids] = q.get()
-
-    # if xp.__name__ == 'cupy': # tps seems to only work with numpy
-    #     IFF = xp.asarray(IFF,dtype=xp.float32)
-
-    # return IFF
     
     
-def simulate_influence_functions(act_coords, local_mask, pix_scale:float = 1.0, xp=np):
+def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0, xp=np):
     """ Simulate the influence functions by 
     imposing 'perfect' zonal commands """
     
@@ -219,7 +187,7 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float = 1.0, 
     for k in range(n_acts):
         print(f'\rSimulating influence functions: {k+1}/{n_acts}', end='')
         act_data = np.zeros(n_acts)
-        act_data[k] = 1e-6
+        act_data[k] = 1.0
         tps = ThinPlateSpline(alpha=0.0)
         tps.fit(act_pix_coords, act_data)
         img = tps.transform(pix_coords[pix_ids,:])
@@ -259,8 +227,8 @@ def get_pixel_coords(mask, coords, pix_scale:float = 1.0, xp=np):
     H,W = mask.shape
     dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
     pix_coords = xp.zeros([2,xp.shape(coords)[-1]], dtype=dtype)
-    pix_coords[0,:] = (coords[1,:]*pix_scale/2 + H)/2
-    pix_coords[1,:] = (coords[0,:]*pix_scale/2 + W)/2
+    pix_coords[0,:] = coords[1,:]*pix_scale + H/2 #(coords[1,:]*pix_scale/2 + H)/2
+    pix_coords[1,:] = coords[0,:]*pix_scale + W/2 #(coords[0,:]*pix_scale/2 + W)/2
     
     return pix_coords
 

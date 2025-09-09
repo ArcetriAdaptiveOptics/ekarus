@@ -62,7 +62,7 @@ def main(lambdaInM = 1000e-9, starMagnitude = 3, modulationAngleInLambdaOverD = 
 
     # 3. Calibrate the system
     print('Calibrating the KL modes ...')
-    Rec, IM = ssao.calibrate_modes(KL, amps = 0.2)
+    Rec, IM = ssao.calibrate_modes(KL, amps=0.2)
     if show:
         IM_std = xp.std(IM,axis=0)
         if xp.__name__ == 'cupy':
@@ -97,6 +97,8 @@ def main(lambdaInM = 1000e-9, starMagnitude = 3, modulationAngleInLambdaOverD = 
     Nits = 300
     Nmodes = 467
 
+    Nsteps_delay = 2 # accounts for CCD reading time + time for DM to reach cmd steady-state
+
     # Define variables
     mask_len = int(xp.sum(1-ssao.dm.mask))
     dm_shape = xp.zeros(mask_len, dtype=xptype)
@@ -104,7 +106,7 @@ def main(lambdaInM = 1000e-9, starMagnitude = 3, modulationAngleInLambdaOverD = 
     dm_phase = xp.zeros_like(ssao.cmask, dtype=xptype)
 
     # Save telemetry
-    dm_cmds = xp.zeros([Nits,ssao.dm.Nacts])
+    dm_cmds = xp.zeros([Nits+Nsteps_delay,ssao.dm.Nacts])
     dm_phases = xp.zeros([Nits,mask_len])
     residual_phases = xp.zeros([Nits,mask_len])
     input_phases = xp.zeros([Nits,mask_len])
@@ -116,6 +118,7 @@ def main(lambdaInM = 1000e-9, starMagnitude = 3, modulationAngleInLambdaOverD = 
         input_phase = ssao.get_phase_screen(tt)
         input_phase -= xp.mean(input_phase[~ssao.cmask])
 
+        dm_shape = ssao.dm.IFF @ dm_cmds[i,:]*(2*xp.pi)/lambdaInM # convert to radians
         dm_phase[~ssao.cmask] = dm_shape
         dm_phase = xp.reshape(dm_phase, ssao.cmask.shape)
 
@@ -124,7 +127,9 @@ def main(lambdaInM = 1000e-9, starMagnitude = 3, modulationAngleInLambdaOverD = 
         modes = ssao.perform_loop_iteration(dt, residual_phase, Rec)
         cmd = m2c[:,0:Nmodes] @ modes[0:Nmodes]
         dm_cmd += cmd*g
-        dm_shape = ssao.dm.IFF @ dm_cmd
+        dm_cmds[i+Nsteps_delay,:] = dm_cmd*lambdaInM/(2*xp.pi) # convert to meters
+        # dm_cmd += cmd*g
+        # dm_shape = ssao.dm.IFF @ dm_cmd
 
         # Save telemetry
         input_phases[i,:] = input_phase[~ssao.cmask]
@@ -200,40 +205,42 @@ def main(lambdaInM = 1000e-9, starMagnitude = 3, modulationAngleInLambdaOverD = 
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
 
-    plt.figure(figsize=(10,10))
+    plt.figure(figsize=(9,9))
     plt.subplot(2,2,1)
     # plt.imshow(masked_array(input_phase, mask = cmask),origin='lower',cmap='RdBu')
     # plt.colorbar()
     # plt.title(f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}')
-    myimshow(masked_input_phases[-1],title=f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',cmap='RdBu')
+    myimshow(masked_input_phases[-1],title=f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',cmap='RdBu',shrink=0.8)
     w = ssao.pupilSizeInPixels + 10
     H,W = ssao.cmask.shape
     plt.xlim([W//2-w//2, W//2+w//2])
     plt.ylim([H//2-w//2, H//2+w//2])
 
+    pixelsPerMAS = ssao.pixelsPerRadian*180/xp.pi*3600*1000
+
     plt.subplot(2,2,2)
-    showZoomCenter(psf, ssao.pixelsPerRadian*180/xp.pi*3600, \
+    showZoomCenter(psf, pixelsPerMAS, \
     title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno', \
-    xlabel='[arcsec]', ylabel='[arcsec]')
+    xlabel='[mas]', ylabel='[mas]', shrink=0.8)
 
     plt.subplot(2,2,3)
     # plt.imshow(detector_image,origin='lower')
     # plt.colorbar()
     # plt.title('Detector image')
-    myimshow(detector_images[-1], title = 'Detector image')
+    myimshow(detector_images[-1], title = 'Detector image', shrink=0.8)
 
     plt.subplot(2,2,4)
-    ssao.dm.plot_position(dm_cmds[-1]*lambdaInM/(2*xp.pi))
+    ssao.dm.plot_position(dm_cmds[-1])
     plt.title('Mirror command')
 
-    plt.figure(figsize=(4*Nits/10,3))
+    plt.figure(figsize=(2.4*Nits/10,2.4))
     plt.plot(input_sig2,'-o',label='open loop')
     plt.plot(sig2,'-o',label='closed loop')
     plt.legend()
     plt.grid()
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.xlabel('# iteration')
-    x_ticks = (xp.arange(Nits//4)*4).get() if xp.__name__ == 'cupy' else xp.arange(Nits//4)*4
+    x_ticks = (xp.arange(Nits//10)*10).get() if xp.__name__ == 'cupy' else xp.arange(Nits//10)*10
     plt.xticks(x_ticks)
     plt.xlim([-0.5,Nits-0.5])
 

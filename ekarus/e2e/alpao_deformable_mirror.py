@@ -124,10 +124,9 @@ class ALPAODM(DeformableMirror):
             coords = self._getALPAOcoordinates(nacts_row_sequence, xp=self._xp)
             coords[0] -= (max(coords[0])-min(coords[0]))/2
             coords[1] -= (max(coords[1])-min(coords[1]))/2    
-            radii =self._xp.sqrt(coords[0]**2+coords[1]**2)/2
-            self.act_coords = coords*self.pupil_size/max(radii)
-            act_coords = self.act_coords.get() if self._xp.__name__ == 'cupy' else self.act_coords.copy()
-            myfits.save_fits(coords_path, act_coords, hdr_dict)
+            radii = self._xp.sqrt(coords[0]**2+coords[1]**2)/2
+            self.act_coords = coords*self.pupil_size/2/(2*max(radii))
+            myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
         iff_path = os.path.join(dir_path,'InfluenceFunctions.fits')
         try:
@@ -139,8 +138,7 @@ class ALPAODM(DeformableMirror):
             #     self.IFF = dmutils.simulate_influence_functions_with_multiprocessing(self.act_coords, self.mask, self.pixel_scale, xp=self._xp)
             # else:
             self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask, self.pixel_scale, xp=self._xp)
-            IFFs = self.IFF.get() if self._xp.__name__ == 'cupy' else self.IFF.copy()
-            myfits.save_fits(iff_path, IFFs, hdr_dict)
+            myfits.save_fits(iff_path, self.IFF, hdr_dict)
 
 
 

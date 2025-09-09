@@ -13,6 +13,7 @@ def read_fits(filename, isBool:bool=False):
     if len(hdu) > 1 and hasattr(hdu[1], "data"):
         mask = hdu[1].data.astype(bool)
         data_out = masked_array(data_out, mask=mask)
+        print(mask.shape)
     
     return data_out
 

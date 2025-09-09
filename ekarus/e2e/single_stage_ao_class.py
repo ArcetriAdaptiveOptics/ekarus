@@ -50,7 +50,7 @@ class SingleStageAO():
     def set_modulation_angle(self, modulationAngleInLambdaOverD):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
         self.modulationAngle = modulationAngleInLambdaOverD * self.lambdaInM/self.pupilSizeInM
-        self.modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*3*self._xp.pi)//4*4
+        self.modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*2.4*self._xp.pi)//4*4
         print(f'Now using {self.modulationNsteps:1.0f} modulation steps')
 
     def get_star_magnitude(self):
@@ -86,12 +86,12 @@ class SingleStageAO():
             subaperture_masks = self.slope_computer._subaperture_masks
             if self._xp.__name__ == 'cupy':
                 detector_image = detector_image.get()
-            hdr_dict = {'APEX_ANG': self.wfs.apex_angle, 'PIX_SCAL': self.pixelsPerRadian, 'OVERSAMP': self.oversampling,  'SUBAPPIX': subaperture_size}
+            hdr_dict = {'APEX_ANG': self.wfs.apex_angle, 'RAD2PIX': self.pixelsPerRadian, 'OVERSAMP': self.oversampling,  'SUBAPPIX': subaperture_size}
             myfits.save_fits(subap_path, (subaperture_masks).astype(self._xp.uint8), hdr_dict)
             
     
     def get_slopes(self, input_field, Nphotons):
-        modulated_intensity = self.wfs.modulate(input_field, self.modulationAngle, pixel_scale=self.pixelsPerRadian, N_steps=self.modulationNsteps)
+        modulated_intensity = self.wfs.modulate(input_field, self.modulationAngle, self.pixelsPerRadian, N_steps=self.modulationNsteps)
         detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphotons)
         slopes = self.slope_computer.compute_slopes(detector_image)
 
