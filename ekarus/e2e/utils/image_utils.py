@@ -99,9 +99,9 @@ def showZoomCenter(image, pixelSize, **kwargs):
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
 
-def myimshow(image, title = '', **kwargs):
+def myimshow(image, title='', shrink=1.0, **kwargs):
     if hasattr(image,'get'):
         image = image.get()
     plt.imshow(image,origin='lower', **kwargs)
-    plt.colorbar()
+    plt.colorbar(shrink=shrink)
     plt.title(title)

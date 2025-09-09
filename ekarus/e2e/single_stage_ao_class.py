@@ -3,7 +3,7 @@ import os
 
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.e2e.utils.read_configuration import ConfigReader
-from arte.atmo.phase_screen_generator import PhaseScreenGenerator
+# from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 from ekarus.analytical.turbulence_layers import TurbulenceLayers
 
 from ekarus.e2e.alpao_deformable_mirror import ALPAODM
@@ -143,7 +143,7 @@ class SingleStageAO():
     
     
     def define_KL_modes(self, zern_modes:int = 5):
-        KL_path = os.path.join(self.savepath,'KLmatrix.fits')
+        KL_path = os.path.join(self.savepath,'KLmodes.fits')
         m2c_path = os.path.join(self.savepath,'m2c.fits')
         try:
             KL = myfits.read_fits(KL_path)
@@ -168,7 +168,7 @@ class SingleStageAO():
     
 
     def calibrate_modes(self, MM, amps):
-        IM_path = os.path.join(self.savepath,'IMmatrix.fits')
+        IM_path = os.path.join(self.savepath,'IM.fits')
         Rec_path = os.path.join(self.savepath,'Rec.fits')
         try:
             IM = myfits.read_fits(IM_path)
@@ -205,7 +205,7 @@ class SingleStageAO():
     def initialize_turbulence(self, N:float=10):
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
+        atmo_path = os.path.join(self.savepath, 'AtmospherePhaseScreens.fits')
         r0s, L0, windSpeeds, windAngles = self._config.read_atmo_pars()
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path, xp=self._xp)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
@@ -219,31 +219,31 @@ class SingleStageAO():
         return masked_phase
 
 
-    def generate_phase_screens(self, N:int=10):
-        screenPixels = N*self.oversampling*self.pupilSizeInPixels
-        screenMeters = N*self.oversampling*self.pupilSizeInM
-        self.pixelsPerMeter = screenPixels/screenMeters
-        atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
-        try:
-            phase_screens = myfits.read_fits(atmo_path)
-            if self._xp.__name__ == 'cupy':
-                phase_screens = self._xp.asarray(phase_screens, dtype=self._xp.float32)
-        except FileNotFoundError:
-            r0, L0, _, _ = self._config.read_atmo_pars()
-            if isinstance(r0, float):
-                Nscreens = 1
-            else:
-                Nscreens = len(r0)
-            phs = PhaseScreenGenerator(screenPixels, screenMeters, outerScaleInMeters=L0, seed=42)
-            phs.generate_normalized_phase_screens(Nscreens)
-            phs.rescale_to(r0At500nm=r0)
-            phs.get_in_radians_at(self.lambdaInM)
-            phs.save_normalized_phase_screens(atmo_path)
-            phase_screens = self._xp.asarray(phs._phaseScreens, dtype=self.dtype)
-            hdr_dict = {'r0': r0, 'L0': L0, 'N_SCREEN': Nscreens}
-            myfits.save_fits(atmo_path, phase_screens, hdr_dict)
+    # def generate_phase_screens(self, N:int=10):
+    #     screenPixels = N*self.oversampling*self.pupilSizeInPixels
+    #     screenMeters = N*self.oversampling*self.pupilSizeInM
+    #     self.pixelsPerMeter = screenPixels/screenMeters
+    #     atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
+    #     try:
+    #         phase_screens = myfits.read_fits(atmo_path)
+    #         if self._xp.__name__ == 'cupy':
+    #             phase_screens = self._xp.asarray(phase_screens, dtype=self._xp.float32)
+    #     except FileNotFoundError:
+    #         r0, L0, _, _ = self._config.read_atmo_pars()
+    #         if isinstance(r0, float):
+    #             Nscreens = 1
+    #         else:
+    #             Nscreens = len(r0)
+    #         phs = PhaseScreenGenerator(screenPixels, screenMeters, outerScaleInMeters=L0, seed=42)
+    #         phs.generate_normalized_phase_screens(Nscreens)
+    #         phs.rescale_to(r0At500nm=r0)
+    #         phs.get_in_radians_at(self.lambdaInM)
+    #         phs.save_normalized_phase_screens(atmo_path)
+    #         phase_screens = self._xp.asarray(phs._phaseScreens, dtype=self.dtype)
+    #         hdr_dict = {'r0': r0, 'L0': L0, 'N_SCREEN': Nscreens}
+    #         myfits.save_fits(atmo_path, phase_screens, hdr_dict)
 
-        return phase_screens
+    #     return phase_screens
 
 
 

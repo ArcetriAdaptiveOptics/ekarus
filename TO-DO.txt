@@ -1,10 +1,15 @@
+IMPORTANT:
 Control Filter Class
 Multiprocessing: modulation + IFFs
 
+
+EXTRAS:
 Zernike WFS
 Schack Hartmann WFS
 
-High Level AO
-Turbulence class
-Documentation
+
+CODING/EASE-OF_USE:
+Simplify architecture
+Sensor-agnostic AO class
+Documentation !!!
 Restore Circular Mask
