@@ -1,15 +1,18 @@
 IMPORTANT:
-Control Filter Class
-Multiprocessing: modulation + IFFs
+DM stroke limitation & offloading
+Loop on different wavelengths
+Control Filter Class ('leaky' integrator)
+Loop parameters control (gain, rebinning ...)
 
 
 EXTRAS:
 Zernike WFS
 Schack Hartmann WFS
+Multiprocessing: modulation + IFFs
 
 
 CODING/EASE-OF_USE:
 Simplify architecture
 Sensor-agnostic AO class
-Documentation !!!
+Documentation (!!!)
 Restore Circular Mask

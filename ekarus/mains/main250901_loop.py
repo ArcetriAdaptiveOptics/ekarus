@@ -12,19 +12,16 @@ except:
     import numpy as xp
     xptype = xp.float64
 
+GoodSeeing = '20250908_130000'
+BadSeeing = '20250909_160000'
 
-def main(lambdaInM = 1000e-9, starMagnitude = 3, modulationAngleInLambdaOverD = 3):
-    tn = '20250908_130000'
-
+def main(tn:str=GoodSeeing, lambdaInM=1000e-9, starMagnitude=0, modulationAngleInLambdaOverD=3, show:bool=False):
     print('Initializing devices ...')
     ssao = SingleStageAO(tn, xp=xp)
-
-    show = False # boolean to show initialization outputs
 
     ssao.set_wavelength(lambdaInM=lambdaInM)
     ssao.set_star_magnitude(starMagnitude)
     ssao.set_modulation_angle(modulationAngleInLambdaOverD)
-
 
     # 1. Define the subapertures using a piston input wavefront
     print('Defining the detector subaperture masks ...')

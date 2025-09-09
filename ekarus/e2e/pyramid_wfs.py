@@ -72,6 +72,7 @@ class PyramidWFS:
         :param input_field: complex array numpy 2D representing the input electric field
         :param modulation_angle: float, modulation amplitude in radians
         :param pixelsPerRadian: float indicating the number of pixels per radian
+        :param N_steps: number of steps during modulation
 
         :return: array numpy 2D representing the average intensity after modulation
         """

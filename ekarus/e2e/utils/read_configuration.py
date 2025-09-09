@@ -19,8 +19,8 @@ class ConfigReader():
     def read_sensor_pars(self):
         sensor_conf = self._config['WFS']
         apex_angle = float(sensor_conf['apex_angle'])
-        subaperture_size = float(sensor_conf['subaperture_size'])
-        return apex_angle, subaperture_size
+        # subaperture_size = float(sensor_conf['subaperture_size'])
+        return apex_angle #, subaperture_size
     
     def read_dm_pars(self):
         dm_conf = self._config['DM']

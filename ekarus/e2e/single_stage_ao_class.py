@@ -68,6 +68,12 @@ class SingleStageAO():
             collected_flux = self.throughput * total_flux * collecting_area
         return collected_flux
     
+    def _get_subaperture_pixel_size(self):
+        image_size = self.pupilSizeInPixels*self.oversampling
+        rebin_factor = min(self.ccd.detector_shape)/image_size
+        pupilPixelSizeOnDetector = self.pupilSizeInPixels * rebin_factor
+        return pupilPixelSizeOnDetector-0.5 
+    
 
     def define_subaperture_masks(self):
         subap_path = os.path.join(self.savepath,'SubapertureMasks.fits')
@@ -77,16 +83,17 @@ class SingleStageAO():
                 subaperture_masks = self._xp.asarray(subaperture_masks)
             self.slope_computer._subaperture_masks = subaperture_masks
         except FileNotFoundError:
-            _, subaperture_size = self._config.read_sensor_pars()
+            # _, subapertureSizeInPixels = self._config.read_sensor_pars()
+            subapertureSizeInPixels = self._get_subaperture_pixel_size()
             piston = 1-self.cmask
             alpha = 10*self.lambdaInM/self.pupilSizeInM # modulate a lot during subaperture definition
             modulated_intensity = self.wfs.modulate(piston, alpha, self.pixelsPerRadian, N_steps=120)
             detector_image = self.ccd.image_on_detector(modulated_intensity)
-            self.slope_computer.calibrate_sensor(subaperture_image = detector_image, Npix = subaperture_size)
+            self.slope_computer.calibrate_sensor(subaperture_image=detector_image, Npix=subapertureSizeInPixels)
             subaperture_masks = self.slope_computer._subaperture_masks
             if self._xp.__name__ == 'cupy':
                 detector_image = detector_image.get()
-            hdr_dict = {'APEX_ANG': self.wfs.apex_angle, 'RAD2PIX': self.pixelsPerRadian, 'OVERSAMP': self.oversampling,  'SUBAPPIX': subaperture_size}
+            hdr_dict = {'APEX_ANG': self.wfs.apex_angle, 'RAD2PIX': self.pixelsPerRadian, 'OVERSAMP': self.oversampling,  'SUBAPPIX': subapertureSizeInPixels}
             myfits.save_fits(subap_path, (subaperture_masks).astype(self._xp.uint8), hdr_dict)
             
     
@@ -94,7 +101,6 @@ class SingleStageAO():
         modulated_intensity = self.wfs.modulate(input_field, self.modulationAngle, self.pixelsPerRadian, N_steps=self.modulationNsteps)
         detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphotons)
         slopes = self.slope_computer.compute_slopes(detector_image)
-
         return slopes
     
     
@@ -192,7 +198,7 @@ class SingleStageAO():
     
     
     def initialize_devices(self):
-        apex_angle, _ = self._config.read_sensor_pars()
+        apex_angle = self._config.read_sensor_pars()
         detector_shape, RON, quantum_efficiency = self._config.read_detector_pars()
         Nacts = self._config.read_dm_pars()
 
