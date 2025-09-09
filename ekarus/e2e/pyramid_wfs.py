@@ -64,7 +64,7 @@ class PyramidWFS:
         return output_field
     
 
-    def modulate(self, input_field, modulation_angle, pixel_scale):
+    def modulate(self, input_field, modulation_angle, pixel_scale, N_steps:int = 12):
         """
         Modulates the input electric field by tilting it in different directions
         and averaging the resulting intensities.
@@ -80,7 +80,6 @@ class PyramidWFS:
         L = max(input_field.shape)
 
         alpha_pix = modulation_angle/pixel_scale*(2*self._xp.pi)
-        N_steps = int((alpha_pix//20+1)*4)
         phi_vec = 2*self._xp.pi*self._xp.arange(N_steps)/N_steps
 
         intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)

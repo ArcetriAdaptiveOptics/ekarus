@@ -7,19 +7,14 @@ class ConfigReader():
         self._config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
         self._config.read(config_path)
         self.xp = xp
-
-    def read_pupil_pars(self):
-        pup_conf = self._config['PUPIL']
-        pupil_size = float(pup_conf['pupilSizeInM'])
-        pupil_pixel_size = int(pup_conf['Npix'])
-        oversampling = int(pup_conf['oversampling'])
-        return pupil_size, pupil_pixel_size, oversampling
     
     def read_telescope_pars(self):
         telescope_conf = self._config['TELESCOPE']
-        telescope_size = float(telescope_conf['telescopeSizeInM'])
+        aperture_size = float(telescope_conf['pupilSizeInM'])
+        aperture_pixel_size = int(telescope_conf['pupilSizeInPixels'])
+        oversampling = int(telescope_conf['oversampling'])
         throughput = float(telescope_conf['throughput'])
-        return telescope_size, throughput
+        return aperture_size, aperture_pixel_size, oversampling, throughput
     
     def read_sensor_pars(self):
         sensor_conf = self._config['WFS']
@@ -36,7 +31,8 @@ class ConfigReader():
         detector_conf = self._config['DETECTOR']
         detector_shape = (int(detector_conf['detector_shape'].split(',')[0]), int(detector_conf['detector_shape'].split(',')[1]))
         RON = float(detector_conf['RON'])
-        return detector_shape, RON
+        quantum_efficiency = float(detector_conf['quantum_efficiency'])
+        return detector_shape, RON, quantum_efficiency
     
     def read_atmo_pars(self):
         atmo_conf = self._config['ATMO']

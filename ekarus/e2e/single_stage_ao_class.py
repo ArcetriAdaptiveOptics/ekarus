@@ -37,6 +37,7 @@ class SingleStageAO():
 
         self.lambdaInM = None
         self.starMagnitude = None
+        self.modulationAngleInLambdaOverD = None
 
 
     def get_wavelength(self):
@@ -44,7 +45,13 @@ class SingleStageAO():
     
     def set_wavelength(self, lambdaInM):
         self.lambdaInM = lambdaInM
-        self.pixelScale = self.get_pixel_size()
+        self.pixelsPerRadian = self.lambdaInM/self.pupilSizeInM/self.oversampling 
+
+    def set_modulation_angle(self, modulationAngleInLambdaOverD):
+        self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
+        self.modulationAngle = modulationAngleInLambdaOverD * self.lambdaInM/self.pupilSizeInM
+        self.modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*3*self._xp.pi)//4*4
+        print(f'Now using {self.modulationNsteps:1.0f} modulation steps')
 
     def get_star_magnitude(self):
         return self.starMagnitude
@@ -53,15 +60,11 @@ class SingleStageAO():
         self.starMagnitude = starMagnitude
         self.photon_flux = self.get_photons_per_second()
 
-
-    def get_pixel_size(self):
-        return self.lambdaInM/self.pupilSizeInM/self.oversampling
-
     def get_photons_per_second(self, B0 = 1e+10):
         collected_flux = None
         if self.starMagnitude is not None:
             total_flux = B0 * 10**(-self.starMagnitude/2.5)
-            collecting_area = self._xp.pi/4*self.telescopeSizeInM**2
+            collecting_area = self._xp.pi/4*self.pupilSizeInM**2
             collected_flux = self.throughput * total_flux * collecting_area
         return collected_flux
     
@@ -76,27 +79,26 @@ class SingleStageAO():
         except FileNotFoundError:
             _, subaperture_size = self._config.read_sensor_pars()
             piston = 1-self.cmask
-            alpha = 10*self.pixelScale*self.oversampling
-            modulated_intensity = self.wfs.modulate(piston, alpha, self.pixelScale)
+            alpha = 10*self.lambdaInM/self.pupilSizeInM # modulate a lot during subaperture definition
+            modulated_intensity = self.wfs.modulate(piston, alpha, self.pixelsPerRadian, N_steps=120)
             detector_image = self.ccd.image_on_detector(modulated_intensity)
             self.slope_computer.calibrate_sensor(subaperture_image = detector_image, Npix = subaperture_size)
             subaperture_masks = self.slope_computer._subaperture_masks
             if self._xp.__name__ == 'cupy':
                 detector_image = detector_image.get()
-            hdr_dict = {'APEX_ANG': self.wfs.apex_angle, 'PIX_SCAL': self.pixelScale, 'OVERSAMP': self.oversampling,  'SUBAPPIX': subaperture_size}
+            hdr_dict = {'APEX_ANG': self.wfs.apex_angle, 'PIX_SCAL': self.pixelsPerRadian, 'OVERSAMP': self.oversampling,  'SUBAPPIX': subaperture_size}
             myfits.save_fits(subap_path, (subaperture_masks).astype(self._xp.uint8), hdr_dict)
             
     
-    def get_slopes(self, input_field, Nphotons, **kwargs):
-
-        modulated_intensity = self.wfs.modulate(input_field, **kwargs, pixel_scale=self.pixelScale)
+    def get_slopes(self, input_field, Nphotons):
+        modulated_intensity = self.wfs.modulate(input_field, self.modulationAngle, pixel_scale=self.pixelsPerRadian, N_steps=self.modulationNsteps)
         detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphotons)
         slopes = self.slope_computer.compute_slopes(detector_image)
 
         return slopes
     
     
-    def compute_reconstructor(self, MM, amps:float = 0.1, **kwargs):
+    def compute_reconstructor(self, MM, amps:float = 0.1):
         Nmodes = self._xp.shape(MM)[0]
         slopes = None
         electric_field_amp = 1-self.cmask
@@ -111,10 +113,10 @@ class SingleStageAO():
             amp = amps[i]
             mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask, xp=self._xp)
             input_field = self._xp.exp(1j*mode_phase) * electric_field_amp
-            push_slope = self.get_slopes(input_field, Nphotons, **kwargs)/amp
+            push_slope = self.get_slopes(input_field, Nphotons)/amp
 
             input_field = self._xp.conj(input_field)
-            pull_slope = self.get_slopes(input_field, Nphotons, **kwargs)/amp
+            pull_slope = self.get_slopes(input_field, Nphotons)/amp
 
             if slopes is None:
                 slopes = (push_slope-pull_slope)/2
@@ -129,12 +131,12 @@ class SingleStageAO():
         return Rec, IM, 1/S
 
 
-    def perform_loop_iteration(self, time_step, input_phase, Rec, **kwargs):
+    def perform_loop_iteration(self, time_step, input_phase, Rec):
 
         Nphotons = self.photon_flux * time_step
 
         input_field = (1-self.cmask) * self._xp.exp(1j*input_phase)
-        slopes = self.get_slopes(input_field, Nphotons, **kwargs)
+        slopes = self.get_slopes(input_field, Nphotons)
         modes = Rec @ slopes
 
         return modes
@@ -151,7 +153,11 @@ class SingleStageAO():
                 m2c = self._xp.asarray(m2c, dtype=self._xp.float32)
         except FileNotFoundError:
             r0s, L0, _, _ = self._config.read_atmo_pars()
-            r0 = self._xp.sqrt(self._xp.sum(r0s**2))
+            if isinstance(r0s, float):
+                r0 = r0s
+            else:
+                r0 = self._xp.sqrt(self._xp.sum(r0s**2))
+
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.dm.mask, self.pupilSizeInPixels, \
                 self.pupilSizeInM, self.dm.IFF.T, r0, L0, zern_modes=zern_modes,\
                 oversampling=self.oversampling, verbose = True, xp=self._xp, dtype=self.dtype)
@@ -161,7 +167,7 @@ class SingleStageAO():
         return KL, m2c
     
 
-    def calibrate_modes(self, MM, amps, **kwargs):
+    def calibrate_modes(self, MM, amps):
         IM_path = os.path.join(self.savepath,'IMmatrix.fits')
         Rec_path = os.path.join(self.savepath,'Rec.fits')
         try:
@@ -171,7 +177,7 @@ class SingleStageAO():
                 IM = self._xp.asarray(IM, dtype=self._xp.float32)
                 Rec = self._xp.asarray(Rec, dtype=self._xp.float32)
         except FileNotFoundError:
-            Rec, IM, _ = self.compute_reconstructor(MM, amps, **kwargs)
+            Rec, IM, _ = self.compute_reconstructor(MM, amps)
             myfits.save_fits(IM_path, IM)
             myfits.save_fits(Rec_path, Rec)
         return Rec, IM
@@ -180,26 +186,25 @@ class SingleStageAO():
     def read_configuration(self, tn):
         config_path = os.path.join(self.basepath,'ekarus','simulations','Config',str(tn)+'.ini')
         self._config = ConfigReader(config_path, self._xp)
-        self.pupilSizeInM, self.pupilSizeInPixels, self.oversampling = self._config.read_pupil_pars()
+        self.pupilSizeInM, self.pupilSizeInPixels, self.oversampling, self.throughput = self._config.read_telescope_pars()
         mask_shape = (self.oversampling * self.pupilSizeInPixels, self.oversampling * self.pupilSizeInPixels)
         self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels//2, xp=self._xp)
-        self.telescopeSizeInM, self.throughput = self._config.read_telescope_pars()
     
     
     def initialize_devices(self):
         apex_angle, _ = self._config.read_sensor_pars()
-        detector_shape, RON = self._config.read_detector_pars()
+        detector_shape, RON, quantum_efficiency = self._config.read_detector_pars()
         Nacts = self._config.read_dm_pars()
 
         self.wfs = PyramidWFS(apex_angle, xp=self._xp)
-        self.ccd = Detector(detector_shape=detector_shape, xp=self._xp)
+        self.ccd = Detector(detector_shape=detector_shape, RON=RON, quantum_efficiency=quantum_efficiency, xp=self._xp)
         self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels, xp=self._xp)
-        self.slope_computer = SlopeComputer(wfs_type = 'PyrWFS', xp=self._xp)
+        self.slope_computer = SlopeComputer(wfs_type='PyrWFS', xp=self._xp)
 
 
-    def initialize_turbulence(self, N:int=10):
-        screenPixels = N*self.oversampling*self.pupilSizeInPixels
-        screenMeters = N*self.oversampling*self.telescopeSizeInM#self.pupilSizeInM
+    def initialize_turbulence(self, N:float=10):
+        screenPixels = N*self.pupilSizeInPixels
+        screenMeters = N*self.pupilSizeInM 
         atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
         r0s, L0, windSpeeds, windAngles = self._config.read_atmo_pars()
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path, xp=self._xp)
@@ -216,7 +221,7 @@ class SingleStageAO():
 
     def generate_phase_screens(self, N:int=10):
         screenPixels = N*self.oversampling*self.pupilSizeInPixels
-        screenMeters = N*self.oversampling*self.telescopeSizeInM#self.pupilSizeInM
+        screenMeters = N*self.oversampling*self.pupilSizeInM
         self.pixelsPerMeter = screenPixels/screenMeters
         atmo_path = os.path.join(self.savepath, 'AtmoScreens.fits')
         try:

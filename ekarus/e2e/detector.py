@@ -4,18 +4,22 @@ from arte.math.toccd import toccd
 
 class Detector:
 
-    def __init__(self, detector_shape = None, RON: float = 0.0, max_bits:int = 12, xp=np):
+    def __init__(self, detector_shape = None, RON:float = 0.0, quantum_efficiency:float = 1.0, max_bits:int = 12, xp=np):
         """
         Detector constructor.
         
-        :param pix_size: number of pixels in the detector
+        :param detector_shape: number of pixels in the detector
         :param RON: readout noise in electrons
+        :param quantum_efficiency: the quantum efficiency of the detector
+        :param max_bits: the maximum number of counts per pixel
         """
 
-        self.RON = RON
-        self.subapertures = None
         self.detector_shape = detector_shape
+        self.RON = RON
+        self.quantum_efficiency = quantum_efficiency
         self.max_bits = max_bits
+
+        self.subapertures = None
 
         self._xp = xp
         self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
@@ -49,8 +53,8 @@ class Detector:
         - Noisy intensity image.
         """
 
-        # Re-scale the intensity based on the flux
-        norm_intensity = intensity*flux/self._xp.sum(intensity)
+        # Re-scale the intensity based on the flux and quantum efficiency
+        norm_intensity = self.quantum_efficiency * flux * intensity/self._xp.sum(intensity)
 
         # Noise
         poisson_noise = self._xp.random.poisson(norm_intensity, self._xp.shape(intensity)) # Possion noise

@@ -5,10 +5,6 @@ def read_fits(filename, isBool:bool = False):
     hdu = pyfits.open(filename)
     data_out = hdu[0].data
 
-    # if xp is not None:
-    #     dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
-    #     data_out = xp.asarray(data_out, dtype=dtype)
-
     if isBool is True:
         data_out = (data_out).astype(bool) 
     

@@ -99,7 +99,9 @@ def showZoomCenter(image, pixelSize, **kwargs):
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
 
-
-# def compute_pixel_size(wavelength, pupil_diameter_in_m, padding:int=1):
-#     """ Get the number of pixels per radian """
-#     return wavelength/pupil_diameter_in_m/padding
+def myimshow(image, title = '', **kwargs):
+    if hasattr(image,'get'):
+        image = image.get()
+    plt.imshow(image,origin='lower', **kwargs)
+    plt.colorbar()
+    plt.title(title)
