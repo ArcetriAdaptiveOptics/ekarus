@@ -13,7 +13,7 @@ except:
     xptype = xp.float64
 
 
-def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngleInLambdaOverD=3, show:bool=False):
+def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngleInLambdaOverD=3, show:bool=False):
 
     # Loop parameters
     loopFrequencyInHz = 1500
@@ -77,11 +77,28 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngle
         plt.title('Interaction matrix standard deviation')
         plt.show()
 
+    
+    # 3.5 Define loop paramters
+    dt = 1/loopFrequencyInHz
+    modal_gains = xp.zeros(xp.shape(m2c)[1])
+    modal_gains[:nModes2Correct] = 1
+    nDelaySteps = int(delayInS * loopFrequencyInHz)
 
     # 4. Get atmospheric phase screen
     print('Initializing turbulence ...')
-    ssao.initialize_turbulence(N=20)
-    screen = ssao.get_phase_screen(dt=0)
+    # Define N so that it is long enough for the number of iterations
+    _, _, windSpeeds, _ = ssao._config.read_atmo_pars()
+    if isinstance(windSpeeds,float) or isinstance(windSpeeds,int):
+        maxSpeed = windSpeeds
+    else:
+        maxSpeed = windSpeeds.max()
+    maxLen = maxSpeed*Nits*dt
+    N = int(xp.ceil(maxLen/ssao.pupilSizeInM))
+    N = xp.max(xp.array([10,N]))
+
+    ssao.initialize_turbulence(N)
+
+    screen = ssao.get_phase_screen(0)
     if show:
         if xp.__name__ == 'cupy':
             screen = screen.get()
@@ -95,11 +112,6 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngle
     print('Running the loop ...')
     electric_field_amp = 1-ssao.cmask
 
-    # Define loop paramters
-    dt = 1/loopFrequencyInHz
-    modal_gains = xp.zeros(xp.shape(m2c)[1])
-    modal_gains[:nModes2Correct] = 1
-    nDelaySteps =  delayInS * loopFrequencyInHz
 
     # Define variables
     mask_len = int(xp.sum(1-ssao.dm.mask))
@@ -114,20 +126,23 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngle
     input_phases = xp.zeros([Nits,mask_len])
     detector_images = xp.zeros([Nits,ssao.ccd.detector_shape[0],ssao.ccd.detector_shape[1]])
 
+
     for i in range(Nits):
         print(f'\rIteration {i+1}/{Nits}', end='')
         sim_time = dt*i
         input_phase = ssao.get_phase_screen(sim_time)
         input_phase -= xp.mean(input_phase[~ssao.cmask])
 
-        dm_shape = ssao.dm.IFF @ dm_cmds[i,:]*(2*xp.pi)/lambdaInM # convert to radians
+        dm_shape = ssao.dm.IFF @ dm_cmds[i,:]*(2*xp.pi)/lambdaInM
         dm_phase[~ssao.cmask] = dm_shape
         dm_phase = xp.reshape(dm_phase, ssao.cmask.shape)
 
         residual_phase = input_phase - dm_phase
 
         modes = ssao.perform_loop_iteration(dt, residual_phase, Rec)
-        cmd = m2c[:,0:nModes2Correct] @ modes[0:nModes2Correct]
+        modes *= modal_gains
+        cmd = m2c @ modes
+        # cmd = m2c[:,0:nModes2Correct] @ modes[0:nModes2Correct]
         dm_cmd += cmd*g
         dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi) # convert to meters
 
@@ -154,6 +169,7 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngle
     masked_input_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
     masked_dm_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
     masked_residual_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
+    logPSFs = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
 
     aux = xp.zeros_like(ssao.cmask,dtype=xptype)
 
@@ -183,10 +199,16 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngle
         aux = (aux).reshape(cmask.shape)
         masked_residual_phases[i,:,:]= masked_array(aux, cmask)
 
+        electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(aux))
+        field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
+        psf = abs(field_on_focal_plane)**2
+        logPSFs[i,:,:] = xp.log(psf)
+
     import os
     atmo_phases_path = os.path.join(ssao.savepath,'AtmoPhases.fits')
     dm_phases_path = os.path.join(ssao.savepath,'DMphases.fits')
-    res_phases_path = os.path.join(ssao.savepath,'ResPhases.fits')
+    res_phases_path = os.path.join(ssao.savepath,'ResPhases.fits')    
+    psfs_path = os.path.join(ssao.savepath,'logPSFs.fits')
     detector_imgs_path = os.path.join(ssao.savepath,'DetectorFrames.fits')
     dm_cmds_path = os.path.join(ssao.savepath,'DMcommands.fits')
 
@@ -196,6 +218,7 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngle
     myfits.save_fits(res_phases_path, masked_residual_phases)
     myfits.save_fits(detector_imgs_path, detector_images)
     myfits.save_fits(dm_cmds_path, dm_cmds)
+    myfits.save_fits(psfs_path, logPSFs)
 
     # print(f'Number of collected photons: {xp.sum(detector_image):1.0f}')
 
@@ -207,31 +230,27 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngle
 
     plt.figure(figsize=(9,9))
     plt.subplot(2,2,1)
-    # plt.imshow(masked_array(input_phase, mask = cmask),origin='lower',cmap='RdBu')
-    # plt.colorbar()
-    # plt.title(f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}')
-    myimshow(masked_input_phases[-1],title=f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',cmap='RdBu',shrink=0.8)
+    myimshow(masked_input_phases[-1]*(lambdaInM/(2*xp.pi)), \
+        title=f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
+        cmap='RdBu',shrink=0.8)
     w = ssao.pupilSizeInPixels + 10
     H,W = ssao.cmask.shape
     plt.xlim([W//2-w//2, W//2+w//2])
     plt.ylim([H//2-w//2, H//2+w//2])
+    plt.axis('off')
 
     pixelsPerMAS = ssao.pixelsPerRadian*180/xp.pi*3600*1000
-
     plt.subplot(2,2,2)
-    showZoomCenter(psf, pixelsPerMAS, \
-    title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno', \
-    xlabel='[mas]', ylabel='[mas]', shrink=0.8)
+    showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
+        title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
 
     plt.subplot(2,2,3)
-    # plt.imshow(detector_image,origin='lower')
-    # plt.colorbar()
-    # plt.title('Detector image')
     myimshow(detector_images[-1], title = 'Detector image', shrink=0.8)
 
     plt.subplot(2,2,4)
     ssao.dm.plot_position(dm_cmds[-1])
     plt.title('Mirror command')
+    plt.axis('off')
 
     plt.figure(figsize=(2.4*Nits/10,2.4))
     plt.plot(input_sig2,'-o',label='open loop')

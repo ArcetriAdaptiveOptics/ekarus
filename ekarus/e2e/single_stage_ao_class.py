@@ -216,11 +216,11 @@ class SingleStageAO():
         self.slope_computer = SlopeComputer(wfs_type='PyrWFS', xp=self._xp)
 
 
-    def initialize_turbulence(self, N:float=10):
+    def initialize_turbulence(self, N:int=10):
+        r0s, L0, windSpeeds, windAngles = self._config.read_atmo_pars()
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
         atmo_path = os.path.join(self.savepath, 'AtmospherePhaseScreens.fits')
-        r0s, L0, windSpeeds, windAngles = self._config.read_atmo_pars()
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path, xp=self._xp)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens(self.lambdaInM)

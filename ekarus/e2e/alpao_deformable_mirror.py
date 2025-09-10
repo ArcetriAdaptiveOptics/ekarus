@@ -10,7 +10,7 @@ from ekarus.e2e.utils import my_fits_package as myfits
 
 class ALPAODM(DeformableMirror):
 
-    def __init__(self, input, xp=np, **kwargs):
+    def __init__(self, input, xp=np, basepath=None, **kwargs):
         """
         ALPAO DM constructor
 
@@ -23,7 +23,8 @@ class ALPAODM(DeformableMirror):
 
         super().__init__(xp)
 
-        basepath = os.getcwd()
+        if basepath == None:
+            basepath = os.getcwd()
         self.config = configparser.ConfigParser()
         self.alpaopath = os.path.join(basepath,'ekarus/e2e/alpao_dms/')
         config_path = os.path.join(self.alpaopath,'configuration.ini')
@@ -128,7 +129,7 @@ class ALPAODM(DeformableMirror):
             self.act_coords = coords*self.pupil_size/2/(2*max(radii))
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
-        iff_path = os.path.join(dir_path,'InfluenceFunctions.fits')
+        iff_path = os.path.join(dir_path,str(Npix)+'pixels_InfluenceFunctions.fits')
         try:
             self.IFF = myfits.read_fits(iff_path)
             if self._xp.__name__ == 'cupy':
@@ -183,7 +184,8 @@ class ALPAODM(DeformableMirror):
         self.IM = dmutils.cube2mat(masked_cube,xp=self._xp)
         self.IFF = self.IM @ self._xp.linalg.inv(self.CMat)
 
-        self.act_coords = dmutils.get_coords_from_IFF(self.IFF, self.mask, use_peak = True, xp=self._xp)
+        self.act_coords, self._iff_act_pix_coords = dmutils.get_coords_from_IFF(self.IFF, self.mask, use_peak = True, xp=self._xp)
+        self.K = dmutils.estimate_stiffness_from_IFF(self.IM, self.CMat, self._iff_act_pix_coords, xp=self._xp)
 
 
     def _init_ALPAO_from_act_coords(self, act_coords):

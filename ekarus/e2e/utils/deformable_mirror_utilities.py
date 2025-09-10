@@ -3,7 +3,7 @@ import numpy as np
 from tps import ThinPlateSpline # for the simulated IFF
 from scipy.interpolate import griddata
 
-import multiprocessing
+# import multiprocessing
 
 
 def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None, xp=np):
@@ -257,22 +257,25 @@ def get_coords_from_IFF(IFF, mask, use_peak=True, xp=np):
     """
     
     # Get pixel coordinates
-    pix_coords = getMaskPixelCoords(mask)
+    xy_pix_coords = getMaskPixelCoords(mask)
 
-    x_coords = pix_coords[0,:]
-    y_coords = pix_coords[1,:]
+    x_coords = xy_pix_coords[0,:]
+    y_coords = xy_pix_coords[1,:]
 
     mask = (mask).astype(bool) # ensure mask is boolean
     x_coords = x_coords[~mask.flatten()]
     y_coords = y_coords[~mask.flatten()]
 
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+
     # Get the coordinates of the actuators
     n_acts = IFF.shape[1]
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
     act_coords = xp.zeros([2, n_acts], dtype=dtype)
+    iff_pix_coords = xp.zeros(n_acts, dtype=int)
 
     for k in range(n_acts):
         act_data = IFF[:, k]
+        iff_pix_coords[k] = xp.argmax(act_data)
         if use_peak:
             max_id = xp.argmax(act_data)
             act_coords[0,k] = x_coords[max_id]
@@ -281,7 +284,37 @@ def get_coords_from_IFF(IFF, mask, use_peak=True, xp=np):
             act_coords[0,k] = xp.sum(x_coords * act_data) / xp.sum(act_data)
             act_coords[1,k] = xp.sum(y_coords * act_data) / xp.sum(act_data)
 
-    return act_coords
+    return act_coords, iff_pix_coords
+
+
+def estimate_stiffness_from_IFF(IFF, CMat, act_pix_coords, cmdAmps=None, xp=np):
+    """
+    Get the coordinates of the actuators from the influence functions matrix.
+
+    Parameters
+    ----------
+    IFF : ndarray(float) [Npix,Nacts]
+        The influence functions matrix.
+
+    Returns
+    -------
+    K : ndarray(float) [Nacts,Nacts]
+        The stiffness matrix of the DM.
+    """
+    n_acts = IFF.shape[1]
+    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    PMat = xp.zeros([n_acts,n_acts], dtype=dtype)
+
+    for k in range(n_acts):
+        act_data = IFF[:, k]
+        pos = act_data[act_pix_coords].copy()
+        if cmdAmps is not None:
+            pos *= 1/cmdAmps[k]
+        PMat[:,k] = pos.copy()
+
+    K = PMat @ xp.linalg.inv(CMat)
+
+    return K
 
 
 def cube2mat(cube, xp=np):
