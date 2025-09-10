@@ -1,13 +1,15 @@
 IMPORTANT:
 DM stroke limitation & offloading
 Loop on different wavelengths
-Control Filter Class ('leaky' integrator)
-Loop parameters control (gain, rebinning ...)
+Change loop parameters on the fly (modal gain, rebinning ...)
+Pass the mask as input to the DM constructor!
+Is it computationally advantageous to oversample/pad only before ifft?
 
 
 EXTRAS:
 Zernike WFS
-Schack Hartmann WFS
+Shack Hartmann WFS
+Control Filter Class ('leaky' integrator)
 Multiprocessing: modulation + IFFs
 
 

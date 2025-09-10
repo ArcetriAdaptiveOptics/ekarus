@@ -144,9 +144,17 @@ class DeformableMirror():
         if hasattr(x, 'get'):
             x = x.get()
             y = y.get()
+
+        if hasattr(self.act_coords,'get'):
+            coords = self.act_coords.get()
+        else:
+            coords = self.act_coords.copy()
         
         plt.scatter(x,y, c=pos, s=act_pix_size**2, cmap='hot')
         plt.axis('equal')
+        plt.grid()
+        plt.gca().set_xticks(np.linspace(min(coords[0]),max(coords[0]),5))
+        plt.gca().set_yticks(np.linspace(min(coords[1]),max(coords[1]),5))
         plt.colorbar()
     
 

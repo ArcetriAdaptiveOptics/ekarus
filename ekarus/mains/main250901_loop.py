@@ -12,16 +12,23 @@ except:
     import numpy as xp
     xptype = xp.float64
 
-GoodSeeing = '20250908_130000'
-BadSeeing = '20250909_160000'
 
-def main(tn:str=GoodSeeing, lambdaInM=1000e-9, starMagnitude=0, modulationAngleInLambdaOverD=3, show:bool=False):
+def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=0, modulationAngleInLambdaOverD=3, show:bool=False):
+
+    # Loop parameters
+    loopFrequencyInHz = 1500
+    Nits = 500
+    g = 0.05
+    nModes2Correct = 467
+    delayInS = 2/loopFrequencyInHz # CCD reading time + time for DM to reach steady-state
+
     print('Initializing devices ...')
     ssao = SingleStageAO(tn, xp=xp)
 
     ssao.set_wavelength(lambdaInM=lambdaInM)
     ssao.set_star_magnitude(starMagnitude)
     ssao.set_modulation_angle(modulationAngleInLambdaOverD)
+    print(f'Now modulating {ssao.wfs.modulationAngle*180/xp.pi*3600:1.2f} [arcsec] with {ssao.wfs.modulationNsteps:1.0f} modulation steps')
 
     # 1. Define the subapertures using a piston input wavefront
     print('Defining the detector subaperture masks ...')
@@ -88,13 +95,11 @@ def main(tn:str=GoodSeeing, lambdaInM=1000e-9, starMagnitude=0, modulationAngleI
     print('Running the loop ...')
     electric_field_amp = 1-ssao.cmask
 
-    dt = 1/1500 #1e-3
-    g = 0.05
-
-    Nits = 300
-    Nmodes = 467
-
-    Nsteps_delay = 2 # accounts for CCD reading time + time for DM to reach cmd steady-state
+    # Define loop paramters
+    dt = 1/loopFrequencyInHz
+    modal_gains = xp.zeros(xp.shape(m2c)[1])
+    modal_gains[:nModes2Correct] = 1
+    nDelaySteps =  delayInS * loopFrequencyInHz
 
     # Define variables
     mask_len = int(xp.sum(1-ssao.dm.mask))
@@ -103,7 +108,7 @@ def main(tn:str=GoodSeeing, lambdaInM=1000e-9, starMagnitude=0, modulationAngleI
     dm_phase = xp.zeros_like(ssao.cmask, dtype=xptype)
 
     # Save telemetry
-    dm_cmds = xp.zeros([Nits+Nsteps_delay,ssao.dm.Nacts])
+    dm_cmds = xp.zeros([Nits+nDelaySteps,ssao.dm.Nacts])
     dm_phases = xp.zeros([Nits,mask_len])
     residual_phases = xp.zeros([Nits,mask_len])
     input_phases = xp.zeros([Nits,mask_len])
@@ -111,8 +116,8 @@ def main(tn:str=GoodSeeing, lambdaInM=1000e-9, starMagnitude=0, modulationAngleI
 
     for i in range(Nits):
         print(f'\rIteration {i+1}/{Nits}', end='')
-        tt = dt*i
-        input_phase = ssao.get_phase_screen(tt)
+        sim_time = dt*i
+        input_phase = ssao.get_phase_screen(sim_time)
         input_phase -= xp.mean(input_phase[~ssao.cmask])
 
         dm_shape = ssao.dm.IFF @ dm_cmds[i,:]*(2*xp.pi)/lambdaInM # convert to radians
@@ -122,11 +127,9 @@ def main(tn:str=GoodSeeing, lambdaInM=1000e-9, starMagnitude=0, modulationAngleI
         residual_phase = input_phase - dm_phase
 
         modes = ssao.perform_loop_iteration(dt, residual_phase, Rec)
-        cmd = m2c[:,0:Nmodes] @ modes[0:Nmodes]
+        cmd = m2c[:,0:nModes2Correct] @ modes[0:nModes2Correct]
         dm_cmd += cmd*g
-        dm_cmds[i+Nsteps_delay,:] = dm_cmd*lambdaInM/(2*xp.pi) # convert to meters
-        # dm_cmd += cmd*g
-        # dm_shape = ssao.dm.IFF @ dm_cmd
+        dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi) # convert to meters
 
         # Save telemetry
         input_phases[i,:] = input_phase[~ssao.cmask]
@@ -244,7 +247,7 @@ def main(tn:str=GoodSeeing, lambdaInM=1000e-9, starMagnitude=0, modulationAngleI
     plt.figure()
     plt.plot(xp.exp(-xp.array(sig2)).get(),'-o')
     plt.grid()
-    plt.title(f'magV={starMagnitude},gain={g:1.3f},mod={modulationAngleInLambdaOverD:1.1f}')
+    plt.title(f'starMag={starMagnitude},gain={g:1.3f},mod={modulationAngleInLambdaOverD:1.1f}')
     plt.ylabel('Strehl ratio')
     plt.xlabel('Iteration number')
 

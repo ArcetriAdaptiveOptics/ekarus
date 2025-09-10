@@ -20,9 +20,23 @@ class PyramidWFS:
         """
         self.apex_angle = apex_angle
 
+        self.modulationNsteps = None
+        self.modulationAngle = None
+
         self._xp = xp
         self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
         self.cdtype = xp.complex64 if xp.__name__ == 'cupy' else xp.complex128
+
+
+    def set_modulation_parameters(self, modulationAngle, modulationNsteps:int=12):
+        """
+        Set the modulation parameters for the pyramid wavefront sensor.
+
+        :param modulationAngle: the tilt angle for the modulation in radians
+        :param modulationNsteps: the number of steps to average the intensity on. Default is 12
+        """
+        self.modulationAngle = modulationAngle
+        self.modulationNsteps = modulationNsteps
         
         
     @lru_cache(maxsize=5)
@@ -49,7 +63,8 @@ class PyramidWFS:
         2. Apply the pyramid phase delay (shift each point by the phase delay)
         3. From the focal plane to the output pupil plane (IFFT)
 
-        :param input_field: complex array numpy 2D representing the input electric field
+        :param input_field: complex array numpy 2D representing the input
+        electric field
         :param pixelsPerRadian: float indicating the number of pixels per radian
 
         :return: complex array numpy 2D representing the output electric field
@@ -64,40 +79,77 @@ class PyramidWFS:
         return output_field
     
 
-    def modulate(self, input_field, modulation_angle, pixelsPerRadian, N_steps:int = 12):
+    def modulate(self, input_field, pixelsPerRadian):
         """
         Modulates the input electric field by tilting it in different directions
         and averaging the resulting intensities.
 
-        :param input_field: complex array numpy 2D representing the input electric field
-        :param modulation_angle: float, modulation amplitude in radians
+        :param input_field: complex array numpy 2D representing the input
+                            electric field
         :param pixelsPerRadian: float indicating the number of pixels per radian
-        :param N_steps: number of steps during modulation
 
-        :return: array numpy 2D representing the average intensity after modulation
+        :return: numpy 2D array representing the average intensity after
+                 modulation
         """
-        # tiltX,tiltY = image_grid(input_field.shape, recenter=True, xp=self._xp)
-        # L = max(input_field.shape)
-        tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
+        
+        if self.modulationAngle == 0:
+            output = self.propagate(input_field, pixelsPerRadian)
+            intensity = abs(output**2)
+        else:
+            tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
 
-        alpha_pix = modulation_angle/pixelsPerRadian*(2*self._xp.pi)
-        phi_vec = (2*self._xp.pi)*self._xp.arange(N_steps)/N_steps
+            alpha_pix = self.modulationAngle/pixelsPerRadian*(2*self._xp.pi)
+            phi_vec = (2*self._xp.pi)*self._xp.arange(self.modulationNsteps)/self.modulationNsteps
 
-        intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)
+            intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)
 
-        for phi in phi_vec:
-            # tilt = (tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi))/L
-            tilt = tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi)
-            tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
+            for phi in phi_vec:
+                tilt = tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi)
+                tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
 
-            output = self.propagate(tilted_input, pixelsPerRadian)
-            intensity += (abs(output**2))/N_steps
+                output = self.propagate(tilted_input, pixelsPerRadian)
+                intensity += (abs(output**2))/self.modulationNsteps
 
         return intensity
     
-    
-    @lru_cache
+
+    @lru_cache(maxsize=5)
     def _get_XY_tilt_planes(self, input_shape):
         tiltX,tiltY = image_grid(input_shape, recenter=True, xp=self._xp)
         L = max(input_shape)
         return tiltX/L,tiltY/L
+    
+
+    # def modulate(self, input_field, modulation_angle, pixelsPerRadian, N_steps:int = 12):
+    #     """
+    #     Modulates the input electric field by tilting it in different directions
+    #     and averaging the resulting intensities.
+
+    #     :param input_field: complex array numpy 2D representing the input electric field
+    #     :param modulation_angle: float, modulation amplitude in radians
+    #     :param pixelsPerRadian: float indicating the number of pixels per radian
+    #     :param N_steps: number of steps during modulation
+
+    #     :return: array numpy 2D representing the average intensity after modulation
+    #     """
+    #     # tiltX,tiltY = image_grid(input_field.shape, recenter=True, xp=self._xp)
+    #     # L = max(input_field.shape)
+    #     tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
+
+    #     alpha_pix = modulation_angle/pixelsPerRadian*(2*self._xp.pi)
+    #     phi_vec = (2*self._xp.pi)*self._xp.arange(N_steps)/N_steps
+
+    #     intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)
+
+    #     for phi in phi_vec:
+    #         # tilt = (tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi))/L
+    #         tilt = tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi)
+    #         tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
+
+    #         output = self.propagate(tilted_input, pixelsPerRadian)
+    #         intensity += (abs(output**2))/N_steps
+
+    #     return intensity
+    
+    
+

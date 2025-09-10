@@ -49,9 +49,10 @@ class SingleStageAO():
 
     def set_modulation_angle(self, modulationAngleInLambdaOverD):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
-        self.modulationAngle = modulationAngleInLambdaOverD * self.lambdaInM/self.pupilSizeInM
-        self.modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*2.4*self._xp.pi)//4*4
-        print(f'Now using {self.modulationNsteps:1.0f} modulation steps')
+        if modulationAngleInLambdaOverD is not None:
+            modulationAngle = modulationAngleInLambdaOverD * self.lambdaInM/self.pupilSizeInM
+            modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*2.4*self._xp.pi)//4*4
+            self.wfs.set_modulation_parameters(modulationAngle=modulationAngle, modulationNsteps=modulationNsteps)
 
     def get_star_magnitude(self):
         return self.starMagnitude
@@ -86,8 +87,15 @@ class SingleStageAO():
             # _, subapertureSizeInPixels = self._config.read_sensor_pars()
             subapertureSizeInPixels = self._get_subaperture_pixel_size()
             piston = 1-self.cmask
-            alpha = 10*self.lambdaInM/self.pupilSizeInM # modulate a lot during subaperture definition
-            modulated_intensity = self.wfs.modulate(piston, alpha, self.pixelsPerRadian, N_steps=120)
+
+            # alpha = 10*self.lambdaInM/self.pupilSizeInM # modulate a lot during subaperture definition
+            # modulated_intensity = self.wfs.modulate(piston, alpha, self.pixelsPerRadian, N_steps=120)
+            
+            modAngle = self.modulationAngleInLambdaOverD # save original modulation angle
+            self.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
+            modulated_intensity = self.wfs.modulate(piston, self.pixelsPerRadian)
+            self.set_modulation_angle(modAngle) # restore old modulation
+
             detector_image = self.ccd.image_on_detector(modulated_intensity)
             self.slope_computer.calibrate_sensor(subaperture_image=detector_image, Npix=subapertureSizeInPixels)
             subaperture_masks = self.slope_computer._subaperture_masks
@@ -98,7 +106,8 @@ class SingleStageAO():
             
     
     def get_slopes(self, input_field, Nphotons):
-        modulated_intensity = self.wfs.modulate(input_field, self.modulationAngle, self.pixelsPerRadian, N_steps=self.modulationNsteps)
+        # modulated_intensity = self.wfs.modulate(input_field, self.modulationAngle, self.pixelsPerRadian, N_steps=self.modulationNsteps)
+        modulated_intensity = self.wfs.modulate(input_field, self.pixelsPerRadian)
         detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphotons)
         slopes = self.slope_computer.compute_slopes(detector_image)
         return slopes
@@ -140,7 +149,6 @@ class SingleStageAO():
     def perform_loop_iteration(self, time_step, input_phase, Rec):
 
         Nphotons = self.photon_flux * time_step
-
         input_field = (1-self.cmask) * self._xp.exp(1j*input_phase)
         slopes = self.get_slopes(input_field, Nphotons)
         modes = Rec @ slopes
