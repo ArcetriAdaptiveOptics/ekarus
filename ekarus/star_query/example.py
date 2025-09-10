@@ -8,10 +8,13 @@ example for the use of the StarQuery class
 contains also the function to compute the statistical analysis of target star
 
 the ticho_2 catalogue can be downloaded at 
+    https://drive.google.com/drive/folders/1VQTy8Uk5qHhnRifWXwCqgAWWiSyg2WzS?usp=drive_link
+    just save the I_256 folder wherever you want on your pc and set the "path_tycho" variable
+    
+original data from
     https://cdsarc.cds.unistra.fr/viz-bin/Cat?I/259#browse -> FTP
 I downloaded and unzipped the full folder. Do not unzip the single file. The program does it itself
-For some reason now i can't download the folder anymore mhe  
-
+For some reason now i can't download the folder anymore   
 
 
 """
@@ -64,7 +67,7 @@ th.load(catalog_name="tycho2", path=path_tycho, sections=np.arange(20), suppl=[1
 #%%assigning a location
 
 '''
-Location can be reassigned as tuble. The system then converts it to a astropy EarthLocation object.
+Location can be reassigned as tuple. The system then converts it to a astropy EarthLocation object.
 When reassigning location the timezone is updated ("_tzname") and the Sun and Moon attributes are redefined.
 The columns ["alt_max", "sky_time", "rise", "set", "obs_time"] are then recomputed.
 
@@ -100,7 +103,7 @@ NOTE:
 
 '''
 
-th.mag_max = 5
+th.mag_max = 7
 th.alt_min = 70
 
 
@@ -146,6 +149,7 @@ above the alt_min between the dusk and dawn for the current "nocturnal" day.
 Meaning the 24h from the last midday to the next one.
 '''
 
+th.time = th.sun.dusk
 df = th.filter_sky(current=0)
 mask =  df['obs_time'] > 0
 data = df[mask].copy()
@@ -189,7 +193,7 @@ Same procedure but for 'n' days around the year. For each one results are stored
 The system automatically calculates the observable time during each night, so there is no need to specify  anything
 other than the date.
 '''
-n = 50
+n = 100
 
 dates = [ datetime.now() + timedelta(days=i * (365 / n)) for i in range(n)]
 
@@ -204,7 +208,7 @@ parameters. so there isn't a set required order of operations (do whatewher you 
 
 #changing the system paramets before df reassignment is fine
 th.alt_min = 70
-th.mag_max = 10
+th.mag_max = 7
 
 th.df = df0
 
@@ -343,7 +347,7 @@ AL LEAST the amount of time. The last point before the red line (max observable 
 is smaller (missing data) in respect to the prevoius ones.
 '''
 
-cut = int(max(th.df["sky_time"]))
+# cut = int(max(th.df["sky_time"]))
 
 img = star_mean
 fig, ax = plt.subplots()
