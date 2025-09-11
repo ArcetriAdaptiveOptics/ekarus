@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from numpy.ma import masked_array
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow
+from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, image_grid
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 
 try:
@@ -105,7 +105,8 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
     mask_len = int(xp.sum(1-ssao.dm.mask))
     dm_shape = xp.zeros(mask_len, dtype=xptype)
     dm_cmd = xp.zeros(ssao.dm.Nacts, dtype=xptype)
-    dm_phase = xp.zeros_like(ssao.cmask, dtype=xptype)
+    # dm_phase = xp.zeros_like(ssao.cmask, dtype=xptype)
+    delta_phase_in_rad = xp.zeros_like(ssao.cmask, dtype=xptype)
 
     # Save telemetry
     dm_cmds = xp.zeros([Nits+nDelaySteps,ssao.dm.Nacts])
@@ -114,43 +115,54 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
     input_phases = xp.zeros([Nits,mask_len])
     detector_images = xp.zeros([Nits,ssao.ccd.detector_shape[0],ssao.ccd.detector_shape[1]])
 
+    X,Y = image_grid(ssao.cmask.shape, recenter=True, xp=xp)
+    tiltX = X[~ssao.cmask]/(ssao.cmask.shape[0]//2)
+    tiltY = Y[~ssao.cmask]/(ssao.cmask.shape[1]//2)
+    TTmat = xp.stack((tiltX.T,tiltY.T),axis=1)
+    pinvTTmat = xp.linalg.pinv(TTmat)
+
+    tt_offload = 0 # tip-tilt offload percentage
 
     for i in range(Nits):
         print(f'\rIteration {i+1}/{Nits}', end='')
         sim_time = dt*i
-        input_phase = ssao.get_phasescreen_at_time(sim_time)
-        input_phase -= xp.mean(input_phase[~ssao.cmask])
 
-        dm_shape = ssao.dm.IFF @ dm_cmds[i,:]*(2*xp.pi)/lambdaInM
-        dm_phase[~ssao.cmask] = dm_shape
-        dm_phase = xp.reshape(dm_phase, ssao.cmask.shape)
+        atmo_phase = ssao.get_phasescreen_at_time(sim_time)
+        input_phase = atmo_phase[~ssao.cmask]*lambdaInM/(2*xp.pi) # convert to meters
+        input_phase -= xp.mean(input_phase) # remove piston
 
-        residual_phase = input_phase - dm_phase
+        # tilt_coeffs = pinvTTmat @ input_phase # get tilt coefficients
+        # input_phase -= tt_offload * TTmat @ tilt_coeffs # remove tt_offload% of the tilt
 
-        modes = ssao.perform_loop_iteration(dt, residual_phase, Rec)
+        dm_shape = ssao.dm.IFF @ dm_cmds[i,:]
+        residual_phase = input_phase - dm_shape
+
+        delta_phase_in_rad[~ssao.cmask] = residual_phase*(2*xp.pi)/lambdaInM
+        delta_phase_in_rad = xp.reshape(delta_phase_in_rad, ssao.cmask.shape)
+
+        modes = ssao.perform_loop_iteration(dt, delta_phase_in_rad, Rec)
         modes *= modal_gains
-        cmd = m2c @ modes
-        # cmd = m2c[:,0:nModes2Correct] @ modes[0:nModes2Correct]
+        cmd = m2c @ modes # cmd = m2c[:,0:nModes2Correct] @ modes[0:nModes2Correct]
         dm_cmd += cmd*g
         dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi) # convert to meters
 
         # Save telemetry
-        input_phases[i,:] = input_phase[~ssao.cmask]
-        dm_phases[i,:] = dm_phase[~ssao.cmask]
+        input_phases[i,:] = input_phase
+        dm_phases[i,:] = dm_shape
         detector_images[i,:,:] = ssao.ccd.last_frame
         dm_cmds[i,:] = dm_cmd
-        residual_phases[i,:] = residual_phase[~ssao.cmask]
+        residual_phases[i,:] = residual_phase
     print('')
 
 
     #################### Post-processing ##############################
     electric_field_amp = 1-ssao.cmask
-    electric_field = electric_field_amp * xp.exp(-1j*residual_phase)
+    electric_field = electric_field_amp * xp.exp(-1j*delta_phase_in_rad)
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf = abs(field_on_focal_plane)**2
 
-    sig2 = xp.std(residual_phases,axis=-1)**2
-    input_sig2 = xp.std(input_phases,axis=-1)**2 
+    sig2 = xp.std(residual_phases*(2*xp.pi)/lambdaInM,axis=-1)**2
+    input_sig2 = xp.std(input_phases*(2*xp.pi)/lambdaInM,axis=-1)**2 
 
     print('Saving telemetry to .fits ...')
     cmask = ssao.cmask.get() if xp.__name__ == 'cupy' else ssao.cmask.copy()
@@ -187,7 +199,7 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
         aux = (aux).reshape(cmask.shape)
         masked_residual_phases[i,:,:]= masked_array(aux, cmask)
 
-        electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(aux))
+        electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(aux*(2*xp.pi)/lambdaInM))
         field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
         psf = abs(field_on_focal_plane)**2
         logPSFs[i,:,:] = xp.log(psf)
@@ -218,8 +230,8 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
 
     plt.figure(figsize=(9,9))
     plt.subplot(2,2,1)
-    myimshow(masked_input_phases[-1]*(lambdaInM/(2*xp.pi)), \
-        title=f'Input: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
+    myimshow(masked_input_phases[-1], \
+        title=f'Atmo [m]: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
         cmap='RdBu',shrink=0.8)
     w = ssao.pupilSizeInPixels + 10
     H,W = ssao.cmask.shape
@@ -237,7 +249,7 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
 
     plt.subplot(2,2,4)
     ssao.dm.plot_position(dm_cmds[-1])
-    plt.title('Mirror command')
+    plt.title('Mirror command [m]')
     plt.axis('off')
 
     plt.figure(figsize=(2.4*Nits/10,2.4))

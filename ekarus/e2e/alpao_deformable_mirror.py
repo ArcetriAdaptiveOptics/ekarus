@@ -185,7 +185,7 @@ class ALPAODM(DeformableMirror):
         self.IFF = self.IM @ self._xp.linalg.inv(self.CMat)
 
         self.act_coords, self._iff_act_pix_coords = dmutils.get_coords_from_IFF(self.IFF, self.mask, use_peak = True, xp=self._xp)
-        self.K = dmutils.estimate_stiffness_from_IFF(self.IM, self.CMat, self._iff_act_pix_coords, xp=self._xp)
+        # self.K = dmutils.estimate_stiffness_from_IFF(self.IM, self.CMat, self._iff_act_pix_coords, xp=self._xp)
 
 
     def _init_ALPAO_from_act_coords(self, act_coords):

@@ -1,5 +1,5 @@
 IMPORTANT:
-DM stroke limitation & offloading
+DM stroke limitation
 Loop on different wavelengths
 Change loop parameters on the fly (modal gain, rebinning ...)
 Pass the mask as input to the DM constructor!

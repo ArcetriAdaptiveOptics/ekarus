@@ -14,6 +14,11 @@ class ConfigReader():
         aperture_pixel_size = int(telescope_conf['pupilSizeInPixels'])
         oversampling = int(telescope_conf['oversampling'])
         throughput = float(telescope_conf['throughput'])
+        try:
+            wfs_split = float(telescope_conf['beam_splitter'])
+            throughput *= wfs_split
+        except KeyError:
+            pass
         return aperture_size, aperture_pixel_size, oversampling, throughput
     
     def read_sensor_pars(self):
