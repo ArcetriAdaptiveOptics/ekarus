@@ -69,6 +69,7 @@ class SingleStageAO():
             collected_flux = self.throughput * total_flux * collecting_area
         return collected_flux
     
+    
     def _get_subaperture_pixel_size(self):
         image_size = self.pupilSizeInPixels*self.oversampling
         rebin_factor = min(self.ccd.detector_shape)/image_size
@@ -105,9 +106,20 @@ class SingleStageAO():
             myfits.save_fits(subap_path, (subaperture_masks).astype(self._xp.uint8), hdr_dict)
             
     
-    def get_slopes(self, input_field, Nphotons):
-        # modulated_intensity = self.wfs.modulate(input_field, self.modulationAngle, self.pixelsPerRadian, N_steps=self.modulationNsteps)
-        modulated_intensity = self.wfs.modulate(input_field, self.pixelsPerRadian)
+    # def get_slopes(self, input_field, Nphotons):
+    #     modulated_intensity = self.wfs.modulate(input_field, self.pixelsPerRadian)
+    #     detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphotons)
+    #     slopes = self.slope_computer.compute_slopes(detector_image)
+    #     return slopes
+    
+    def get_slopes(self, input_field, Nphotons, lambdasInMList=None):
+        if lambdasInMList is None:
+            modulated_intensity = self.wfs.modulate(input_field, self.pixelsPerRadian)
+        else:
+            N = len(lambdasInMList)
+            modulated_intensity = self.wfs.modulate(input_field, lambdasInMList[0]/self.oversampling/self.pupilSizeInM)/N
+            for k in range(N-1):
+                modulated_intensity += self.wfs.modulate(input_field, lambdasInMList[k+1]/self.oversampling/self.pupilSizeInM)/N
         detector_image = self.ccd.image_on_detector(modulated_intensity, photon_flux = Nphotons)
         slopes = self.slope_computer.compute_slopes(detector_image)
         return slopes

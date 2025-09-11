@@ -67,8 +67,6 @@ class TurbulenceLayers():
     def move_mask_on_phasescreens(self, dt):
 
         masked_phases = self._xp.zeros([self.Nscreens,self.mask_shape[0],self.mask_shape[1]])
-        # screen_shape = self.screen_shape
-        # mask_shape = self.mask.shape
         if self.Nscreens > 1:
             for k in range(self.Nscreens):
                 masked_phases[k,:,:] = self._get_single_masked_phase(dt, self.phase_screens[k], self.windSpeeds[k], \
@@ -96,7 +94,7 @@ class TurbulenceLayers():
         y_round = int(self._xp.floor(y) * (y>=yStart) + self._xp.ceil(y) * (y<yStart))
 
         dx, dy = abs(x-x_round), abs(y-y_round)
-        sdx, sdy = int(self._xp.sign(x-xStart)), int(self._xp.sign(y-yStart))
+        sdx, sdy = int(self._xp.sign(x-x_round)), int(self._xp.sign(y-y_round)) # sdx, sdy = int(self._xp.sign(x-xStart)), int(self._xp.sign(y-yStart))
 
         H,W = mask_shape
 
@@ -104,12 +102,12 @@ class TurbulenceLayers():
         full_mask[y_round:(y_round+H),x_round:(x_round+W)] = self.mask.copy()
         phase = reshape_on_mask(screen[~full_mask], self.mask, xp=self._xp)
 
-        thr = 1e-2
+        thr = 1e-8
 
         if dx > thr and dy > thr:
             dx_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdx,axis=1)], self.mask, xp=self._xp)
             dy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,sdy,axis=0)], self.mask, xp=self._xp)
-            dxdy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,(sdx,sdy),axis=(0,1))], self.mask, xp=self._xp)
+            dxdy_phase = reshape_on_mask(screen[~self._xp.roll(full_mask,(sdy,sdx),axis=(0,1))], self.mask, xp=self._xp)
             phase_mask = (phase * (1-dx) + dx * dx_phase) * (1-dy) + (dy_phase * (1-dx) + dx * dxdy_phase) * dy
 
         elif dx > thr:

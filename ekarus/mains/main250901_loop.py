@@ -13,12 +13,10 @@ except:
     xptype = xp.float64
 
 
-def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngleInLambdaOverD=3, show:bool=False):
+def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-9, starMagnitude=3, modulationAngleInLambdaOverD=3, show:bool=False):
 
     # Loop parameters
     loopFrequencyInHz = 1500
-    Nits = 500
-    g = 0.05
     nModes2Correct = 467
     delayInS = 2/loopFrequencyInHz # CCD reading time + time for DM to reach steady-state
 
@@ -78,15 +76,16 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
         plt.show()
 
     
-    # 3.5 Define loop paramters
+    # 3.5 Define loop parameters
     dt = 1/loopFrequencyInHz
     modal_gains = xp.zeros(xp.shape(m2c)[1])
     modal_gains[:nModes2Correct] = 1
     nDelaySteps = int(delayInS * loopFrequencyInHz)
+    endTime = Nits*dt
 
     # 4. Get atmospheric phase screen
     print('Initializing turbulence ...')
-    ssao.initialize_turbulence(Nits*dt)
+    ssao.initialize_turbulence(endTime)
     screen = ssao.get_phasescreen_at_time(0)
     if show:
         if xp.__name__ == 'cupy':
@@ -143,7 +142,7 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
         modes = ssao.perform_loop_iteration(dt, delta_phase_in_rad, Rec)
         modes *= modal_gains
         cmd = m2c @ modes # cmd = m2c[:,0:nModes2Correct] @ modes[0:nModes2Correct]
-        dm_cmd += cmd*g
+        dm_cmd += cmd*integratorGain
         dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi) # convert to meters
 
         # Save telemetry
@@ -231,7 +230,7 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
     plt.figure(figsize=(9,9))
     plt.subplot(2,2,1)
     myimshow(masked_input_phases[-1], \
-        title=f'Atmo [m]: Strehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
+        title=f'Atmosphere phase [m]\nStrehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
         cmap='RdBu',shrink=0.8)
     w = ssao.pupilSizeInPixels + 10
     H,W = ssao.cmask.shape
@@ -242,7 +241,7 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
     pixelsPerMAS = ssao.pixelsPerRadian*180/xp.pi*3600*1000
     plt.subplot(2,2,2)
     showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
-        title = f'PSF: Strehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
+        title = f'Corrected PSF\nStrehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
 
     plt.subplot(2,2,3)
     myimshow(detector_images[-1], title = 'Detector image', shrink=0.8)
@@ -252,23 +251,17 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
     plt.title('Mirror command [m]')
     plt.axis('off')
 
-    plt.figure(figsize=(2.4*Nits/10,2.4))
+    plt.figure(figsize=(2*Nits/10,2.4))
     plt.plot(input_sig2,'-o',label='open loop')
     plt.plot(sig2,'-o',label='closed loop')
     plt.legend()
     plt.grid()
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.xlabel('# iteration')
-    x_ticks = (xp.arange(Nits//10)*10).get() if xp.__name__ == 'cupy' else xp.arange(Nits//10)*10
-    plt.xticks(x_ticks)
+    plt.gca().set_yscale('log')
+    # x_ticks = (xp.arange(Nits//10)*10).get() if xp.__name__ == 'cupy' else xp.arange(Nits//10)*10
+    # plt.xticks(x_ticks)
     plt.xlim([-0.5,Nits-0.5])
-
-    plt.figure()
-    plt.plot(xp.exp(-xp.array(sig2)).get(),'-o')
-    plt.grid()
-    plt.title(f'starMag={starMagnitude},gain={g:1.3f},mod={modulationAngleInLambdaOverD:1.1f}')
-    plt.ylabel('Strehl ratio')
-    plt.xlabel('Iteration number')
 
     plt.show()
 
