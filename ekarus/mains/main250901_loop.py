@@ -86,19 +86,8 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
 
     # 4. Get atmospheric phase screen
     print('Initializing turbulence ...')
-    # Define N so that it is long enough for the number of iterations
-    _, _, windSpeeds, _ = ssao._config.read_atmo_pars()
-    if isinstance(windSpeeds,float) or isinstance(windSpeeds,int):
-        maxSpeed = windSpeeds
-    else:
-        maxSpeed = windSpeeds.max()
-    maxLen = maxSpeed*Nits*dt
-    N = int(xp.ceil(maxLen/ssao.pupilSizeInM))
-    N = xp.max(xp.array([10,N]))
-
-    ssao.initialize_turbulence(N)
-
-    screen = ssao.get_phase_screen(0)
+    ssao.initialize_turbulence(Nits*dt)
+    screen = ssao.get_phasescreen_at_time(0)
     if show:
         if xp.__name__ == 'cupy':
             screen = screen.get()
@@ -111,7 +100,6 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
     # 5. Perform the iteration
     print('Running the loop ...')
     electric_field_amp = 1-ssao.cmask
-
 
     # Define variables
     mask_len = int(xp.sum(1-ssao.dm.mask))
@@ -130,7 +118,7 @@ def main(tn:str='exampleTN', lambdaInM=1000e-9, starMagnitude=3, modulationAngle
     for i in range(Nits):
         print(f'\rIteration {i+1}/{Nits}', end='')
         sim_time = dt*i
-        input_phase = ssao.get_phase_screen(sim_time)
+        input_phase = ssao.get_phasescreen_at_time(sim_time)
         input_phase -= xp.mean(input_phase[~ssao.cmask])
 
         dm_shape = ssao.dm.IFF @ dm_cmds[i,:]*(2*xp.pi)/lambdaInM

@@ -216,8 +216,20 @@ class SingleStageAO():
         self.slope_computer = SlopeComputer(wfs_type='PyrWFS', xp=self._xp)
 
 
-    def initialize_turbulence(self, N:int=10):
+    def initialize_turbulence(self, input=int(10)):
         r0s, L0, windSpeeds, windAngles = self._config.read_atmo_pars()
+
+        if isinstance(input, float):
+            if isinstance(windSpeeds,float) or isinstance(windSpeeds,int):
+                maxSpeed = windSpeeds
+            else:
+                maxSpeed = windSpeeds.max()
+            maxLen = maxSpeed*input
+            N = int(self._xp.ceil(maxLen/self.pupilSizeInM))
+        else:
+            N = input.copy()
+        N = self._xp.max(self._xp.array([10,N])) # set minimum N to 10
+
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
         atmo_path = os.path.join(self.savepath, 'AtmospherePhaseScreens.fits')
@@ -227,8 +239,8 @@ class SingleStageAO():
         self.layers.update_mask(self.cmask)
 
 
-    def get_phase_screen(self, dt):
-        masked_phases = self.layers.move_mask_on_phasescreens(dt)
+    def get_phasescreen_at_time(self, time):
+        masked_phases = self.layers.move_mask_on_phasescreens(time)
         masked_phase = self._xp.sum(masked_phases,axis=0)
         return masked_phase
 
