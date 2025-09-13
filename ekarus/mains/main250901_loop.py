@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from numpy.ma import masked_array
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, image_grid
+from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, image_grid, reshape_on_mask
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 
 try:
@@ -102,9 +102,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
 
     # Define variables
     mask_len = int(xp.sum(1-ssao.dm.mask))
-    dm_shape = xp.zeros(mask_len, dtype=xptype)
     dm_cmd = xp.zeros(ssao.dm.Nacts, dtype=xptype)
-    # dm_phase = xp.zeros_like(ssao.cmask, dtype=xptype)
     delta_phase_in_rad = xp.zeros_like(ssao.cmask, dtype=xptype)
 
     # Save telemetry
@@ -118,9 +116,8 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     tiltX = X[~ssao.cmask]/(ssao.cmask.shape[0]//2)
     tiltY = Y[~ssao.cmask]/(ssao.cmask.shape[1]//2)
     TTmat = xp.stack((tiltX.T,tiltY.T),axis=1)
-    # pinvTTmat = xp.linalg.pinv(TTmat)
 
-    ttOffloadFrequency = 300 # [Hz]
+    ttOffloadFrequency = 100 # [Hz]
 
 
     for i in range(Nits):
@@ -132,17 +129,15 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         input_phase -= xp.mean(input_phase) # remove piston
 
         # Tilt offloading
-        if i>0 and i % (ttOffloadFrequency/loopFrequencyInHz) <= 1e-6:
-            print(f'Offloading tilt at step {i:1.0f}')
+        if i>0 and i % int(loopFrequencyInHz/ttOffloadFrequency) <= 1e-6:
             tt_coeffs = modes[:2]*lambdaInM/(2*xp.pi)
             input_phase -= TTmat @ tt_coeffs
 
-        # dm_shape = ssao.dm.IFF @ dm_cmds[i,:]
-        # residual_phase = input_phase - dm_shape
         residual_phase = input_phase - ssao.dm.surface
 
-        delta_phase_in_rad[~ssao.cmask] = residual_phase*(2*xp.pi)/lambdaInM
-        delta_phase_in_rad = xp.reshape(delta_phase_in_rad, ssao.cmask.shape)
+        # delta_phase_in_rad[~ssao.cmask] = residual_phase*(2*xp.pi)/lambdaInM
+        # delta_phase_in_rad = xp.reshape(delta_phase_in_rad, ssao.cmask.shape)
+        delta_phase_in_rad = reshape_on_mask(residual_phase*(2*xp.pi)/lambdaInM, ssao.cmask, xp=xp)
 
         modes = ssao.perform_loop_iteration(dt, delta_phase_in_rad, Rec)
         modes *= modal_gains
@@ -150,9 +145,12 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         dm_cmd += cmd*integratorGain
         ssao.dm.set_position(dm_cmd*lambdaInM/(2*xp.pi), absolute=True)
         dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi)
+        ssao.dm.set_position(dm_cmd*lambdaInM/(2*xp.pi), absolute=True)
+        dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi)
 
         # Save telemetry
         input_phases[i,:] = input_phase
+        dm_phases[i,:] = ssao.dm.surface # dm_shape
         dm_phases[i,:] = ssao.dm.surface # dm_shape
         detector_images[i,:,:] = ssao.ccd.last_frame
         dm_cmds[i,:] = dm_cmd
@@ -162,9 +160,6 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
 
     #################### Post-processing ##############################
     electric_field_amp = 1-ssao.cmask
-    electric_field = electric_field_amp * xp.exp(-1j*delta_phase_in_rad)
-    field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-    psf = abs(field_on_focal_plane)**2
 
     sig2 = xp.std(residual_phases*(2*xp.pi)/lambdaInM,axis=-1)**2
     input_sig2 = xp.std(input_phases*(2*xp.pi)/lambdaInM,axis=-1)**2 
@@ -209,6 +204,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         psf = abs(field_on_focal_plane)**2
         logPSFs[i,:,:] = xp.log(psf)
 
+    # Can this be done passing a dictionary of {filenames: MAs} to save?
     import os
     atmo_phases_path = os.path.join(ssao.savepath,'AtmoPhases.fits')
     dm_phases_path = os.path.join(ssao.savepath,'DMphases.fits')
@@ -228,10 +224,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     # print(f'Number of collected photons: {xp.sum(detector_image):1.0f}')
 
     ########################## Plotting ###############################
-    if xp.__name__ == 'cupy': # Convert to numpy for plotting
-        psf = psf.get()
-        input_sig2 = input_sig2.get()
-        sig2 = sig2.get()
+    psf = xp.exp(logPSFs[-1])
 
     plt.figure(figsize=(9,9))
     plt.subplot(2,2,1)
@@ -257,7 +250,11 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     plt.title('Mirror command [m]')
     plt.axis('off')
 
-    plt.figure(figsize=(1.7*Nits/10,3))
+    if xp.__name__ == 'cupy': # Convert to numpy for plotting
+        input_sig2 = input_sig2.get()
+        sig2 = sig2.get()
+
+    plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(input_sig2,'-o',label='open loop')
     plt.plot(sig2,'-o',label='closed loop')
     plt.legend()
@@ -265,6 +262,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.xlabel('# iteration')
     plt.gca().set_yscale('log')
+    # x_ticks = (xp.linspace(0,Nits,21,endpoint=True)).get() if xp.__name__ == 'cupy' else xp.linspace(0,Nits,21,endpoint=True)
     # x_ticks = (xp.linspace(0,Nits,21,endpoint=True)).get() if xp.__name__ == 'cupy' else xp.linspace(0,Nits,21,endpoint=True)
     # plt.xticks(x_ticks)
     plt.xlim([-0.5,Nits-0.5])

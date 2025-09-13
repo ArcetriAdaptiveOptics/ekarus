@@ -69,13 +69,15 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
     # return (mask.mask()).astype(bool)
 
 
-def reshape_on_mask(flat_array, mask, xp=np, dtype=np.float32):
+def reshape_on_mask(flat_array, mask, xp=np, dtype=None):
     """
     Reshape a given array on a 2D mask.
     :param flat_array: array of shape sum(1-mask)
     :param mask: boolean 2D mask
     :return: 2D array with flat_array in ~mask
     """
+    if dtype is None:
+        dtype = xp.float32
     image = xp.zeros(mask.shape,dtype=dtype)
     image[~mask] = flat_array
     image = xp.reshape(image, mask.shape)
@@ -93,11 +95,14 @@ def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', s
     cbar.ax.set_ylabel(zlabel)
 
 def showZoomCenter(image, pixelSize, **kwargs):
-    '''show log(image) zoomed around center'''
+    '''show log(image) zoomed around center'''    
+    if hasattr(image,'get'):
+        image = image.get()
     imageHalfSizeInPoints= image.shape[0]/2
     roi= [int(imageHalfSizeInPoints*0.9), int(imageHalfSizeInPoints*1.1)]
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
+
 
 def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
     if hasattr(image,'get'):
