@@ -46,7 +46,7 @@ class TurbulenceLayers():
                 print(f'Generating {N:1.0f} {Npix:1.0f}x{Npix:1.0f} phase-screens ...')
             else:
                 print(f'Generating {Npix:1.0f}x{Npix:1.0f} phase-screen ...')
-            self._phs.generate_normalized_phase_screens(self.Nscreens)
+            self._phs.generate_normalized_phase_screens(N)
             self._phs.save_normalized_phase_screens(self.savepath)
         
         self.phase_screens = self._xp.asarray(self._phs._phaseScreens, dtype=self.dtype)

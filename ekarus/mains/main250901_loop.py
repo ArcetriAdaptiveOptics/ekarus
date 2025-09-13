@@ -118,9 +118,10 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     tiltX = X[~ssao.cmask]/(ssao.cmask.shape[0]//2)
     tiltY = Y[~ssao.cmask]/(ssao.cmask.shape[1]//2)
     TTmat = xp.stack((tiltX.T,tiltY.T),axis=1)
-    pinvTTmat = xp.linalg.pinv(TTmat)
+    # pinvTTmat = xp.linalg.pinv(TTmat)
 
-    tt_offload = 0 # tip-tilt offload percentage
+    ttOffloadFrequency = 300 # [Hz]
+
 
     for i in range(Nits):
         print(f'\rIteration {i+1}/{Nits}', end='')
@@ -130,11 +131,15 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         input_phase = atmo_phase[~ssao.cmask]*lambdaInM/(2*xp.pi) # convert to meters
         input_phase -= xp.mean(input_phase) # remove piston
 
-        # tilt_coeffs = pinvTTmat @ input_phase # get tilt coefficients
-        # input_phase -= tt_offload * TTmat @ tilt_coeffs # remove tt_offload% of the tilt
+        # Tilt offloading
+        if i>0 and i % (ttOffloadFrequency/loopFrequencyInHz) <= 1e-6:
+            print(f'Offloading tilt at step {i:1.0f}')
+            tt_coeffs = modes[:2]*lambdaInM/(2*xp.pi)
+            input_phase -= TTmat @ tt_coeffs
 
-        dm_shape = ssao.dm.IFF @ dm_cmds[i,:]
-        residual_phase = input_phase - dm_shape
+        # dm_shape = ssao.dm.IFF @ dm_cmds[i,:]
+        # residual_phase = input_phase - dm_shape
+        residual_phase = input_phase - ssao.dm.surface
 
         delta_phase_in_rad[~ssao.cmask] = residual_phase*(2*xp.pi)/lambdaInM
         delta_phase_in_rad = xp.reshape(delta_phase_in_rad, ssao.cmask.shape)
@@ -143,11 +148,12 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         modes *= modal_gains
         cmd = m2c @ modes # cmd = m2c[:,0:nModes2Correct] @ modes[0:nModes2Correct]
         dm_cmd += cmd*integratorGain
-        dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi) # convert to meters
+        ssao.dm.set_position(dm_cmd*lambdaInM/(2*xp.pi), absolute=True)
+        dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi)
 
         # Save telemetry
         input_phases[i,:] = input_phase
-        dm_phases[i,:] = dm_shape
+        dm_phases[i,:] = ssao.dm.surface # dm_shape
         detector_images[i,:,:] = ssao.ccd.last_frame
         dm_cmds[i,:] = dm_cmd
         residual_phases[i,:] = residual_phase
@@ -251,7 +257,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     plt.title('Mirror command [m]')
     plt.axis('off')
 
-    plt.figure(figsize=(2*Nits/10,2.4))
+    plt.figure(figsize=(1.7*Nits/10,3))
     plt.plot(input_sig2,'-o',label='open loop')
     plt.plot(sig2,'-o',label='closed loop')
     plt.legend()
@@ -259,7 +265,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.xlabel('# iteration')
     plt.gca().set_yscale('log')
-    # x_ticks = (xp.arange(Nits//10)*10).get() if xp.__name__ == 'cupy' else xp.arange(Nits//10)*10
+    # x_ticks = (xp.linspace(0,Nits,21,endpoint=True)).get() if xp.__name__ == 'cupy' else xp.linspace(0,Nits,21,endpoint=True)
     # plt.xticks(x_ticks)
     plt.xlim([-0.5,Nits-0.5])
 

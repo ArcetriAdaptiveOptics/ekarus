@@ -240,7 +240,7 @@ class SingleStageAO():
             N = int(self._xp.ceil(maxLen/self.pupilSizeInM))
         else:
             N = input.copy()
-        N = self._xp.max(self._xp.array([10,N])) # set minimum N to 10
+        N = int(self._xp.max(self._xp.array([10,N]))) # set minimum N to 10
 
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
