@@ -24,10 +24,8 @@ class SlopeComputer():
         match self.wfs_type:
             case 'PyrWFS':
                 piston, lambdaOverD, subaperturePixelSize = args
-                modAngle = self._wfs.modulationAngleInLambdaOverD # save original modulation angle
                 self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
                 modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
-                self._wfs.set_modulation_angle(modAngle) # restore old modulation
                 detector_image = self._detector.image_on_detector(modulated_intensity)
                 self._define_subaperture_masks(detector_image, subaperturePixelSize)
             case _:

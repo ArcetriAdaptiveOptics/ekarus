@@ -25,8 +25,6 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
 
     ssao.set_wavelength(lambdaInM=lambdaInM)
     ssao.set_star_magnitude(starMagnitude)
-    ssao.pyr.set_modulation_angle(modulationAngleInLambdaOverD)
-    print(f'Now modulating {ssao.pyr.modulationAngleInLambdaOverD:1.0f} [lambda/D] with {ssao.pyr.modulationNsteps:1.0f} modulation steps')
 
     # 1. Define the subapertures using a piston input wavefront
     print('Defining the detector subaperture masks ...')
@@ -95,6 +93,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     # 5. Perform the iteration
     print('Running the loop ...')
     electric_field_amp = 1-ssao.cmask
+    ssao.pyr.set_modulation_angle(modulationAngleInLambdaOverD)
 
     # Define variables
     mask_len = int(xp.sum(1-ssao.dm.mask))
@@ -112,8 +111,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     tiltX = X[~ssao.cmask]/(ssao.cmask.shape[0]//2)
     tiltY = Y[~ssao.cmask]/(ssao.cmask.shape[1]//2)
     TTmat = xp.stack((tiltX.T,tiltY.T),axis=1)
-
-    ttOffloadFrequency = 100 # [Hz]
+    ttOffloadFrequency = 0 # [Hz]
 
 
     for i in range(Nits):
@@ -125,14 +123,11 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         input_phase -= xp.mean(input_phase) # remove piston
 
         # Tilt offloading
-        if i>0 and i % int(loopFrequencyInHz/ttOffloadFrequency) <= 1e-6:
+        if i>0 and ttOffloadFrequency > 0 and i % int(loopFrequencyInHz/ttOffloadFrequency) <= 1e-6:
             tt_coeffs = modes[:2]*lambdaInM/(2*xp.pi)
             input_phase -= TTmat @ tt_coeffs
 
         residual_phase = input_phase - ssao.dm.surface
-
-        # delta_phase_in_rad[~ssao.cmask] = residual_phase*(2*xp.pi)/lambdaInM
-        # delta_phase_in_rad = xp.reshape(delta_phase_in_rad, ssao.cmask.shape)
         delta_phase_in_rad = reshape_on_mask(residual_phase*(2*xp.pi)/lambdaInM, ssao.cmask, xp=xp)
 
         modes = ssao.perform_loop_iteration(dt, delta_phase_in_rad, Rec)
