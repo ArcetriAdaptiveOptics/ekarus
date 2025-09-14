@@ -12,28 +12,34 @@ class ConfigReader():
         telescope_conf = self._config['TELESCOPE']
         aperture_size = float(telescope_conf['pupilSizeInM'])
         aperture_pixel_size = int(telescope_conf['pupilSizeInPixels'])
-        oversampling = int(telescope_conf['oversampling'])
+        # oversampling = int(telescope_conf['oversampling'])
         throughput = float(telescope_conf['throughput'])
         try:
             wfs_split = float(telescope_conf['beam_splitter'])
             throughput *= wfs_split
         except KeyError:
             pass
-        return aperture_size, aperture_pixel_size, oversampling, throughput
+        return aperture_size, aperture_pixel_size, throughput
     
-    def read_sensor_pars(self):
-        sensor_conf = self._config['WFS']
+    def read_sensor_pars(self, sensor_name:str=None):
+        if sensor_name is None:
+            sensor_name = 'WFS'
+        sensor_conf = self._config[sensor_name]
         apex_angle = float(sensor_conf['apex_angle'])
-        # subaperture_size = float(sensor_conf['subaperture_size'])
-        return apex_angle #, subaperture_size
+        oversampling = int(sensor_conf['oversampling'])
+        return apex_angle, oversampling
     
-    def read_dm_pars(self):
-        dm_conf = self._config['DM']
+    def read_dm_pars(self, dm_name:str=None):
+        if dm_name is None:
+            dm_name = 'DM'
+        dm_conf = self._config[dm_name]
         Nacts = int(dm_conf['Nacts'])
         return Nacts
     
-    def read_detector_pars(self):
-        detector_conf = self._config['DETECTOR']
+    def read_detector_pars(self, detector_name:str=None):
+        if detector_name is None:
+            detector_name = 'DETECTOR'
+        detector_conf = self._config[detector_name]
         detector_shape = (int(detector_conf['detector_shape'].split(',')[0]), int(detector_conf['detector_shape'].split(',')[1]))
         RON = float(detector_conf['RON'])
         quantum_efficiency = float(detector_conf['quantum_efficiency'])

@@ -5,42 +5,54 @@ from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circul
 
 class SlopeComputer():
 
-    def __init__(self, wfs_type, xp=np):
+    def __init__(self, wfs, detector, xp=np):
 
-        self.wfs_type = wfs_type
+        self._wfs = wfs
+        self._detector = detector
+
+        if hasattr(wfs,'apex_angle'):
+            self.wfs_type = 'PyrWFS'
+        else:
+            raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
 
         self._xp = xp
         self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
 
-    def calibrate_sensor(self, **kwargs):
+    def calibrate_sensor(self, *args):
 
         match self.wfs_type:
             case 'PyrWFS':
-                self._define_subaperture_masks(**kwargs)
+                piston, lambdaOverD, subaperturePixelSize = args
+                modAngle = self._wfs.modulationAngleInLambdaOverD # save original modulation angle
+                self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
+                modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
+                self._wfs.set_modulation_angle(modAngle) # restore old modulation
+                detector_image = self._detector.image_on_detector(modulated_intensity)
+                self._define_subaperture_masks(detector_image, subaperturePixelSize)
             case _:
                 raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
         
 
 
-    def compute_slopes(self, detector_image, **kwargs):
+    def compute_slopes(self, input_field, lambdaOverD, nPhotons, **kwargs):
         """
-        Compute slopes from the detector image
+        Compute slopes from the input field
         """
 
-        slopes = None
+        intensity = self._wfs.get_intensity(input_field, lambdaOverD)
+        detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
 
         match self.wfs_type:
             case 'PyrWFS':
                 slopes = self._compute_pyramid_slopes(detector_image, **kwargs)
+            case _:
+                raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
 
         return slopes
 
 
     def _compute_pyramid_slopes(self, detector_image, use_diagonal:bool=False):
-        """
-        Compute slopes from the detector image
-        """
 
         A = detector_image[~self._subaperture_masks[0]]
         B = detector_image[~self._subaperture_masks[1]]
