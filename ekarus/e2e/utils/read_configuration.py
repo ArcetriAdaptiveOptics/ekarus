@@ -21,7 +21,8 @@ class ConfigReader():
         sensor_conf = self._config[sensor_name]
         apex_angle = float(sensor_conf['apex_angle'])
         oversampling = int(sensor_conf['oversampling'])
-        return apex_angle, oversampling
+        modulationAngleInLambdaOverD = float(sensor_conf['modulationAngleInLambdaOverD'])
+        return apex_angle, oversampling, modulationAngleInLambdaOverD
     
     def read_dm_pars(self, dm_name:str=None):
         if dm_name is None:
@@ -55,14 +56,13 @@ class ConfigReader():
     
     def read_loop_pars(self):
         loop_conf = self._config['LOOP']
-        modulationAngleInLambdaOverD = float(loop_conf['modulationAngleInLambdaOverD'])
         nIterations = int(loop_conf['nIterations'])
         loopFrequencyInHz = float(loop_conf['loopFrequencyInHz'])
         integratorGain = float(loop_conf['integratorGain'])
         delay = int(loop_conf['delay'])
         nModes2Correct = int(loop_conf['nModes2Correct'])
         # ttOffloadFrequencyInHz = float(loop_conf['ttOffloadFrequencyInHz'])
-        return modulationAngleInLambdaOverD, nIterations, loopFrequencyInHz, integratorGain, delay, nModes2Correct#, ttOffloadFrequencyInHz
+        return nIterations, loopFrequencyInHz, integratorGain, delay, nModes2Correct#, ttOffloadFrequencyInHz
     
     def _read_array(self, a):
         lenA = len(a.split(','))

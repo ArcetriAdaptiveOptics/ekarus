@@ -32,24 +32,8 @@ class SingleStageAO():
         self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
         self._read_configuration(tn)
-        self._initialize_devices()
         self._read_loop_parameters()
-
-    #     self.lambdaInM = None
-    #     self.starMagnitude = None
-
-    # def get_wavelength(self):
-    #     return self.lambdaInM
-    
-    # def set_wavelength(self, lambdaInM):
-    #     self.lambdaInM = lambdaInM
-
-    # def get_star_magnitude(self):
-    #     return self.starMagnitude
-    
-    # def set_star_magnitude(self, starMagnitude):
-    #     self.starMagnitude = starMagnitude
-    #     self.photon_flux = self.get_photons_per_second()
+        self._initialize_devices()
 
     def get_photons_per_second(self, starMagnitude, B0 = 1e+10):
         collected_flux = None
@@ -67,27 +51,24 @@ class SingleStageAO():
         self.pupilSizeInM, self.pupilSizeInPixels, self.throughput = self._config.read_telescope_pars()
         mask_shape = (self.pupilSizeInPixels, self.pupilSizeInPixels)
         self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels//2, xp=self._xp)
-
-        # self.lambdaInM, self.starMagnitude = self._config.read_target_pars()
-        # self.photon_flux = self.get_photons_per_second()
-
         
     def _initialize_devices(self):
-        apex_angle, oversampling = self._config.read_sensor_pars()
+        apex_angle, oversampling, modulationAngleInLambdaOverD = self._config.read_sensor_pars()
         detector_shape, RON, quantum_efficiency = self._config.read_detector_pars()
         Nacts = self._config.read_dm_pars()
+
         self.pyr = PyramidWFS(apex_angle, oversampling, xp=self._xp)
+        self.pyr.set_modulation_angle(modulationAngleInLambdaOverD)
         self.ccd = Detector(detector_shape=detector_shape, RON=RON, quantum_efficiency=quantum_efficiency, xp=self._xp)
         self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels, xp=self._xp)
+
         # self.slope_computer = SlopeComputer(wfs_type='PyrWFS', xp=self._xp) # OLD
         self.slope_computer = SlopeComputer(self.pyr, self.ccd, xp=self._xp)
     
     def _read_loop_parameters(self):
-        modulationAngleInLambdaOverD, nIterations, loopFrequencyInHz, integratorGain, delay, nModes2Correct = self._config.read_loop_pars()
+        nIterations, loopFrequencyInHz, integratorGain, delay, nModes2Correct = self._config.read_loop_pars()
         self.dt = 1/loopFrequencyInHz
         self.Nits = nIterations
-        self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
-        self.pyr.set_modulation_angle(self.modulationAngleInLambdaOverD)
         self.integratorGain = integratorGain
         self.delaySteps = delay
         self.nModes = nModes2Correct
@@ -245,8 +226,6 @@ class SingleStageAO():
         # tiltX = X[~self.cmask]/(self.cmask.shape[0]//2)
         # tiltY = Y[~self.cmask]/(self.cmask.shape[1]//2)
         # TTmat = self._xp.stack((tiltX.T,tiltY.T),axis=1)
-
-        import matplotlib.pyplot as plt
 
         for i in range(self.Nits):
             print(f'\rIteration {i+1}/{self.Nits}', end='')
