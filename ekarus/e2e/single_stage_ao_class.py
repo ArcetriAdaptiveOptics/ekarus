@@ -236,7 +236,7 @@ class SingleStageAO():
 
         # Save telemetry
         dm_cmds = self._xp.zeros([self.Nits,self.dm.Nacts])
-        # dm_phases = self._xp.zeros([self.Nits,mask_len])
+        dm_phases = self._xp.zeros([self.Nits,mask_len])
         residual_phases = self._xp.zeros([self.Nits,mask_len])
         input_phases = self._xp.zeros([self.Nits,mask_len])
         detector_images = self._xp.zeros([self.Nits,self.ccd.detector_shape[0],self.ccd.detector_shape[1]])
@@ -269,21 +269,19 @@ class SingleStageAO():
             input_field = electric_field_amp * self._xp.exp(1j*delta_phase_in_rad)
             slopes = self.slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
             modes = Rec @ slopes
-            # modes *= modal_gains
+            modes *= modal_gains
             cmd = m2c @ modes
             dm_cmd += cmd*self.integratorGain
             dm_cmds[i,:] = dm_cmd*lambdaInM/(2*self._xp.pi) # convert to meters
-            # self.dm.set_position(dm_cmd*lambdaInM/(2*self._xp.pi), absolute=True)
-
+            
             # Save telemetry
+            dm_phases[i,:] = self.dm.surface
             input_phases[i,:] = input_phase
             detector_images[i,:,:] = self.ccd.last_frame
             residual_phases[i,:] = residual_phase
         print('')
 
-        print(lambdaInM, self.pyr.modulationAngleInLambdaOverD)
-
-        return input_phases, residual_phases, dm_cmds, detector_images 
+        return input_phases, residual_phases, dm_phases, dm_cmds, detector_images 
 
 
 

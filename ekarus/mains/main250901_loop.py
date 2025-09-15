@@ -77,7 +77,7 @@ def main(tn:str='exampleTN', show:bool=False):
 
     # 5. Perform the iteration
     print('Running the loop ...')
-    atmo_phases, residual_phases, dm_cmds, detector_images = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c)
+    atmo_phases, residual_phases, dm_phases, dm_cmds, detector_images = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c)
 
     sig2 = xp.std(residual_phases*(2*xp.pi)/lambdaInM,axis=-1)**2
     input_sig2 = xp.std(atmo_phases*(2*xp.pi)/lambdaInM,axis=-1)**2 
@@ -91,7 +91,7 @@ def main(tn:str='exampleTN', show:bool=False):
 
     cmask = ssao.cmask.get() if xp.__name__ == 'cupy' else ssao.cmask.copy()
     psf_mask = psf_mask.get() if xp.__name__ == 'cupy' else psf_mask.copy()
-    IFF = ssao.dm.IFF.get() if xp.__name__ == 'cupy' else ssao.dm.IFF.copy()
+    # IFF = ssao.dm.IFF.get() if xp.__name__ == 'cupy' else ssao.dm.IFF.copy()
 
     masked_input_phases = xp.zeros([ssao.Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
     masked_dm_phases = xp.zeros([ssao.Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
@@ -104,6 +104,7 @@ def main(tn:str='exampleTN', show:bool=False):
         masked_residual_phases = masked_residual_phases.get()
 
         atmo_phases = atmo_phases.get()
+        dm_phases = dm_phases.get()
         residual_phases = residual_phases.get()
         dm_cmds = dm_cmds.get()
         detector_images = detector_images.get()
@@ -115,14 +116,11 @@ def main(tn:str='exampleTN', show:bool=False):
 
 
     for i in range(ssao.Nits):
-        atmo_phase = atmo_phases[i,:]
-        dm_phase = IFF @ dm_cmds[i,:]
-
-        masked_input_phases[i,:,:] = get_masked_array(atmo_phase, cmask)
-        masked_dm_phases[i,:,:] = get_masked_array(dm_phase, cmask)
+        masked_input_phases[i,:,:] = get_masked_array(atmo_phases[i,:], cmask)
+        masked_dm_phases[i,:,:] = get_masked_array(dm_phases[i,:], cmask)
         masked_residual_phases[i,:,:] = get_masked_array(residual_phases[i,:], cmask)
 
-        input_phase = reshape_on_mask(atmo_phase, psf_mask)
+        input_phase = reshape_on_mask(residual_phases[i,:], psf_mask)
         electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
         field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
         psf = abs(field_on_focal_plane)**2
