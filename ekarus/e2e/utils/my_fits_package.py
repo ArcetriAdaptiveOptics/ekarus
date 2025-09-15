@@ -1,5 +1,5 @@
 from astropy.io import fits as pyfits
-from numpy import uint8
+import numpy as np
 from numpy.ma import masked_array
 
 def read_fits(filename, isBool:bool=False):
@@ -18,17 +18,19 @@ def read_fits(filename, isBool:bool=False):
     return data_out
 
 
-def save_fits(filename, data, overwrite:bool=True, header_dictionary=None):
+def save_fits(filename, datain, overwrite:bool=True, header_dictionary=None):
 
     hdr = pyfits.Header()
     if header_dictionary is not None:
         for key in header_dictionary:
             hdr[str(key)] = float(header_dictionary[key])
 
-    if hasattr(data, 'get'):
-        data = data.get()
+    if hasattr(datain, 'get'):
+        datain = datain.get()
     
-    pyfits.writeto(filename, data, hdr, overwrite=overwrite)
+    if hasattr(datain, "mask"):
+        pyfits.writeto(filename, datain.data, hdr, overwrite=overwrite)
+        pyfits.append(filename, np.array(datain.mask).astype(np.uint8))
+    else:
+        pyfits.writeto(filename, datain, hdr, overwrite=overwrite)
     
-    if hasattr(data, "mask"):
-        pyfits.append(filename, data.mask.astype(uint8))

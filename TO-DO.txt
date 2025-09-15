@@ -1,20 +1,16 @@
 IMPORTANT:
 DM stroke limitation
 Loop on different wavelengths
-Change loop parameters on the fly (modal gain, rebinning ...)
-Pass the mask as input to the DM constructor!
-Is it computationally advantageous to oversample/pad only before ifft?
 
 
 EXTRAS:
 Zernike WFS
 Shack Hartmann WFS
+Pass the mask as input to the DM constructor!
 Control Filter Class ('leaky' integrator)
 Multiprocessing: modulation + IFFs
 
 
 CODING/EASE-OF_USE:
-Simplify architecture
-Sensor-agnostic AO class
 Documentation (!!!)
 Restore Circular Mask

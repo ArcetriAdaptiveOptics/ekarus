@@ -1,6 +1,7 @@
 import numpy as np
 # from arte.types.mask import CircularMask
 import matplotlib.pyplot as plt
+from numpy.ma import masked_array
 
 
 
@@ -69,7 +70,7 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
     # return (mask.mask()).astype(bool)
 
 
-def reshape_on_mask(flat_array, mask, xp=np, dtype=None):
+def reshape_on_mask(vec, mask, xp=np, dtype=None):
     """
     Reshape a given array on a 2D mask.
     :param flat_array: array of shape sum(1-mask)
@@ -79,9 +80,19 @@ def reshape_on_mask(flat_array, mask, xp=np, dtype=None):
     if dtype is None:
         dtype = xp.float32
     image = xp.zeros(mask.shape,dtype=dtype)
-    image[~mask] = flat_array
+    image[~mask] = vec
     image = xp.reshape(image, mask.shape)
     return image
+
+
+def get_masked_array(vec, mask):
+    if hasattr(vec, 'get'):
+        vec = vec.get()
+    if hasattr(mask, 'get'):
+        mask = mask.get() 
+    aux = reshape_on_mask(vec, mask)
+    ma_vec = masked_array(aux, mask)
+    return ma_vec
 
 
 def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0, **kwargs):
