@@ -13,22 +13,16 @@ except:
     xptype = xp.float64
 
 
-def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-9, starMagnitude=3, modulationAngleInLambdaOverD=3, show:bool=False):
-
-    # Loop parameters
-    loopFrequencyInHz = 1500
-    nModes2Correct = 467
-    delayInS = 2/loopFrequencyInHz # CCD reading time + time for DM to reach steady-state
+def main(tn:str='exampleTN', show:bool=False):
 
     print('Initializing devices ...')
     ssao = SingleStageAO(tn, xp=xp)
 
-    ssao.set_wavelength(lambdaInM=lambdaInM)
-    ssao.set_star_magnitude(starMagnitude)
+    lambdaInM, starMagnitude = ssao._config.read_target_pars()
 
     # 1. Define the subapertures using a piston input wavefront
     print('Defining the detector subaperture masks ...')
-    ssao.define_subaperture_masks()
+    ssao.define_subaperture_masks(lambdaInM)
     if show:
         try:
             detector_image = ssao.ccd.last_frame
@@ -41,7 +35,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
 
     # 2. Define the system modes
     print('Obtaining the Karhunen-Loeve mirror modes ...')
-    KL, m2c = ssao.define_KL_modes(zern_modes = 5)
+    KL, m2c = ssao.define_KL_modes(zern_modes=5)
     if show:
         N=9
         plt.figure(figsize=(2*N,7))
@@ -58,7 +52,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
 
     # 3. Calibrate the system
     print('Calibrating the KL modes ...')
-    Rec, IM = ssao.calibrate_modes(KL, amps=0.2)
+    Rec, IM = ssao.calibrate_modes(KL, lambdaInM, amps=0.2)
     if show:
         IM_std = xp.std(IM,axis=0)
         if xp.__name__ == 'cupy':
@@ -69,19 +63,11 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         plt.title('Interaction matrix standard deviation')
         plt.show()
 
-    
-    # 3.5 Define loop parameters
-    dt = 1/loopFrequencyInHz
-    modal_gains = xp.zeros(xp.shape(m2c)[1])
-    modal_gains[:nModes2Correct] = 1
-    nDelaySteps = int(delayInS * loopFrequencyInHz)
-    endTime = Nits*dt
-
     # 4. Get atmospheric phase screen
     print('Initializing turbulence ...')
-    ssao.initialize_turbulence(endTime)
-    screen = ssao.get_phasescreen_at_time(0)
+    ssao.initialize_turbulence()
     if show:
+        screen = ssao.get_phasescreen_at_time(0)
         if xp.__name__ == 'cupy':
             screen = screen.get()
         plt.figure()
@@ -89,70 +75,14 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         plt.colorbar()
         plt.title('Atmo screen')
 
-
     # 5. Perform the iteration
     print('Running the loop ...')
-    electric_field_amp = 1-ssao.cmask
-    ssao.pyr.set_modulation_angle(modulationAngleInLambdaOverD)
+    atmo_phases, residual_phases, dm_cmds, detector_images = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c)
 
-    # Define variables
-    mask_len = int(xp.sum(1-ssao.dm.mask))
-    dm_cmd = xp.zeros(ssao.dm.Nacts, dtype=xptype)
-    delta_phase_in_rad = xp.zeros_like(ssao.cmask, dtype=xptype)
-
-    # Save telemetry
-    dm_cmds = xp.zeros([Nits+nDelaySteps,ssao.dm.Nacts])
-    dm_phases = xp.zeros([Nits,mask_len])
-    residual_phases = xp.zeros([Nits,mask_len])
-    input_phases = xp.zeros([Nits,mask_len])
-    detector_images = xp.zeros([Nits,ssao.ccd.detector_shape[0],ssao.ccd.detector_shape[1]])
-
-    X,Y = image_grid(ssao.cmask.shape, recenter=True, xp=xp)
-    tiltX = X[~ssao.cmask]/(ssao.cmask.shape[0]//2)
-    tiltY = Y[~ssao.cmask]/(ssao.cmask.shape[1]//2)
-    TTmat = xp.stack((tiltX.T,tiltY.T),axis=1)
-    ttOffloadFrequency = 0 # [Hz]
-
-
-    for i in range(Nits):
-        print(f'\rIteration {i+1}/{Nits}', end='')
-        sim_time = dt*i
-
-        atmo_phase = ssao.get_phasescreen_at_time(sim_time)
-        input_phase = atmo_phase[~ssao.cmask]*lambdaInM/(2*xp.pi) # convert to meters
-        input_phase -= xp.mean(input_phase) # remove piston
-
-        # Tilt offloading
-        if i>0 and ttOffloadFrequency > 0 and i % int(loopFrequencyInHz/ttOffloadFrequency) <= 1e-6:
-            tt_coeffs = modes[:2]*lambdaInM/(2*xp.pi)
-            input_phase -= TTmat @ tt_coeffs
-
-        residual_phase = input_phase - ssao.dm.surface
-        delta_phase_in_rad = reshape_on_mask(residual_phase*(2*xp.pi)/lambdaInM, ssao.cmask, xp=xp)
-
-        modes = ssao.perform_loop_iteration(dt, delta_phase_in_rad, Rec)
-        modes *= modal_gains
-        cmd = m2c @ modes # cmd = m2c[:,0:nModes2Correct] @ modes[0:nModes2Correct]
-        dm_cmd += cmd*integratorGain
-        ssao.dm.set_position(dm_cmd*lambdaInM/(2*xp.pi), absolute=True)
-        dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi)
-        ssao.dm.set_position(dm_cmd*lambdaInM/(2*xp.pi), absolute=True)
-        dm_cmds[i+nDelaySteps,:] = dm_cmd*lambdaInM/(2*xp.pi)
-
-        # Save telemetry
-        input_phases[i,:] = input_phase
-        dm_phases[i,:] = ssao.dm.surface # dm_shape
-        dm_phases[i,:] = ssao.dm.surface # dm_shape
-        detector_images[i,:,:] = ssao.ccd.last_frame
-        dm_cmds[i,:] = dm_cmd
-        residual_phases[i,:] = residual_phase
-    print('')
-
+    sig2 = xp.std(residual_phases*(2*xp.pi)/lambdaInM,axis=-1)**2
+    input_sig2 = xp.std(atmo_phases*(2*xp.pi)/lambdaInM,axis=-1)**2 
 
     #################### Post-processing ##############################
-    sig2 = xp.std(residual_phases*(2*xp.pi)/lambdaInM,axis=-1)**2
-    input_sig2 = xp.std(input_phases*(2*xp.pi)/lambdaInM,axis=-1)**2 
-
     print('Saving telemetry to .fits ...')
     oversampling = 4
     padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)
@@ -161,19 +91,19 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
 
     cmask = ssao.cmask.get() if xp.__name__ == 'cupy' else ssao.cmask.copy()
     psf_mask = psf_mask.get() if xp.__name__ == 'cupy' else psf_mask.copy()
+    IFF = ssao.dm.IFF.get() if xp.__name__ == 'cupy' else ssao.dm.IFF.copy()
 
-    masked_input_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
-    masked_dm_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
-    masked_residual_phases = xp.zeros([Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
-    logPSFs = xp.zeros([Nits,psf_mask.shape[0],psf_mask.shape[1]], dtype=xptype)
+    masked_input_phases = xp.zeros([ssao.Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
+    masked_dm_phases = xp.zeros([ssao.Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
+    masked_residual_phases = xp.zeros([ssao.Nits,ssao.cmask.shape[0],ssao.cmask.shape[1]], dtype=xptype)
+    logPSFs = xp.zeros([ssao.Nits,psf_mask.shape[0],psf_mask.shape[1]], dtype=xptype)
 
     if xp.__name__ == 'cupy':
         masked_input_phases = masked_input_phases.get()
         masked_dm_phases = masked_dm_phases.get()
         masked_residual_phases = masked_residual_phases.get()
 
-        input_phases = input_phases.get()
-        dm_phases = dm_phases.get()
+        atmo_phases = atmo_phases.get()
         residual_phases = residual_phases.get()
         dm_cmds = dm_cmds.get()
         detector_images = detector_images.get()
@@ -184,12 +114,15 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
         return ma_vec
 
 
-    for i in range(Nits):
-        masked_input_phases[i,:,:] = get_masked_array(input_phases[i,:], cmask)
-        masked_dm_phases[i,:,:] = get_masked_array(dm_phases[i,:], cmask)
+    for i in range(ssao.Nits):
+        atmo_phase = atmo_phases[i,:]
+        dm_phase = IFF @ dm_cmds[i,:]
+
+        masked_input_phases[i,:,:] = get_masked_array(atmo_phase, cmask)
+        masked_dm_phases[i,:,:] = get_masked_array(dm_phase, cmask)
         masked_residual_phases[i,:,:] = get_masked_array(residual_phases[i,:], cmask)
 
-        input_phase = reshape_on_mask(input_phases[i,:], psf_mask)
+        input_phase = reshape_on_mask(atmo_phase, psf_mask)
         electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
         field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
         psf = abs(field_on_focal_plane)**2
@@ -222,13 +155,9 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     myimshow(masked_input_phases[-1], \
         title=f'Atmosphere phase [m]\nStrehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
         cmap='RdBu',shrink=0.8)
-    # w = ssao.pupilSizeInPixels + 10
-    # H,W = ssao.cmask.shape
-    # plt.xlim([W//2-w//2, W//2+w//2])
-    # plt.ylim([H//2-w//2, H//2+w//2])
     plt.axis('off')
 
-    pixelsPerMAS = ssao.lambdaInM/ssao.pupilSizeInM*180/xp.pi*3600*1000
+    pixelsPerMAS = lambdaInM/ssao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
     plt.subplot(2,2,2)
     showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
         title = f'Corrected PSF\nStrehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
@@ -237,7 +166,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     myimshow(detector_images[-1], title = 'Detector image', shrink=0.8)
 
     plt.subplot(2,2,4)
-    ssao.dm.plot_position(dm_cmds[-1])
+    ssao.dm.plot_position()
     plt.title('Mirror command [m]')
     plt.axis('off')
 
@@ -256,7 +185,7 @@ def main(tn:str='exampleTN', Nits:int=500, integratorGain=0.05, lambdaInM=1000e-
     # x_ticks = (xp.linspace(0,Nits,21,endpoint=True)).get() if xp.__name__ == 'cupy' else xp.linspace(0,Nits,21,endpoint=True)
     # x_ticks = (xp.linspace(0,Nits,21,endpoint=True)).get() if xp.__name__ == 'cupy' else xp.linspace(0,Nits,21,endpoint=True)
     # plt.xticks(x_ticks)
-    plt.xlim([-0.5,Nits-0.5])
+    plt.xlim([-0.5,ssao.Nits-0.5])
 
     plt.show()
 

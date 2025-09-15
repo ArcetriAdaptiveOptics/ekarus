@@ -24,7 +24,7 @@ class TurbulenceLayers():
         self._check_same_length(r0s, windSpeeds)
         self._check_same_length(r0s, windAngles)
 
-        self.Nscreens = self._get_len(r0s)
+        self.nLayers = self._get_len(r0s)
         self.savepath = savepath
 
 
@@ -41,7 +41,7 @@ class TurbulenceLayers():
         try:
             self._phs = self._phs.load_normalized_phase_screens(self.savepath)
         except FileNotFoundError:   
-            N, Npix = self.Nscreens, screenSizeInPixels
+            N, Npix = self.nLayers, screenSizeInPixels
             if N > 1:
                 print(f'Generating {N:1.0f} {Npix:1.0f}x{Npix:1.0f} phase-screens ...')
             else:
@@ -50,15 +50,21 @@ class TurbulenceLayers():
             self._phs.save_normalized_phase_screens(self.savepath)
         
         self.phase_screens = self._xp.asarray(self._phs._phaseScreens, dtype=self.dtype)
-        # self._phs.rescale_to(r0At500nm=self.r0s)
         self._normalization_factors = (1/self.pixelsPerMeter / self.r0s) ** (5. / 6)
         self.screen_shape = self._phs._phaseScreens.shape[1:]
 
 
-    def rescale_phasescreens(self, lambdaInM):
-        # self._phs.get_in_radians_at(wavelengthInMeters=lambdaInM)
-        if self.Nscreens > 1:
-            for k in range(self.Nscreens):
+    def rescale_phasescreens(self):
+        if self.nLayers > 1:
+            for k in range(self.nLayers):
+                self.phase_screens[k,:,:] *= 500e-9 / (2*self._xp.pi) * self._normalization_factors[k]
+        else:
+            self.phase_screens[0,:,:] *= 500e-9 / (2*self._xp.pi) * self._normalization_factors
+    
+
+    def rescale_phasescreens_in_radians(self, lambdaInM):
+        if self.nLayers > 1:
+            for k in range(self.nLayers):
                 self.phase_screens[k,:,:] *= 500e-9 / lambdaInM * self._normalization_factors[k]
         else:
             self.phase_screens[0,:,:] *= 500e-9 / lambdaInM * self._normalization_factors
@@ -66,9 +72,9 @@ class TurbulenceLayers():
         
     def move_mask_on_phasescreens(self, dt):
 
-        masked_phases = self._xp.zeros([self.Nscreens,self.mask_shape[0],self.mask_shape[1]])
-        if self.Nscreens > 1:
-            for k in range(self.Nscreens):
+        masked_phases = self._xp.zeros([self.nLayers,self.mask_shape[0],self.mask_shape[1]])
+        if self.nLayers > 1:
+            for k in range(self.nLayers):
                 masked_phases[k,:,:] = self._get_single_masked_phase(dt, self.phase_screens[k], self.windSpeeds[k], \
                                                                 self.windAngles[k], self.startX[k], self.startY[k])
         else:
@@ -131,12 +137,12 @@ class TurbulenceLayers():
         H,W = self.screen_shape
         h,w = self.mask_shape
 
-        self.startX = self._xp.zeros(self.Nscreens)
-        self.startY = self._xp.zeros(self.Nscreens)
+        self.startX = self._xp.zeros(self.nLayers)
+        self.startY = self._xp.zeros(self.nLayers)
 
-        for k in range(self.Nscreens):
+        for k in range(self.nLayers):
 
-            if self.Nscreens > 1:
+            if self.nLayers > 1:
                 windAngle = self.windAngles[k]
             else: 
                 windAngle = self.windAngles

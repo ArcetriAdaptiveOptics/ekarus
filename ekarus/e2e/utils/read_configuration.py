@@ -10,16 +10,10 @@ class ConfigReader():
     
     def read_telescope_pars(self):
         telescope_conf = self._config['TELESCOPE']
-        aperture_size = float(telescope_conf['pupilSizeInM'])
-        aperture_pixel_size = int(telescope_conf['pupilSizeInPixels'])
-        # oversampling = int(telescope_conf['oversampling'])
+        pupilSizeInM = float(telescope_conf['pupilSizeInM'])
+        pupilSizeInPixels = int(telescope_conf['pupilSizeInPixels'])
         throughput = float(telescope_conf['throughput'])
-        try:
-            wfs_split = float(telescope_conf['beam_splitter'])
-            throughput *= wfs_split
-        except KeyError:
-            pass
-        return aperture_size, aperture_pixel_size, throughput
+        return pupilSizeInM, pupilSizeInPixels, throughput
     
     def read_sensor_pars(self, sensor_name:str=None):
         if sensor_name is None:
@@ -48,10 +42,27 @@ class ConfigReader():
     def read_atmo_pars(self):
         atmo_conf = self._config['ATMO']
         r0 = self._read_array(atmo_conf['r0'])
-        L0 = float(atmo_conf['L0'])
+        outerScaleInM = float(atmo_conf['outerScaleInM'])
         windSpeed = self._read_array(atmo_conf['windSpeed'])
         windAngle = self._read_array(atmo_conf['windAngle'])*self.xp.pi/180 # radians 2 degrees
-        return r0, L0, windSpeed, windAngle
+        return r0, outerScaleInM, windSpeed, windAngle
+    
+    def read_target_pars(self):
+        target_conf = self._config['TARGET']
+        lambdaInM = float(target_conf['lambdaInNm'])*1e-9
+        starMagnitude = float(target_conf['starMagnitude'])
+        return lambdaInM, starMagnitude
+    
+    def read_loop_pars(self):
+        loop_conf = self._config['LOOP']
+        modulationAngleInLambdaOverD = float(loop_conf['modulationAngleInLambdaOverD'])
+        nIterations = int(loop_conf['nIterations'])
+        loopFrequencyInHz = float(loop_conf['loopFrequencyInHz'])
+        integratorGain = float(loop_conf['integratorGain'])
+        delay = int(loop_conf['delay'])
+        nModes2Correct = int(loop_conf['nModes2Correct'])
+        # ttOffloadFrequencyInHz = float(loop_conf['ttOffloadFrequencyInHz'])
+        return modulationAngleInLambdaOverD, nIterations, loopFrequencyInHz, integratorGain, delay, nModes2Correct#, ttOffloadFrequencyInHz
     
     def _read_array(self, a):
         lenA = len(a.split(','))

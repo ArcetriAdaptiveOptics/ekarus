@@ -42,9 +42,11 @@ class PyramidWFS:
         return intensity
 
 
-    def set_modulation_angle(self, modulationAngleInLambdaOverD):
+    def set_modulation_angle(self, modulationAngleInLambdaOverD, verbose:bool=True):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
-        self.modulationNsteps = self._xp.ceil(self.modulationAngleInLambdaOverD*2.4*self._xp.pi)//4*4
+        self.modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*2.25*self._xp.pi)//4*4
+        if verbose:
+            print(f'Now modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self.modulationNsteps:1.0f} modulation steps')
         
         
     @lru_cache(maxsize=5)
