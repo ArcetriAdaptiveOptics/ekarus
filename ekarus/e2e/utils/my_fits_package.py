@@ -65,7 +65,7 @@ def save_fits(
             data = data.asmarray()
         else:
             data = xp.asnumpy(data)
-    if isinstance(data, xp.masked_array):
+    if isinstance(data, xp.MaskedArray):
         _fits.writeto(filepath, data.data, header=header, overwrite=overwrite)
         if hasattr(data, "mask"):
             _fits.append(filepath, data.mask.astype(uint8))

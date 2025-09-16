@@ -23,7 +23,7 @@ SLOPE.COMPUTER:
 
 TELESCOPE:
   pupilSizeInM: 1.8
-  pupilSizeinPixels: 128
+  pupilSizeInPixels: 128
   throughput: 0.11          # accounting for beam splitter
 
 ATMO:

@@ -1,28 +1,28 @@
-import matplotlib.pyplot as plt
-from numpy.ma import masked_array
+import xupy as xp
+masked_array = xp.masked_array
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, reshape_on_mask
+import matplotlib.pyplot as plt
+
+from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 
-try:
-    import cupy as xp
-    xptype = xp.float32
-    print('Now using GPU acceleration!')
-except:
-    import numpy as xp
-    xptype = xp.float64
+def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
+    if hasattr(image, 'asmarray'):
+        image = image.asmarray()
+    plt.imshow(image, origin='lower', **kwargs)
+    cbar = plt.colorbar(shrink=shrink)
+    cbar.set_label(cbar_title, loc='top')
+    plt.title(title)
 
 
 def main(tn:str='example_single_stage', show:bool=False):
 
     print('Initializing devices ...')
-    ssao = SingleStageAO(tn, xp=xp)
-
-    lambdaInM, starMagnitude = ssao._config.read_target_pars()
+    ssao = SingleStageAO(tn)
 
     # 1. Define the subapertures using a piston input wavefront
     print('Defining the detector subaperture masks ...')
-    ssao.define_subaperture_masks(ssao.slope_computer, lambdaInM)
+    ssao.sc.calibrate_sensor(tn, '', piston=1-ssao.cmask, lambdaOverD=ssao.pyr.lambdaInM/ssao.pupilSizeInM, Npix=ssao.pupilSizeInPixels)
     if show:
         try:
             detector_image = ssao.ccd.last_frame
@@ -52,10 +52,10 @@ def main(tn:str='example_single_stage', show:bool=False):
 
     # 3. Calibrate the system
     print('Calibrating the KL modes ...')
-    Rec, IM = ssao.calibrate_modes(ssao.slope_computer, KL, lambdaInM, amps=0.2)
+    Rec, IM = ssao.compute_reconstructor(ssao.slope_computer, KL, amps=0.2)
     if show:
-        IM_std = xp.std(IM,axis=0)
-        if xp.__name__ == 'cupy':
+        IM_std = xp.std(IM, axis=0)
+        if xp.on_gpu:
             IM_std = IM_std.get()
         plt.figure()
         plt.plot(IM_std,'-o')
@@ -77,7 +77,7 @@ def main(tn:str='example_single_stage', show:bool=False):
 
     # 5. Perform the iteration
     print('Running the loop ...')
-    sig2, input_sig2 = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c,save_telemetry=True)
+    sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, Rec, m2c,save_telemetry=True)
 
     # 6. Post-processing and plotting
     print('Plotting results ...')
@@ -91,7 +91,7 @@ def main(tn:str='example_single_stage', show:bool=False):
     psf_mask = xp.pad(ssao.cmask, padding_len, mode='constant', constant_values=1)
     electric_field_amp = 1-psf_mask
     input_phase = reshape_on_mask(residual_phase, psf_mask, xp=xp)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
+    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/ssao.pyr.lambdaInM))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf = abs(field_on_focal_plane)**2
 
@@ -107,7 +107,7 @@ def main(tn:str='example_single_stage', show:bool=False):
         cmap='RdBu',shrink=0.8)
     plt.axis('off')
 
-    pixelsPerMAS = lambdaInM/ssao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
+    pixelsPerMAS = ssao.pyr.lambdaInM/ssao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
     plt.subplot(2,2,2)
     showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
         title = f'Corrected PSF\nStrehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
@@ -135,3 +135,5 @@ def main(tn:str='example_single_stage', show:bool=False):
 
     return ssao
 
+if __name__ == '__main__':
+    ssao = main(show=True)

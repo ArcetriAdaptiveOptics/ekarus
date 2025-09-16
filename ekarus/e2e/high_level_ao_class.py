@@ -222,6 +222,16 @@ class HighLevelAO():
             file_path = os.path.join(self.savepath,str(key)+'.fits')
             myfits.save_fits(file_path, data_dict[key])
             
+    def load_telemetry_data(self, data_keys: list[str]):
+        """
+        Load telemetry data from FITS files.
+        """
+        loaded_data = []
+        for key in data_keys:
+            file_path = os.path.join(self.savepath, key+'.fits')
+            loaded_data.append(myfits.read_fits(file_path))
+        return loaded_data
+            
 
 
 

@@ -20,6 +20,13 @@ class SingleStageAO(HighLevelAO):
         """The constructor"""
         super().__init__(tn)
         self._initialize_devices()
+        self.telemetry_keys = [
+            "AtmoPhases",
+            "DMphases",
+            "ResPhases",
+            "DetectorFrames",
+            "DMcommands",
+        ]
 
     def _initialize_devices(self):
         """
@@ -32,12 +39,12 @@ class SingleStageAO(HighLevelAO):
         """
         sensor_pars = self._config.read_sensor_pars()
         apex_angle, oversampling, modulationAngleInLambdaOverD = (
-            sensor_pars["apex_angle"], 
-            sensor_pars["oversampling"], 
-            sensor_pars["modulationAngleInLambdaOverD"]
+            sensor_pars["apex_angle"],
+            sensor_pars["oversampling"],
+            sensor_pars["modulationAngleInLambdaOverD"],
         )
         self.pyr = PyramidWFS(apex_angle, oversampling)
-        self.pyr.lambdaInM = sensor_pars['lambdaInM']
+        self.pyr.lambdaInM = sensor_pars["lambdaInM"]
         self.pyr.set_modulation_angle(modulationAngleInLambdaOverD)
 
         detector_pars = self._config.read_detector_pars()
@@ -51,73 +58,97 @@ class SingleStageAO(HighLevelAO):
             RON=RON,
             quantum_efficiency=quantum_efficiency,
         )
-        
-        self.slope_computer = SlopeComputer(self.pyr, self.ccd)
+
+        sc_pars = self._config.read_slope_computer_pars()
+        self.sc = SlopeComputer(self.pyr, self.ccd)
+        (
+            self.sc.dt,
+            self.sc.intgGain,
+            self.sc.delay,
+            self.sc.nModes,
+            self.sc.ttOffloadFreqHz,
+        ) = (
+            1 / sc_pars["loopFrequencyInHz"],
+            sc_pars["integratorGain"],
+            sc_pars["delay"],
+            sc_pars["nModes2Correct"],
+            sc_pars["ttOffloadFrequencyInHz"],
+        )
 
         dm_pars = self._config.read_dm_pars()
         Nacts = dm_pars["Nacts"]
         self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels)
 
+    def run_loop(self, starMagnitude: float, Rec, m2c, save_telemetry: bool = False):
+        """
+        Main loop for the single stage AO system.
 
-    def run_loop(
-        self, lambdaInM, starMagnitude, Rec, m2c, save_telemetry: bool = False
-    ):
+        Parameters
+        ----------
+        starMagnitude : float
+            The magnitude of the star being observed.
+        Rec : array_like
+            The reconstruction matrix.
+        m2c : array_like
+            The modal-to-command matrix.
+        save_telemetry : bool, optional
+            Whether to save telemetry data (default is False).
+        """
+        m2rad = 2 * xp.pi / self.pyr.lambdaInM
         electric_field_amp = 1 - self.cmask
 
-        modal_gains = self._xp.zeros(Rec.shape[0])
+        modal_gains = xp.zeros(Rec.shape[0])
         modal_gains[: self.nModes] = 1
 
-        lambdaOverD = lambdaInM / self.pupilSizeInM
+        lambdaOverD = self.pyr.lambdaInM / self.pupilSizeInM
         Nphotons = self.get_photons_per_second(starMagnitude) * self.dt
 
         # Define variables
-        mask_len = int(self._xp.sum(1 - self.dm.mask))
-        dm_cmd = self._xp.zeros(self.dm.Nacts, dtype=self.dtype)
+        mask_len = int(xp.sum(1 - self.dm.mask))
+        dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype)
         self.dm.set_position(dm_cmd, absolute=True)
-        dm_cmds = self._xp.zeros([self.Nits, self.dm.Nacts])
+        dm_cmds = xp.zeros([self.Nits, self.dm.Nacts])
 
         if save_telemetry:
-            dm_phases = self._xp.zeros([self.Nits, mask_len])
-            residual_phases = self._xp.zeros([self.Nits, mask_len])
-            input_phases = self._xp.zeros([self.Nits, mask_len])
-            detector_images = self._xp.zeros(
+            dm_phases = xp.zeros([self.Nits, mask_len])
+            residual_phases = xp.zeros([self.Nits, mask_len])
+            input_phases = xp.zeros([self.Nits, mask_len])
+            detector_images = xp.zeros(
                 [self.Nits, self.ccd.detector_shape[0], self.ccd.detector_shape[1]]
             )
 
         # X,Y = image_grid(self.cmask.shape, recenter=True, xp=self._xp)
         # tiltX = X[~self.cmask]/(self.cmask.shape[0]//2)
         # tiltY = Y[~self.cmask]/(self.cmask.shape[1]//2)
-        # TTmat = self._xp.stack((tiltX.T,tiltY.T),axis=1)
+        # TTmat = xp.stack((tiltX.T,tiltY.T),axis=1)
 
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="")
-            sim_time = self.dt * i
+            sim_time = self.sc.dt * i
 
             atmo_phase = self.get_phasescreen_at_time(sim_time)
             input_phase = atmo_phase[~self.cmask]
-            input_phase -= self._xp.mean(input_phase)  # remove piston
+            input_phase -= xp.mean(input_phase)  # remove piston
 
             # # Tilt offloading
             # if i>0 and ttOffloadFrequency > 0 and i % int(loopFrequencyInHz/ttOffloadFrequency) <= 1e-6:
             #     tt_coeffs = modes[:2]
             #     input_phase -= TTmat @ tt_coeffs
 
-            if i >= self.delaySteps:
-                self.dm.set_position(dm_cmds[i - self.delaySteps, :], absolute=True)
+            if i >= self.sc.delay:
+                self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
             residual_phase = input_phase - self.dm.surface
-            delta_phase_in_rad = reshape_on_mask(
-                residual_phase * (2 * self._xp.pi) / lambdaInM, self.cmask, xp=self._xp
-            )
+            delta_phase_in_rad = reshape_on_mask(residual_phase * m2rad, self.cmask)
 
-            input_field = electric_field_amp * self._xp.exp(1j * delta_phase_in_rad)
+            input_field = electric_field_amp * xp.exp(1j * delta_phase_in_rad)
             slopes = self.slope_computer.compute_slopes(
                 input_field, lambdaOverD, Nphotons
             )
             modes = Rec @ slopes
             modes *= modal_gains
             cmd = m2c @ modes
-            dm_cmd += cmd * self.integratorGain
-            dm_cmds[i, :] = dm_cmd * lambdaInM / (2 * self._xp.pi)  # convert to meters
+            dm_cmd += cmd * self.intGain
+            dm_cmds[i, :] = dm_cmd / m2rad  # convert to meters
 
             residual_phases[i, :] = residual_phase
             input_phases[i, :] = input_phase
@@ -126,12 +157,8 @@ class SingleStageAO(HighLevelAO):
                 detector_images[i, :, :] = self.ccd.last_frame
         print("")
 
-        errRad2 = (
-            self._xp.std(residual_phases * (2 * self._xp.pi) / lambdaInM, axis=-1) ** 2
-        )
-        inputErrRad2 = (
-            self._xp.std(input_phases * (2 * self._xp.pi) / lambdaInM, axis=-1) ** 2
-        )
+        errRad2 = xp.std(residual_phases / m2rad, axis=-1) ** 2
+        inputErrRad2 = xp.std(input_phases / m2rad, axis=-1) ** 2
 
         if save_telemetry:
             print("Saving telemetry to .fits ...")
@@ -154,21 +181,19 @@ class SingleStageAO(HighLevelAO):
                 ]
             )
 
-            data_dict = {
-                "AtmoPhases": ma_input_phases,
-                "DMphases": ma_dm_phases,
-                "ResPhases": ma_res_phases,
-                "DetectorFrames": detector_images,
-                "DMcommands": dm_cmds,
-            }
+            data_dict = {}
+            for key, value in zip(
+                self.telemetry_keys,
+                [
+                    ma_input_phases,
+                    ma_dm_phases,
+                    ma_res_phases,
+                    detector_images,
+                    dm_cmds,
+                ],
+            ):
+                data_dict[key] = value
+
             self.save_telemetry_data(data_dict)
 
         return errRad2, inputErrRad2
-
-    def load_telemetry_data(self):
-        atmo_phases = read_fits(os.path.join(self.savepath, "AtmoPhases.fits"))
-        dm_phases = read_fits(os.path.join(self.savepath, "DMphases.fits"))
-        res_phases = read_fits(os.path.join(self.savepath, "ResPhases.fits"))
-        det_frames = read_fits(os.path.join(self.savepath, "DetectorFrames.fits"))
-        dm_cmds = read_fits(os.path.join(self.savepath, "DMcommands.fits"))
-        return atmo_phases, dm_phases, res_phases, det_frames, dm_cmds

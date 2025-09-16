@@ -1,5 +1,7 @@
 import os.path as op
 from .root import configpath
+from ruamel.yaml import YAML
+yaml = YAML()
 
 
 class ConfigReader():

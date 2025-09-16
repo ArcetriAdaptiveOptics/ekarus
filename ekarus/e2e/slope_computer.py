@@ -22,7 +22,7 @@ class SlopeComputer():
         self.dtype = xp.float
 
 
-    def calibrate_sensor(self, tn: str, prefix_str: str, *args):
+    def calibrate_sensor(self, tn: str, prefix_str: str, **kwargs):
         """
         Calibrates the sensor.
         
@@ -32,14 +32,15 @@ class SlopeComputer():
         """
         match self.wfs_type:
             case 'PyrWFS':
-                subap_path = join(resultspath, tn, f'{prefix_str}_SubapertureMasks.fits')
-                piston, lambdaOverD, subaperturePixelSize = args
+                print(resultspath, tn, prefix_str)
+                subap_path = join(resultspath, tn, f'{str(prefix_str)}_SubapertureMasks.fits')
+                piston, lambdaOverD, subaperturePixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix']
                 try:
                     subaperture_masks = read_fits(subap_path).astype(bool)
                     self._subaperture_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
                     subapertureSizeInPixels = self._get_subaperture_pixel_size(subaperturePixelSize)
-                    self.calibrate_sensor(piston, lambdaOverD, subapertureSizeInPixels)
+                    self.(piston, lambdaOverD, subapertureSizeInPixels)
                     hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subapertureSizeInPixels}
                     save_fits(subap_path, (self._subaperture_masks).astype(xp.uint8), hdr_dict)
                 oldAngle = self._wfs.modulationAngleInLambdaOverD
