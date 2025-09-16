@@ -3,6 +3,9 @@ import numpy as np
 from tps import ThinPlateSpline # for the simulated IFF
 from scipy.interpolate import griddata
 
+
+import matplotlib.pyplot as plt
+
 # import multiprocessing
 
 
@@ -123,48 +126,6 @@ def compute_reconstructor(M, thr:float= 1e-12, xp=np):
     Rec = (V.T * Sinv) @ U.T
 
     return Rec, U
-
-
-# def simulate_influence_functions_with_multiprocessing(act_coords, local_mask, pix_scale:float = 1.0, xp=np):
-#     """ Simulate the influence functions by 
-#     imposing 'perfect' zonal commands """
-    
-#     if xp.__name__ == 'cupy':
-#         local_mask = local_mask.get()
-#         act_coords = act_coords.get()
-
-#     n_acts = max(act_coords.shape)
-
-#     mask_ids = np.arange(np.size(local_mask))
-#     pix_ids = mask_ids[~(local_mask).flatten()]
-    
-#     pix_coords = getMaskPixelCoords(local_mask).T
-#     act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale).T
-
-#     n_cores = multiprocessing.cpu_count() -2
-#     print(f'Simulating IFFs on {n_cores:1.0f} cores...')
-
-#     def get_act_iff(act_id):
-#         print(f'\rSimulating influence functions: {act_id}/{n_acts}', end='')
-#         act_data = np.zeros(n_acts)
-#         act_data[act_id] = 1e-6
-#         tps = ThinPlateSpline(alpha=0.0)
-#         tps.fit(act_pix_coords, act_data)
-#         img = tps.transform(pix_coords[pix_ids,:])
-#         return img[:,0]
-    
-#     with multiprocessing.Pool(processes=n_cores) as pool:
-#         iffs = [pool.apply_async(get_act_iff, j) for j in range(n_acts)]
-#         IFF = np.stack([iff.get(timeout=10) for iff in iffs])
-
-#     print(IFF)
-#     print(IFF.shape)
-
-#     if xp.__name__ == 'cupy': # tps seems to only work with numpy
-#         IFF = xp.asarray(IFF,dtype=xp.float32)
-
-#     return IFF
-
     
     
 def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0, xp=np):
@@ -355,3 +316,45 @@ def getMaskPixelCoords(mask, xp=np):
     pix_coords[1,:] = xp.tile(xp.arange(W),H)
     
     return pix_coords
+
+
+
+# def simulate_influence_functions_with_multiprocessing(act_coords, local_mask, pix_scale:float = 1.0, xp=np):
+#     """ Simulate the influence functions by 
+#     imposing 'perfect' zonal commands """
+    
+#     if xp.__name__ == 'cupy':
+#         local_mask = local_mask.get()
+#         act_coords = act_coords.get()
+
+#     n_acts = max(act_coords.shape)
+
+#     mask_ids = np.arange(np.size(local_mask))
+#     pix_ids = mask_ids[~(local_mask).flatten()]
+    
+#     pix_coords = getMaskPixelCoords(local_mask).T
+#     act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale).T
+
+#     n_cores = multiprocessing.cpu_count() -2
+#     print(f'Simulating IFFs on {n_cores:1.0f} cores...')
+
+#     def get_act_iff(act_id):
+#         print(f'\rSimulating influence functions: {act_id}/{n_acts}', end='')
+#         act_data = np.zeros(n_acts)
+#         act_data[act_id] = 1e-6
+#         tps = ThinPlateSpline(alpha=0.0)
+#         tps.fit(act_pix_coords, act_data)
+#         img = tps.transform(pix_coords[pix_ids,:])
+#         return img[:,0]
+    
+#     with multiprocessing.Pool(processes=n_cores) as pool:
+#         iffs = [pool.apply_async(get_act_iff, j) for j in range(n_acts)]
+#         IFF = np.stack([iff.get(timeout=10) for iff in iffs])
+
+#     print(IFF)
+#     print(IFF.shape)
+
+#     if xp.__name__ == 'cupy': # tps seems to only work with numpy
+#         IFF = xp.asarray(IFF,dtype=xp.float32)
+
+#     return IFF

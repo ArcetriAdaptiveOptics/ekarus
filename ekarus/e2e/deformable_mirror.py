@@ -119,7 +119,7 @@ class DeformableMirror():
     
         
 
-    def plot_position(self, pos = None):
+    def plot_position(self, pos=None, shrink=1.0):
         """
         Plots pos on the actuator coordinates.
         Defaults to current actuator position
@@ -155,7 +155,7 @@ class DeformableMirror():
         plt.grid()
         plt.gca().set_xticks(np.linspace(min(coords[0]),max(coords[0]),5))
         plt.gca().set_yticks(np.linspace(min(coords[1]),max(coords[1]),5))
-        plt.colorbar()
+        plt.colorbar(shrink=shrink)
     
 
 
