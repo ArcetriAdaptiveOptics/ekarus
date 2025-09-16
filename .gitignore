@@ -1,7 +1,8 @@
 # Added
 *.fits
 *.ini
-!ekarus/simulations/Config/exampleTN.ini
+# !ekarus/simulations/Config/exampleTN.ini
+!ekarus/simulations/Config/example*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
