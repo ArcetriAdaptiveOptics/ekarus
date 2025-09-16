@@ -1,11 +1,12 @@
-import numpy as np
+import xupy as xp
+np = xp.np
 # from arte.types.mask import CircularMask
 import matplotlib.pyplot as plt
 from numpy.ma import masked_array
 
 
 
-def image_grid(shape, recenter:bool = False, xp=np):
+def image_grid(shape, recenter:bool = False):
     """
     Define a grid of X and Y coordinates on an image shape
 
@@ -49,7 +50,7 @@ def get_photocenter(image, xp=np):
     return qy,qx
 
 
-def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
+def get_circular_mask(mask_shape, mask_radius, mask_center=None):
     """
     Create a circular mask for the given shape.
     :param shape: tuple (ny, nx) dimensions of the mask
