@@ -60,8 +60,8 @@ class HighLevelAO():
         self.nModes = nModes2Correct
 
 
-    def define_subaperture_masks(self, slope_computer, lambdaInM):
-        subap_path = os.path.join(self.savepath,'SubapertureMasks.fits')
+    def define_subaperture_masks(self, slope_computer, lambdaInM, save_prefix:str=''):
+        subap_path = os.path.join(self.savepath,str(save_prefix)+'SubapertureMasks.fits')
         try:
             subaperture_masks = myfits.read_fits(subap_path, isBool=True)
             if self._xp.__name__ == 'cupy':
@@ -84,9 +84,9 @@ class HighLevelAO():
         return pupilPixelSizeOnDetector-0.5 
     
 
-    def define_KL_modes(self, dm, oversampling, zern_modes:int = 5):
-        KL_path = os.path.join(self.savepath,'KLmodes.fits')
-        m2c_path = os.path.join(self.savepath,'m2c.fits')
+    def define_KL_modes(self, dm, oversampling, zern_modes:int=5, save_prefix:str=''):
+        KL_path = os.path.join(self.savepath,str(save_prefix)+'KLmodes.fits')
+        m2c_path = os.path.join(self.savepath,str(save_prefix)+'m2c.fits')
         try:
             KL = myfits.read_fits(KL_path)
             m2c = myfits.read_fits(m2c_path)
@@ -108,9 +108,9 @@ class HighLevelAO():
         return KL, m2c
     
 
-    def calibrate_modes(self, slope_computer, MM, lambdaInM, amps):
-        IM_path = os.path.join(self.savepath,'IM.fits')
-        Rec_path = os.path.join(self.savepath,'Rec.fits')
+    def calibrate_modes(self, slope_computer, MM, lambdaInM, amps, save_prefix:str=''):
+        IM_path = os.path.join(self.savepath,str(save_prefix)+'IM.fits')
+        Rec_path = os.path.join(self.savepath,str(save_prefix)+'Rec.fits')
         try:
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)

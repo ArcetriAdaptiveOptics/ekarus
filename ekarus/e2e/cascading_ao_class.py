@@ -1,0 +1,154 @@
+import numpy as np
+import os
+
+from ekarus.e2e.alpao_deformable_mirror import ALPAODM
+from ekarus.e2e.pyramid_wfs import PyramidWFS
+from ekarus.e2e.detector import Detector
+from ekarus.e2e.slope_computer import SlopeComputer
+
+from ekarus.e2e.high_level_ao_class import HighLevelAO
+from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
+
+from ekarus.e2e.utils.my_fits_package import read_fits
+
+
+class CascadingAO(HighLevelAO):
+
+    def __init__(self, tn, xp=np):
+
+        super().__init__(tn, xp)
+
+        self._initialize_devices()
+
+
+    def _initialize_devices(self):
+        apex_angle, oversampling,modulationAngleInLambdaOverD = self._config.read_sensor_pars('WFS1')
+        detector_shape, RON, quantum_efficiency = self._config.read_detector_pars('DETECTOR1')
+        Nacts = self._config.read_dm_pars('DM1')
+
+        self.pyr1 = PyramidWFS(apex_angle, oversampling, xp=self._xp)
+        self.pyr1.set_modulation_angle(modulationAngleInLambdaOverD)
+        self.ccd1 = Detector(detector_shape=detector_shape, RON=RON, quantum_efficiency=quantum_efficiency, xp=self._xp)
+        self.dm1 = ALPAODM(Nacts, Npix=self.pupilSizeInPixels, xp=self._xp)
+        self.slope_computer1 = SlopeComputer(self.pyr1, self.ccd1, xp=self._xp)
+
+        apex_angle, oversampling, modulationAngleInLambdaOverD = self._config.read_sensor_pars('WFS2')
+        detector_shape, RON, quantum_efficiency = self._config.read_detector_pars('DETECTOR2')
+        Nacts = self._config.read_dm_pars('DM2')
+
+        self.pyr2 = PyramidWFS(apex_angle, oversampling, xp=self._xp)
+        self.pyr2.set_modulation_angle(modulationAngleInLambdaOverD)
+        self.ccd2 = Detector(detector_shape=detector_shape, RON=RON, quantum_efficiency=quantum_efficiency, xp=self._xp)
+        self.dm2 = ALPAODM(Nacts, Npix=self.pupilSizeInPixels, xp=self._xp)
+        self.slope_computer2 = SlopeComputer(self.pyr2, self.ccd2, xp=self._xp)
+
+    
+    def run_loop(self, lambdaInM, starMagnitude, Rec1, Rec2, m2c_dm1, m2c_dm2, save_telemetry:bool=False):
+        electric_field_amp = 1-self.cmask
+
+        # modal_gains = self._xp.zeros(Rec.shape[0])
+        # modal_gains[:self.nModes] = 1
+
+        lambdaOverD = lambdaInM/self.pupilSizeInM
+        Nphotons = self.get_photons_per_second(starMagnitude) * self.dt
+
+        # Define variables
+        mask_len = int(self._xp.sum(1-self.cmask))
+        dm1_cmd = self._xp.zeros(self.dm1.Nacts, dtype=self.dtype)
+        self.dm1.set_position(dm1_cmd, absolute=True)
+        dm1_cmds = self._xp.zeros([self.Nits,self.dm1.Nacts])
+
+        dm2_cmd = self._xp.zeros(self.dm2.Nacts, dtype=self.dtype)
+        self.dm2.set_position(dm2_cmd, absolute=True)
+        dm2_cmds = self._xp.zeros([self.Nits,self.dm2.Nacts])
+
+        if save_telemetry:
+            dm1_phases = self._xp.zeros([self.Nits,mask_len])
+            dm2_phases = self._xp.zeros([self.Nits,mask_len])
+            after_dm1_phases = self._xp.zeros([self.Nits,mask_len])
+            after_dm2_phases = self._xp.zeros([self.Nits,mask_len])
+            input_phases = self._xp.zeros([self.Nits,mask_len])
+            detector1_images = self._xp.zeros([self.Nits,self.ccd1.detector_shape[0],self.ccd1.detector_shape[1]])
+            detector2_images = self._xp.zeros([self.Nits,self.ccd2.detector_shape[0],self.ccd2.detector_shape[1]])
+
+        for i in range(self.Nits):
+            print(f'\rIteration {i+1}/{self.Nits}', end='')
+            sim_time = self.dt*i
+
+            atmo_phase = self.get_phasescreen_at_time(sim_time)
+            input_phase = atmo_phase[~self.cmask]
+            input_phase -= self._xp.mean(input_phase) # remove piston
+
+            if i >= self.delaySteps:
+                self.dm1.set_position(dm1_cmds[i-self.delaySteps,:], absolute=True)
+            after_dm1_phase = input_phase - self.dm1.surface
+            delta_phase_in_rad = reshape_on_mask(after_dm1_phase*(2*self._xp.pi)/lambdaInM, self.cmask, xp=self._xp)
+            input_field = electric_field_amp * self._xp.exp(1j*delta_phase_in_rad)
+            slopes = self.slope_computer1.compute_slopes(input_field, lambdaOverD, Nphotons)
+            modes = Rec1 @ slopes
+            # modes *= modal_gains
+            cmd = m2c_dm1 @ modes
+            dm1_cmd += cmd*self.integratorGain
+            dm1_cmds[i,:] = dm1_cmd*lambdaInM/(2*self._xp.pi) # convert to meters
+
+            if i >= self.delaySteps:
+                self.dm2.set_position(dm2_cmds[i-self.delaySteps,:], absolute=True)
+            after_dm2_phase = after_dm1_phase - self.dm2.surface
+            delta_phase_in_rad = reshape_on_mask(after_dm2_phase*(2*self._xp.pi)/lambdaInM, self.cmask, xp=self._xp)
+            input_field = electric_field_amp * self._xp.exp(1j*delta_phase_in_rad)
+            slopes = self.slope_computer2.compute_slopes(input_field, lambdaOverD, Nphotons)
+            modes = Rec2 @ slopes
+            # modes *= modal_gains
+            cmd = m2c_dm2 @ modes
+            dm2_cmd += cmd*self.integratorGain
+            dm2_cmds[i,:] = dm2_cmd*lambdaInM/(2*self._xp.pi) # convert to meters
+
+            after_dm2_phases[i,:] = after_dm2_phase
+            after_dm1_phases[i,:] = after_dm1_phase
+            input_phases[i,:] = input_phase
+            if save_telemetry:
+                dm1_phases[i,:] = self.dm1.surface
+                detector1_images[i,:,:] = self.ccd1.last_frame                
+                dm2_phases[i,:] = self.dm2.surface
+                detector2_images[i,:,:] = self.ccd2.last_frame
+        print('')
+
+        afterDM2Rad2 = self._xp.std(after_dm2_phases*(2*self._xp.pi)/lambdaInM,axis=-1)**2
+        afterDM1Rad2 = self._xp.std(after_dm1_phases*(2*self._xp.pi)/lambdaInM,axis=-1)**2
+        inputErrRad2 = self._xp.std(input_phases*(2*self._xp.pi)/lambdaInM,axis=-1)**2 
+
+        if save_telemetry:
+            print('Saving telemetry to .fits ...')
+            ma_input_phases = np.stack([reshape_on_mask(input_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
+            ma_dm1_phases = np.stack([reshape_on_mask(dm1_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
+            ma_res1_phases = np.stack([reshape_on_mask(after_dm1_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
+            ma_dm2_phases = np.stack([reshape_on_mask(dm2_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
+            ma_res2_phases = np.stack([reshape_on_mask(after_dm2_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
+
+            data_dict = {'DM1phases': ma_dm1_phases, 'Res1Phases': ma_res1_phases, \
+                         'Detector1Frames': detector1_images, 'DM1commands': dm1_cmds, \
+                         'DM2phases': ma_dm2_phases, 'Res2Phases': ma_res2_phases, \
+                         'Detector2Frames': detector2_images, 'DM2commands': dm2_cmds, \
+                         'AtmoPhases': ma_input_phases}
+            self.save_telemetry_data(data_dict)
+
+        return afterDM2Rad2, afterDM1Rad2, inputErrRad2
+
+    def load_telemetry_data(self):
+        atmo_phases = read_fits(os.path.join(self.savepath,'AtmoPhases.fits'))
+        dm1_phases = read_fits(os.path.join(self.savepath,'DM1phases.fits'))
+        res1_phases = read_fits(os.path.join(self.savepath,'Res1Phases.fits'))
+        det1_frames = read_fits(os.path.join(self.savepath,'Detector1Frames.fits'))
+        dm1_cmds =  read_fits(os.path.join(self.savepath,'DM1commands.fits'))
+        dm2_phases = read_fits(os.path.join(self.savepath,'DM2phases.fits'))
+        res2_phases = read_fits(os.path.join(self.savepath,'Res2Phases.fits'))
+        det2_frames = read_fits(os.path.join(self.savepath,'Detector2Frames.fits'))
+        dm2_cmds =  read_fits(os.path.join(self.savepath,'DM2commands.fits'))
+        return atmo_phases, dm1_phases, res1_phases, det1_frames, dm1_cmds, dm2_phases, res2_phases, det2_frames, dm2_cmds
+
+
+
+
+
+
+        

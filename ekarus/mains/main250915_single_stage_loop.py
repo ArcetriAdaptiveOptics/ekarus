@@ -13,7 +13,7 @@ except:
     xptype = xp.float64
 
 
-def main(tn:str='exampleTN', show:bool=False):
+def main(tn:str='example_single_stage', show:bool=False):
 
     print('Initializing devices ...')
     ssao = SingleStageAO(tn, xp=xp)
