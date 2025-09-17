@@ -23,7 +23,7 @@ class SingleStageAO(HighLevelAO):
     
         
     def _initialize_devices(self):
-        apex_angle, oversampling, modulationAngleInLambdaOverD = self._config.read_sensor_pars()
+        apex_angle, oversampling, modulationAngleInLambdaOverD, subapSize = self._config.read_sensor_pars()
         detector_shape, RON, quantum_efficiency = self._config.read_detector_pars()
         Nacts = self._config.read_dm_pars()
 
@@ -33,6 +33,8 @@ class SingleStageAO(HighLevelAO):
         self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels, xp=self._xp)
 
         self.slope_computer = SlopeComputer(self.pyr, self.ccd, xp=self._xp)
+        self.subapSizeInPixels = subapSize
+        print(subapSize)
 
 
     def run_loop(self, lambdaInM, starMagnitude, RecCube, m2c, save_telemetry:bool=False):
@@ -69,7 +71,9 @@ class SingleStageAO(HighLevelAO):
                 modAng = 3.0 - i/mod_switch_step
                 Rec = RecCube[:,:,int(modAng)]
                 self.slope_computer._wfs.set_modulation_angle(modAng)
-                self.integratorGain += 0.1
+                self.integratorGain -= 0.1
+                if int(modAng) == 0:
+                    print(lambdaOverD)
                 # print(f'Iteration {i:1.0f}: changing modulation to {self.pyr.modulationAngleInLambdaOverD:1.0f}')
 
             atmo_phase = self.get_phasescreen_at_time(sim_time)

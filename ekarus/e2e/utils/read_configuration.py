@@ -22,7 +22,8 @@ class ConfigReader():
         apex_angle = float(sensor_conf['apex_angle'])
         oversampling = int(sensor_conf['oversampling'])
         modulationAngleInLambdaOverD = float(sensor_conf['modulationAngleInLambdaOverD'])
-        return apex_angle, oversampling, modulationAngleInLambdaOverD
+        subaperture_size = float(sensor_conf['subaperture_size'])
+        return apex_angle, oversampling, modulationAngleInLambdaOverD, subaperture_size
     
     def read_dm_pars(self, dm_name:str=None):
         if dm_name is None:

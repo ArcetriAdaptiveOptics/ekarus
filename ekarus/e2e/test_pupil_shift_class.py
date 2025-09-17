@@ -35,7 +35,7 @@ class SingleStageAO(HighLevelAO):
         self.subapSizeInPixels = subapSize
 
 
-    def run_loop(self, lambdaInM, starMagnitude, Rec, m2c, save_telemetry:bool=False):
+    def run_loop(self, lambdaInM, starMagnitude, Rec, m2c, wedgeShift=None, save_telemetry:bool=False):
         electric_field_amp = 1-self.cmask
 
         modal_gains = self._xp.zeros(Rec.shape[0])
@@ -83,7 +83,7 @@ class SingleStageAO(HighLevelAO):
             delta_phase_in_rad = reshape_on_mask(residual_phase*(2*self._xp.pi)/lambdaInM, self.cmask, xp=self._xp)
 
             input_field = electric_field_amp * self._xp.exp(1j*delta_phase_in_rad)
-            slopes = self.slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+            slopes = self.slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, wedgeShift=wedgeShift)
             modes = Rec @ slopes
             modes *= modal_gains
             cmd = m2c @ modes

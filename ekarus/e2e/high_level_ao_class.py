@@ -68,20 +68,13 @@ class HighLevelAO():
                 subaperture_masks = self._xp.asarray(subaperture_masks)
             slope_computer._subaperture_masks = subaperture_masks
         except FileNotFoundError:
-            subapertureSizeInPixels = self._get_subaperture_pixel_size(slope_computer)
             piston = 1-self.cmask
             lambdaOverD = lambdaInM/self.pupilSizeInM
-            slope_computer.calibrate_sensor(piston, lambdaOverD, subapertureSizeInPixels)
+            slope_computer.calibrate_sensor(piston, lambdaOverD, self.subapSizeInPixels)
             subaperture_masks = slope_computer._subaperture_masks
-            hdr_dict = {'APEX_ANG': slope_computer._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': slope_computer._wfs.oversampling,  'SUBAPPIX': subapertureSizeInPixels}
+            hdr_dict = {'APEX_ANG': slope_computer._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': slope_computer._wfs.oversampling,  'SUBAPPIX': self.subapSizeInPixels}
             myfits.save_fits(subap_path, (subaperture_masks).astype(self._xp.uint8), hdr_dict)
         return slope_computer
-
-    def _get_subaperture_pixel_size(self, slope_computer): 
-        image_size = self.pupilSizeInPixels*slope_computer._wfs.oversampling
-        rebin_factor = min(slope_computer._detector.detector_shape)/image_size
-        pupilPixelSizeOnDetector = self.pupilSizeInPixels * rebin_factor
-        return pupilPixelSizeOnDetector-0.5 
     
 
     def define_KL_modes(self, dm, oversampling, zern_modes:int=5, save_prefix:str=''):

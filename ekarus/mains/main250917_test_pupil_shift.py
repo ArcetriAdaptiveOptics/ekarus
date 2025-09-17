@@ -3,7 +3,7 @@ from numpy.ma import masked_array
 import os.path as op
 
 from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, reshape_on_mask
-from ekarus.e2e.single_stage_ao_class import SingleStageAO
+from ekarus.e2e.test_pupil_shift_class import SingleStageAO
 
 import ekarus.e2e.utils.my_fits_package as myfits
 
@@ -16,7 +16,7 @@ except:
     xptype = xp.float64
 
 
-def main(tn:str='example_single_stage', show:bool=False):
+def main(tn:str='pupil_shift', wedgeAngInSubaps = 39/24*0.2, show:bool=False):
 
     print('Initializing devices ...')
     ssao = SingleStageAO(tn, xp=xp)
@@ -37,6 +37,10 @@ def main(tn:str='example_single_stage', show:bool=False):
 
     print('Running the loop ...')
     sig2, input_sig2 = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c, save_telemetry=True)
+
+    sig = xp.zeros([7,ssao.Nits])
+    sig[0,:] = input_sig2
+    sig[1,:] = sig2
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -74,11 +78,20 @@ def main(tn:str='example_single_stage', show:bool=False):
         plt.colorbar()
         plt.title('Atmo screen')
 
-    masked_input_phases, _, masked_residual_phases, detector_frames, _ = ssao.load_telemetry_data()
+    # Testing pupil shifts
+    phi = xp.linspace(0, xp.pi/2, 5)
+    for k in range(len(phi)):
+        wedgeX = wedgeAngInSubaps * xp.cos(phi[k])
+        wedgeY = wedgeAngInSubaps * xp.sin(phi[k])
+        print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f})')
+        wedgeShift = (wedgeX, wedgeY)
+        sig[k+2,:], _ = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c, wedgeShift=wedgeShift, save_telemetry=True)
 
+
+    # Plotting
+    masked_input_phases, _, masked_residual_phases, detector_frames, _ = ssao.load_telemetry_data()
     last_res_phase = xp.array(masked_residual_phases[-1,:,:])
     residual_phase = last_res_phase[~ssao.cmask]
-
     oversampling = 4
     padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)
     psf_mask = xp.pad(ssao.cmask, padding_len, mode='constant', constant_values=1)
@@ -114,9 +127,17 @@ def main(tn:str='example_single_stage', show:bool=False):
     plt.title('Mirror command [m]')
     plt.axis('off')
 
-    plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(input_sig2,'-o',label='open loop')
-    plt.plot(sig2,'-o',label='closed loop')
+    plt.figure()
+    for k in range(sig.shape[0]):
+        if hasattr(sig,'get'):
+            sig = sig.get()
+        if k == 0:
+            label = 'input'
+        elif k == 1:
+            label = 'reference'
+        else:
+            label = f'shift {wedgeAngInSubaps*24/39*1.5:1.2f} [mm], angle: {phi[k-2]*180/xp.pi:1.0f} [deg]'
+        plt.plot(sig[k],'-o',label=label)
     plt.legend()
     plt.grid()
     plt.ylabel(r'$\sigma^2 [rad^2]$')
@@ -126,5 +147,5 @@ def main(tn:str='example_single_stage', show:bool=False):
 
     plt.show()
 
-    return ssao
+    return ssao, sig
 

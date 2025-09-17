@@ -28,7 +28,7 @@ class PyramidWFS:
         self.cdtype = xp.complex64 if xp.__name__ == 'cupy' else xp.complex128
 
 
-    def get_intensity(self, input_field, lambdaOverD):
+    def get_intensity(self, input_field, lambdaOverD, wedgeShift=None):
 
         L = max(input_field.shape) # TBI: deal with non-square input fields
         padded_field = self._xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
@@ -37,14 +37,14 @@ class PyramidWFS:
             output_field = self.propagate(padded_field, lambdaOverD)
             intensity = self._xp.abs(output_field**2)
         else:
-            intensity = self.modulate(padded_field, lambdaOverD)
+            intensity = self.modulate(padded_field, lambdaOverD, wedgeShift)
 
         return intensity
 
 
     def set_modulation_angle(self, modulationAngleInLambdaOverD, verbose:bool=True):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
-        self.modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*2.25*self._xp.pi)//4*4
+        self.modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*2.4*self._xp.pi)//4*4
         if verbose:
             print(f'Now modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self.modulationNsteps:1.0f} modulation steps')
         
@@ -89,7 +89,7 @@ class PyramidWFS:
         return output_field
     
 
-    def modulate(self, input_field, lambdaOverD):
+    def modulate(self, input_field, lambdaOverD, wedgeShift=None):
         """
         Modulates the input electric field by tilting it in different directions
         and averaging the resulting intensities.
@@ -106,6 +106,11 @@ class PyramidWFS:
 
         alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*self._xp.pi)
         phi_vec = (2*self._xp.pi)*self._xp.arange(self.modulationNsteps)/self.modulationNsteps
+
+        if wedgeShift is not None:
+            wedgeX, wedgeY= wedgeShift
+            wedge_tilt = (tiltX*wedgeX + tiltY*wedgeY)*self.oversampling*(2*self._xp.pi)
+            input_field *= self._xp.exp(1j*wedge_tilt, dtype = self.cdtype)
 
         intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)
 

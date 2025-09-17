@@ -35,12 +35,12 @@ class SlopeComputer():
         
 
 
-    def compute_slopes(self, input_field, lambdaOverD, nPhotons, **kwargs):
+    def compute_slopes(self, input_field, lambdaOverD, nPhotons, wedgeShift=None, **kwargs):
         """
         Compute slopes from the input field
         """
 
-        intensity = self._wfs.get_intensity(input_field, lambdaOverD)
+        intensity = self._wfs.get_intensity(input_field, lambdaOverD, wedgeShift)
         detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
 
         match self.wfs_type:
@@ -128,5 +128,5 @@ class SlopeComputer():
         intensity = detector_image * quadrant_mask
         qx,qy = get_photocenter(intensity, xp=xp)
 
-        return qy,qx
-        # return xp.round(qy), xp.round(qx)
+        # return qy,qx
+        return xp.round(qy), xp.round(qx)
