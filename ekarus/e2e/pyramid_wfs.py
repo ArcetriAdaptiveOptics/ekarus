@@ -33,9 +33,9 @@ class PyramidWFS:
         H,W = input_field.shape # TBI: deal with non-square input fields
         padded_field = self._xp.pad(input_field, int((self.oversampling-1)/2*H), mode='constant', constant_values=0.0)
 
-        if self.modulationAngleInLambdaOverD == 0:
+        if self.modulationAngleInLambdaOverD < 1e-10:
             output_field = self.propagate(padded_field, lambdaOverD)
-            intensity = self._xp.abs(output_field)**2
+            intensity = self._xp.abs(output_field**2)
         else:
             intensity = self.modulate(padded_field, lambdaOverD)
 
@@ -81,7 +81,7 @@ class PyramidWFS:
         """
         self.field_on_focal_plane = self._xp.fft.fftshift(self._xp.fft.fft2(input_field))
 
-        phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD / self.oversampling
+        phase_delay = self.pyramid_phase_delay(input_field.shape) / (lambdaOverD / self.oversampling)
         self._ef_focal_plane_delayed = self.field_on_focal_plane * self._xp.exp(1j*phase_delay, dtype = self.cdtype)
 
         output_field = self._xp.fft.ifft2(self._xp.fft.ifftshift(self._ef_focal_plane_delayed))
@@ -104,10 +104,10 @@ class PyramidWFS:
         
         tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
 
-        pixelsPerRadian = lambdaOverD / self.oversampling
-        modulationAngle = self.modulationAngleInLambdaOverD * lambdaOverD
+        # pixelsPerRadian = lambdaOverD / self.oversampling
+        # modulationAngle = self.modulationAngleInLambdaOverD * lambdaOverD
 
-        alpha_pix = modulationAngle/pixelsPerRadian*(2*self._xp.pi)
+        alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*self._xp.pi)
         phi_vec = (2*self._xp.pi)*self._xp.arange(self.modulationNsteps)/self.modulationNsteps
 
         intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)
@@ -116,7 +116,7 @@ class PyramidWFS:
             tilt = tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi)
             tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
 
-            output = self.propagate(tilted_input, pixelsPerRadian)
+            output = self.propagate(tilted_input, lambdaOverD)
             intensity += (abs(output**2))/self.modulationNsteps
 
         return intensity

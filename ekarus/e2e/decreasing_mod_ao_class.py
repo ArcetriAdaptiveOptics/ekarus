@@ -12,6 +12,7 @@ from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 from ekarus.e2e.utils.my_fits_package import read_fits
 
 
+
 class SingleStageAO(HighLevelAO):
 
     def __init__(self, tn, xp=np):
@@ -34,10 +35,10 @@ class SingleStageAO(HighLevelAO):
         self.slope_computer = SlopeComputer(self.pyr, self.ccd, xp=self._xp)
 
 
-    def run_loop(self, lambdaInM, starMagnitude, Rec, m2c, save_telemetry:bool=False):
+    def run_loop(self, lambdaInM, starMagnitude, RecCube, m2c, save_telemetry:bool=False):
         electric_field_amp = 1-self.cmask
 
-        modal_gains = self._xp.zeros(Rec.shape[0])
+        modal_gains = self._xp.zeros(RecCube.shape[0])
         modal_gains[:self.nModes] = 1
 
         lambdaOverD = lambdaInM/self.pupilSizeInM
@@ -55,26 +56,25 @@ class SingleStageAO(HighLevelAO):
             input_phases = self._xp.zeros([self.Nits,mask_len])
             detector_images = self._xp.zeros([self.Nits,self.ccd.detector_shape[0],self.ccd.detector_shape[1]])
 
-        # X,Y = image_grid(self.cmask.shape, recenter=True, xp=self._xp)
-        # tiltX = X[~self.cmask]/(self.cmask.shape[0]//2)
-        # tiltY = Y[~self.cmask]/(self.cmask.shape[1]//2)
-        # TTmat = self._xp.stack((tiltX.T,tiltY.T),axis=1)
+        Rec = RecCube[:,:,-1]
+        modAng = 3.0
+        self.slope_computer._wfs.set_modulation_angle(modAng)
+        mod_switch_step = 200
 
         for i in range(self.Nits):
             print(f'\rIteration {i+1}/{self.Nits}', end='')
             sim_time = self.dt*i
 
+            if i>0 and int(i % mod_switch_step) == 0 and i < RecCube.shape[-1]*mod_switch_step:
+                modAng = 3.0 - i/mod_switch_step
+                Rec = RecCube[:,:,int(modAng)]
+                self.slope_computer._wfs.set_modulation_angle(modAng)
+                self.integratorGain += 0.1
+                # print(f'Iteration {i:1.0f}: changing modulation to {self.pyr.modulationAngleInLambdaOverD:1.0f}')
+
             atmo_phase = self.get_phasescreen_at_time(sim_time)
             input_phase = atmo_phase[~self.cmask]
             input_phase -= self._xp.mean(input_phase) # remove piston
-
-            # # Tilt offloading
-            # if i>0 and ttOffloadFrequency > 0 and i % int(loopFrequencyInHz/ttOffloadFrequency) <= 1e-6:
-            #     tt_coeffs = modes[:2]
-            #     input_phase -= TTmat @ tt_coeffs
-
-            # if i>0 and int(i%200)==0 and i < 700:
-            #     self.integratorGain += 0.1
 
             if i >= self.delaySteps:
                 self.dm.set_position(dm_cmds[i-self.delaySteps,:], absolute=True)
