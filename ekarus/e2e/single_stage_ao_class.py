@@ -48,15 +48,17 @@ class SingleStageAO(HighLevelAO):
         self.pyr.set_modulation_angle(modulationAngleInLambdaOverD)
 
         detector_pars = self._config.read_detector_pars()
-        detector_shape, RON, quantum_efficiency = (
+        detector_shape, RON, quantum_efficiency, beam_split_ratio = (
             detector_pars["detector_shape"],
             detector_pars["RON"],
             detector_pars["quantum_efficiency"],
+            detector_pars["beam_splitter_ratio"]
         )
         self.ccd = Detector(
             detector_shape=detector_shape,
             RON=RON,
             quantum_efficiency=quantum_efficiency,
+            beam_split_ratio=beam_split_ratio,
         )
 
         sc_pars = self._config.read_slope_computer_pars()
