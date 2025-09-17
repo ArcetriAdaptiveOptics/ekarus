@@ -90,8 +90,10 @@ class SlopeComputer():
         subaperture_masks = self._xp.zeros((4, ny, nx), dtype=bool)
 
         for i in range(4):
-            qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
-            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qy,qx), xp=self._xp)
+            # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
+            # subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qy,qx), xp=self._xp)
+            qx,qy = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
+            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qx,qy), xp=self._xp)
 
         self._subaperture_masks = subaperture_masks
 
@@ -103,20 +105,28 @@ class SlopeComputer():
         quadrant_mask = xp.zeros_like(detector_image, dtype=dtype)
 
         match quad_n:
+            # case 1:
+            #     quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
+            # case 2:
+            #     quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
+            # case 3:
+            #     quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
+            # case 4:
+            #     quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
             case 1:
-                quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
+                quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
             case 2:
                 quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
             case 3:
                 quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
             case 4:
-                quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
+                quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
             case _:
                 raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
 
         quadrant_mask = xp.reshape(quadrant_mask, detector_image.shape)
         intensity = detector_image * quadrant_mask
-        qy,qx = get_photocenter(intensity, xp=xp)
+        qx,qy = get_photocenter(intensity, xp=xp)
 
-        # return qy,qx
-        return xp.round(qy), xp.round(qx)
+        return qy,qx
+        # return xp.round(qy), xp.round(qx)

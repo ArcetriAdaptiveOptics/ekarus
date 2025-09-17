@@ -30,10 +30,10 @@ class PyramidWFS:
 
     def get_intensity(self, input_field, lambdaOverD):
 
-        H,W = input_field.shape # TBI: deal with non-square input fields
-        padded_field = self._xp.pad(input_field, int((self.oversampling-1)/2*H), mode='constant', constant_values=0.0)
+        L = max(input_field.shape) # TBI: deal with non-square input fields
+        padded_field = self._xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
 
-        if self.modulationAngleInLambdaOverD < 1e-10:
+        if self.modulationAngleInLambdaOverD*(2*self._xp.pi)*self.oversampling < 0.1:
             output_field = self.propagate(padded_field, lambdaOverD)
             intensity = self._xp.abs(output_field**2)
         else:
@@ -58,7 +58,7 @@ class PyramidWFS:
         :param shape: tuple (ny, nx) electric field dimensions
         :return: array numpy 2D float (phase delay in pixels)
         """
-        X,Y = image_grid(shape, recenter=True,  xp=self._xp)
+        X,Y = image_grid(shape, recenter=True, xp=self._xp)
         D = max(shape)
         phi = self.apex_angle*(1 - 1/D*(abs(X)+abs(Y)))
         phi = self._xp.asarray(phi,dtype=self.dtype)
@@ -81,7 +81,7 @@ class PyramidWFS:
         """
         self.field_on_focal_plane = self._xp.fft.fftshift(self._xp.fft.fft2(input_field))
 
-        phase_delay = self.pyramid_phase_delay(input_field.shape) / (lambdaOverD / self.oversampling)
+        phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
         self._ef_focal_plane_delayed = self.field_on_focal_plane * self._xp.exp(1j*phase_delay, dtype = self.cdtype)
 
         output_field = self._xp.fft.ifft2(self._xp.fft.ifftshift(self._ef_focal_plane_delayed))
@@ -103,9 +103,6 @@ class PyramidWFS:
         """
         
         tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
-
-        # pixelsPerRadian = lambdaOverD / self.oversampling
-        # modulationAngle = self.modulationAngleInLambdaOverD * lambdaOverD
 
         alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*self._xp.pi)
         phi_vec = (2*self._xp.pi)*self._xp.arange(self.modulationNsteps)/self.modulationNsteps

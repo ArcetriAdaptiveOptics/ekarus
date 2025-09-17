@@ -43,10 +43,10 @@ def get_photocenter(image, xp=np):
     qy = xp.sum(Y * image) / xp.sum(image)
     qx = xp.sum(X * image) / xp.sum(image)
 
-    qy += 0.5
-    qx += 0.5
+    # qy += 0.5
+    # qx += 0.5
 
-    return qy,qx
+    return qx,qy #qy,qx
 
 
 def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
