@@ -16,7 +16,7 @@ except:
     xptype = xp.float64
 
 
-def main(tn:str='example_single_stage', show:bool=False):
+def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
 
     print('Initializing devices ...')
     ssao = SingleStageAO(tn, xp=xp)
@@ -30,13 +30,23 @@ def main(tn:str='example_single_stage', show:bool=False):
     KL, m2c = ssao.define_KL_modes(ssao.dm, ssao.pyr.oversampling, zern_modes=5)
 
     print('Calibrating the KL modes ...')
-    Rec, IM = ssao.calibrate_modes(ssao.slope_computer, KL, lambdaInM, amps=0.2)
+    Rec, IM = ssao.calibrate_modes(ssao.slope_computer, KL, lambdaInM, amps=0.2)#/xp.std(IM,axis=0))
 
     print('Initializing turbulence ...')
     ssao.initialize_turbulence()
 
     print('Running the loop ...')
-    sig2, input_sig2 = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c, save_telemetry=True)
+    sig2, input_sig2 = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c, save_telemetry_prefix='')
+    ssao.SR_in = xp.exp(-input_sig2)
+    ssao.SR_out = xp.exp(-sig2)
+    
+    if starMagnitudes is not None:
+        sig = xp.zeros([len(starMagnitudes),ssao.Nits])
+        for k in range(len(starMagnitudes)):
+            starMag = starMagnitudes[k]
+            print(f'Now simulating for magnitude: {starMag:1.1f}')
+            sig[k,:],_ = ssao.run_loop(lambdaInM, starMag, Rec, m2c, save_telemetry_prefix=f'magV{starMag:1.0f}_')
+        ssao.SR = xp.exp(-sig)
 
     # Post-processing and plotting
     print('Plotting results ...')

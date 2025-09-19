@@ -1,5 +1,6 @@
 import numpy as np
 # from arte.types.mask import CircularMask
+
 import matplotlib.pyplot as plt
 from numpy.ma import masked_array
 

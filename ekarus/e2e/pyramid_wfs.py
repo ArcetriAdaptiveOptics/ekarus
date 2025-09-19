@@ -66,7 +66,7 @@ class PyramidWFS:
         return phi
     
 
-    def propagate(self, input_field, lambdaOverD):
+    def propagate(self, input_field, lambdaOverD, pupilShift=None):
         """
         Propagate the electric field through the pyramid:
         1. From the pupil plane to the focal plane (FFT)
@@ -80,6 +80,12 @@ class PyramidWFS:
         :return: complex array numpy 2D representing the output electric field
         """
         self.field_on_focal_plane = self._xp.fft.fftshift(self._xp.fft.fft2(input_field))
+
+        if pupilShift is not None:
+            tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
+            wedgeX, wedgeY = pupilShift
+            wedge_tilt = (tiltX*wedgeX + tiltY*wedgeY)*(2*self._xp.pi)
+            self.field_on_focal_plane = self.field_on_focal_plane * self._xp.exp(1j*wedge_tilt, dtype = self.cdtype)
 
         phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
         self._ef_focal_plane_delayed = self.field_on_focal_plane * self._xp.exp(1j*phase_delay, dtype = self.cdtype)
@@ -107,18 +113,13 @@ class PyramidWFS:
         alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*self._xp.pi)
         phi_vec = (2*self._xp.pi)*self._xp.arange(self.modulationNsteps)/self.modulationNsteps
 
-        if wedgeShift is not None:
-            wedgeX, wedgeY= wedgeShift
-            wedge_tilt = (tiltX*wedgeX + tiltY*wedgeY)*self.oversampling*(2*self._xp.pi)
-            input_field *= self._xp.exp(1j*wedge_tilt, dtype = self.cdtype)
-
         intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)
 
         for phi in phi_vec:
             tilt = tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi)
             tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
 
-            output = self.propagate(tilted_input, lambdaOverD)
+            output = self.propagate(tilted_input, lambdaOverD, wedgeShift)
             intensity += (abs(output**2))/self.modulationNsteps
 
         return intensity

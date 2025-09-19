@@ -180,9 +180,9 @@ class HighLevelAO():
         return masked_phase
     
     
-    def save_telemetry_data(self, data_dict):
+    def save_telemetry_data(self, data_dict,save_prefix:str=''):
         for key in data_dict:
-            file_path = os.path.join(self.savepath,str(key)+'.fits')
+            file_path = os.path.join(self.savepath,save_prefix+str(key)+'.fits')
             myfits.save_fits(file_path, data_dict[key])
 
 

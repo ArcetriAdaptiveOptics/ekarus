@@ -4,8 +4,6 @@ from tps import ThinPlateSpline # for the simulated IFF
 from scipy.interpolate import griddata
 
 
-import matplotlib.pyplot as plt
-
 # import multiprocessing
 
 
