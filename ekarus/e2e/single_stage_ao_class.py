@@ -10,7 +10,6 @@ from ekarus.abstract_classes.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask  # , get_masked_array
 
 
-
 class SingleStageAO(HighLevelAO):
 
     def __init__(self, tn: str):
@@ -28,12 +27,6 @@ class SingleStageAO(HighLevelAO):
         ]
 
         self._initialize_devices()
-        self.sc.calibrate_sensor(tn, prefix_str='',
-                                  piston=1-self.cmask, 
-                                  lambdaOverD = self.pyr.lambdaInM/self.pupilSizeInM,
-                                  Npix = self.subapertureSize)  
-        self.initialize_turbulence()
-
 
 
     def _initialize_devices(self):
@@ -60,8 +53,8 @@ class SingleStageAO(HighLevelAO):
             sensorLambda=sensorLambda,
             sensorBandwidth=sensorBandwidth
         )
-
         self.subapertureSize=wfs_pars["subapPixSize"]
+
         det_pars = self._config.read_detector_pars()
         self.ccd = Detector(
             detector_shape=det_pars["detector_shape"],
@@ -74,11 +67,10 @@ class SingleStageAO(HighLevelAO):
         self.sc = SlopeComputer(self.pyr, self.ccd, sc_pars)
 
         dm_pars = self._config.read_dm_pars()
-        Nacts = dm_pars["Nacts"]
-        self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels)
+        self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels)
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, Rec, m2c, save_prefix:str=None):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 
@@ -94,15 +86,12 @@ class SingleStageAO(HighLevelAO):
             String prefix to save telemetry data (default is None: telemetry is not saved).
         """
         m2rad = 2 * xp.pi / lambdaInM
-        electric_field_amp = 1 - self.cmask
+        # electric_field_amp = 1 - self.cmask
 
-        modal_gains = xp.zeros(Rec.shape[0])
-        modal_gains[: self.sc.nModes] = 1
+        # lambdaOverD = lambdaInM / self.pupilSizeInM
+        # Nphotons = self.get_photons_per_second(starMagnitude) * self.sc.dt
 
-        lambdaOverD = lambdaInM / self.pupilSizeInM
-        Nphotons = self.get_photons_per_second(starMagnitude) * self.sc.dt
-
-        self.pyr.set_modulation_angle(self.modulationAngleInLambdaOverD)
+        self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD)
 
         # Define variables
         mask_len = int(xp.sum(1 - self.dm.mask))
@@ -118,11 +107,11 @@ class SingleStageAO(HighLevelAO):
             residual_phases = xp.zeros([self.Nits, mask_len])
             input_phases = xp.zeros([self.Nits, mask_len])
             detector_images = xp.zeros([self.Nits, self.ccd.detector_shape[0], self.ccd.detector_shape[1]])
-            rec_modes = xp.zeros([self.Nits,Rec.shape[0]])
+            rec_modes = xp.zeros([self.Nits,self.sc.Rec.shape[0]])
 
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)
-            sim_time = self.sc.dt * i
+            sim_time = self.dt * i
 
             atmo_phase = self.get_phasescreen_at_time(sim_time)
             input_phase = atmo_phase[~self.cmask]
@@ -140,15 +129,18 @@ class SingleStageAO(HighLevelAO):
             #     self.integratorGain += 0.1
 
             residual_phase = input_phase - self.dm.surface
-            delta_phase_in_rad = reshape_on_mask(residual_phase * m2rad, self.cmask)
 
-            input_field = electric_field_amp * xp.exp(1j * delta_phase_in_rad)
-            slopes = self.sc.compute_slopes(input_field, lambdaOverD, Nphotons)
-            modes = Rec @ slopes
-            gmodes = modes * modal_gains
-            cmd = m2c @ gmodes
-            dm_cmd += cmd * self.sc.intGain
-            dm_cmds[i, :] = dm_cmd / m2rad  # convert to meters
+            # delta_phase_in_rad = reshape_on_mask(residual_phase * m2rad, self.cmask)
+
+            # input_field = electric_field_amp * xp.exp(1j * delta_phase_in_rad)
+            # slopes = self.sc.compute_slopes(input_field, lambdaOverD, Nphotons)
+            # modes = self.sc.Rec @ slopes
+            # gmodes = modes * modal_gains
+            # cmd = self.sc.m2c @ gmodes
+            # dm_cmd += cmd * self.sc.intGain
+            # dm_cmds[i, :] = dm_cmd / m2rad  # convert to meters
+
+            dm_cmd, modes = self.perform_loop_iteration(residual_phase, self.sc, starMagnitude)
 
             res_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2

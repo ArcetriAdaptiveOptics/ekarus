@@ -31,8 +31,10 @@ class SlopeComputer():
 
         if hasattr(wfs,'apex_angle'):
             self.wfs_type = 'PyrWFS'
+            self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
         else:
             raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
+        
 
         self.dtype = xp.float
 
@@ -80,6 +82,17 @@ class SlopeComputer():
 
         return slopes
 
+
+    def load_reconstructor(self, Rec, m2c):
+        """
+        Load the reconstructor and the mode-to-command matrix
+        """
+        self.Rec = Rec
+        self.m2c = m2c
+        modal_gains = xp.zeros(xp.shape(Rec)[0])
+        modal_gains[:self.nModes] = 1
+        self.modal_gains = modal_gains
+        
 
     def _compute_pyramid_slopes(self, detector_image, use_diagonal:bool=False):
 

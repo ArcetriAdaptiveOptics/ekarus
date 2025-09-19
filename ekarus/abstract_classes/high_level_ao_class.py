@@ -64,7 +64,7 @@ class HighLevelAO():
         loop_pars = self._config.read_loop_pars()
         self.Nits = loop_pars['nIterations']
         self.starMagnitude = loop_pars['starMagnitude']
-        self.modulationAngleInLambdaOverD = loop_pars['modulationAngleInLambdaOverD']
+        self.dt = 1/loop_pars['simFreqHz']
     
 
     def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=5, save_prefix:str=''):
@@ -212,6 +212,44 @@ class HighLevelAO():
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens() # rescale in meters
         self.layers.update_mask(self.cmask)
+
+    
+    def perform_loop_iteration(self, phase, slope_computer, starMagnitude:float=None):
+        """
+        Performs a single iteration of the AO loop.
+        Parameters
+        ----------
+        phase : array
+            The input phase screen in meters.
+        slope_computer : SlopeComputer
+            The slope computer object.
+        starMagnitude : float
+            The magnitude of the star being observed.
+        
+        Returns
+        -------
+        dm_cmd : xp.array
+            The DM command in meters.
+        modes : xp.array
+            The reconstructed modes in meters.
+        """
+        lambda_ref = slope_computer._wfs.lambdaInM
+        m2rad = 2*xp.pi/lambda_ref
+        lambdaOverD = lambda_ref/self.pupilSizeInM
+        Nphotons = self.get_photons_per_second(starMagnitude) * slope_computer.dt
+
+        delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
+        input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
+        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+        modes = slope_computer.Rec @ slopes
+        gmodes = modes * slope_computer.modal_gains
+        cmd = slope_computer.m2c @ gmodes
+        dm_cmd += cmd * slope_computer.intGain
+
+        dm_cmd /= m2rad  # convert to meters
+        modes /= m2rad  # convert to meters
+
+        return dm_cmd, modes
 
 
     def get_phasescreen_at_time(self, time: float):

@@ -1,112 +1,103 @@
 import matplotlib.pyplot as plt
-from numpy.ma import masked_array
+import os.path as op
 
 from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, reshape_on_mask
 from ekarus.e2e.cascading_ao_class import CascadingAO
 
-try:
-    import cupy as xp
-    xptype = xp.float32
-    print('Now using GPU acceleration!')
-except:
-    import numpy as xp
-    xptype = xp.float64
+import ekarus.e2e.utils.my_fits_package as myfits   
+
+import xupy as xp
+np = xp.np
 
 
 def main(tn:str='example_dual_stage', show:bool=False):
 
     print('Initializing devices ...')
-    cascao = CascadingAO(tn, xp=xp)
+    cascao = CascadingAO(tn)
 
-    lambdaInM, starMagnitude = cascao._config.read_target_pars()
+    cascao.initialize_turbulence()
+    cascao.sc1.calibrate_sensor(tn, prefix_str='Pyr1_',
+                            piston=1-cascao.cmask, 
+                            lambdaOverD = cascao.pyr1.lambdaInM/cascao.pupilSizeInM,
+                            Npix = cascao.subap1Size) 
 
-    # 1. Define the subapertures using a piston input wavefront
-    print('Defining the detector subaperture masks for CCD1 ...')
-    cascao.define_subaperture_masks(cascao.slope_computer1, lambdaInM, save_prefix='CCD1_')
-    print('Defining the detector subaperture masks for CCD2 ...')
-    cascao.define_subaperture_masks(cascao.slope_computer2, lambdaInM, save_prefix='CCD2_')
+    cascao.sc2.calibrate_sensor(tn, prefix_str='Pyr2_',
+                    piston=1-cascao.cmask, 
+                    lambdaOverD = cascao.pyr2.lambdaInM/cascao.pupilSizeInM,
+                    Npix = cascao.subap2Size) 
+
+
+    KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
+    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL, cascao.pyr2.lambdaInM, amps=0.2, save_prefix='SC1_')
+    cascao.sc1.load_reconstructor(Rec,m2c)
+
+    KL, m2c = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
+    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=0.2, save_prefix='SC2_')
+    cascao.sc2.load_reconstructor(Rec,m2c)
+
+    print('Running the loop ...')
+    lambdaInM = 800e-9
+    dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaInM, cascao.starMagnitude, save_prefix='')
+
+    # Post-processing and plotting
+    print('Plotting results ...')
     if show:
-        try:
-            detector1_image = cascao.ccd1.last_frame
-            plt.figure()
-            myimshow(detector1_image,title='Subaperture masks')
-            plt.show()
+        subap1_masks = xp.sum(cascao.sc1._subaperture_masks,axis=0)
+        plt.figure()
+        myimshow(subap1_masks,title='Subaperture masks CCD1')
+        subap2_masks = xp.sum(cascao.sc2._subaperture_masks,axis=0)
+        plt.figure()
+        myimshow(subap2_masks,title='Subaperture masks CCD2')
 
-            detector2_image = cascao.ccd2.last_frame
-            plt.figure()
-            myimshow(detector2_image,title='Subaperture masks')
-            plt.show()
-        except:
-            pass
-
-    # 2. Define the system modes
-    print('Obtaining the Karhunen-Loeve mirror modes for DM1 ...')
-    KL1, m2c_dm1 = cascao.define_KL_modes(cascao.dm1, cascao.pyr1.oversampling, zern_modes=5, save_prefix='DM1_')
-    print('Obtaining the Karhunen-Loeve mirror modes for DM2 ...')
-    KL2, m2c_dm2 = cascao.define_KL_modes(cascao.dm2, cascao.pyr2.oversampling, zern_modes=5, save_prefix='DM2_')
-    if show:
+        KL = myfits.read_fits(op.join(cascao.savecalibpath,'DM1_KLmodes.fits'))
         N=9
         plt.figure(figsize=(2*N,7))
         for i in range(N):
             plt.subplot(4,N,i+1)
-            cascao.dm1.plot_surface(KL1[i,:],title=f'KL Mode {i}')
+            cascao.dm1.plot_surface(KL[i,:],title=f'KL Mode {i}')
             plt.subplot(4,N,i+1+N)
-            cascao.dm1.plot_surface(KL1[i+N,:],title=f'KL Mode {i+N}')
+            cascao.dm1.plot_surface(KL[i+N,:],title=f'KL Mode {i+N}')
             plt.subplot(4,N,i+1+N*2)
-            cascao.dm1.plot_surface(KL1[-i-1-N,:],title=f'KL Mode {xp.shape(KL1)[0]-i-1-N}')
+            cascao.dm1.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-i-1-N}')
             plt.subplot(4,N,i+1+N*3)
-            cascao.dm1.plot_surface(KL1[-i-1,:],title=f'KL Mode {xp.shape(KL1)[0]-i-1}')
+            cascao.dm1.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
 
+        KL = myfits.read_fits(op.join(cascao.savecalibpath,'DM2_KLmodes.fits'))
+        N=9
         plt.figure(figsize=(2*N,7))
         for i in range(N):
             plt.subplot(4,N,i+1)
-            cascao.dm2.plot_surface(KL2[i,:],title=f'KL Mode {i}')
+            cascao.dm2.plot_surface(KL[i,:],title=f'KL Mode {i}')
             plt.subplot(4,N,i+1+N)
-            cascao.dm2.plot_surface(KL2[i+N,:],title=f'KL Mode {i+N}')
+            cascao.dm2.plot_surface(KL[i+N,:],title=f'KL Mode {i+N}')
             plt.subplot(4,N,i+1+N*2)
-            cascao.dm2.plot_surface(KL2[-i-1-N,:],title=f'KL Mode {xp.shape(KL2)[0]-i-1-N}')
+            cascao.dm2.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-i-1-N}')
             plt.subplot(4,N,i+1+N*3)
-            cascao.dm2.plot_surface(KL2[-i-1,:],title=f'KL Mode {xp.shape(KL2)[0]-i-1}')
+            cascao.dm2.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
 
-    # 3. Calibrate the system
-    print('Calibrating the KL modes for DM1 ...')
-    Rec1, IM1 = cascao.calibrate_modes(cascao.slope_computer1, KL1, lambdaInM, amps=0.2, save_prefix='DM1_')
-    print('Calibrating the KL modes for DM2 ...')
-    Rec2, IM2 = cascao.calibrate_modes(cascao.slope_computer2, KL2, lambdaInM, amps=0.2, save_prefix='DM2_')
-    if show:
+        IM1 = myfits.read_fits(op.join(cascao.savecalibpath,'SC1_IM.fits'))
         IM1_std = xp.std(IM1,axis=0)
+        IM2 = myfits.read_fits(op.join(cascao.savecalibpath,'SC2_IM.fits'))
         IM2_std = xp.std(IM2,axis=0)
-        if xp.__name__ == 'cupy':
-            IM1_std = IM1_std.get()
+        if xp.on_gpu:
             IM2_std = IM2_std.get()
         plt.figure()
         plt.plot(IM1_std,'-o')
         plt.plot(IM2_std,'-o')
         plt.grid()
         plt.title('Interaction matrix standard deviation')
-        plt.show()
 
-    # 4. Get atmospheric phase screen
-    print('Initializing turbulence ...')
-    cascao.initialize_turbulence()
-    if show:
         screen = cascao.get_phasescreen_at_time(0)
-        if xp.__name__ == 'cupy':
+        if xp.on_gpu:
             screen = screen.get()
         plt.figure()
         plt.imshow(screen, cmap='RdBu')
         plt.colorbar()
         plt.title('Atmo screen')
 
-    # 5. Perform the iteration
-    print('Running the loop ...')
-    dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaInM, starMagnitude, Rec1, Rec2, m2c_dm1, m2c_dm2, save_telemetry=True)
+    atmo_phases, _, res1_phases, det1_frames, rec1_modes, _, _, res2_phases, det2_frames, rec2_modes, _ = cascao.load_telemetry_data()
 
-    # 6. Post-processing and plotting
-    print('Plotting results ...')
-    atmo_phases, _, res1_phases, det1_frames, _, _, res2_phases, det2_frames, _ = cascao.load_telemetry_data()
-
-    oversampling = 4
+    oversampling = 8
     padding_len = int(cascao.cmask.shape[0]*(oversampling-1)/2)
     psf_mask = xp.pad(cascao.cmask, padding_len, mode='constant', constant_values=1)
     electric_field_amp = 1-psf_mask
@@ -169,7 +160,28 @@ def main(tn:str='example_dual_stage', show:bool=False):
     plt.gca().set_yscale('log')
     plt.xlim([-0.5,cascao.Nits-0.5])
 
+    plt.figure()
+    plt.plot(np.arange(cascao.Nits),rec1_modes[:,:10],'-o')
+    plt.grid()
+    plt.xlim([-0.5,cascao.Nits+0.5])
+    plt.xlabel('# Iteration')
+    plt.ylabel('amplitude [m]')
+    plt.title('Reconstructor 1 modes\n(first 10)')
+    plt.show()
+
+    plt.figure()
+    plt.plot(np.arange(cascao.Nits),rec2_modes[:,:10],'-o')
+    plt.grid()
+    plt.xlim([-0.5,cascao.Nits+0.5])
+    plt.xlabel('# Iteration')
+    plt.ylabel('amplitude [m]')
+    plt.title('Reconstructor 2 modes\n(first 10)')
+    plt.show()
+
+
     plt.show()
 
     return cascao
 
+if __name__ == '__main__':
+    ssao = main(show=True)

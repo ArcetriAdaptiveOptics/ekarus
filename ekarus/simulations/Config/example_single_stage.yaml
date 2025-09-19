@@ -5,7 +5,7 @@ DM:
 PYR:
   oversampling: 4           # oversampling for PSF computation
   lambdaInM: 1000e-9        # [m] sensor wavelength
-  bandWidthInM: 200e-9      # [m] sensor band amplitude
+  bandWidthInM: 0e-9        # [m] sensor band amplitude
   subapPixSize: 63          # subaperture diameter in pix
   subapPixSep: 40           # pixel distance between subaps
 
@@ -17,10 +17,11 @@ DETECTOR:
 
 SLOPE.COMPUTER:
   loopFrequencyInHz: 1500     
-  integratorGain: 0.9         # loop integrator gain
-  delay: 2                    # loop delay in steps
-  nModes2Correct: 467         # number of reconstructor modes
-  ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
+  integratorGain: 0.9           # loop integrator gain
+  delay: 2                      # loop delay in steps
+  nModes2Correct: 467           # number of reconstructor modes
+  ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
+  modulationInLambdaOverD: 3.0
 
 TELESCOPE:
   pupilSizeInM: 1.8         # [m] telescope diameter
@@ -36,4 +37,4 @@ ATMO:
 LOOP:
   nIterations: 200
   starMagnitude: 0.0
-  modulationAngleInLambdaOverD: 3.0
+  simFreqHz: 1500          # simulation frequency in Hz

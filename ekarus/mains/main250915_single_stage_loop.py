@@ -15,8 +15,16 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
 
     ssao = SingleStageAO(tn)
 
-    KL, m2c = ssao.define_KL_modes(ssao.dm, ssao.pyr.oversampling, zern_modes=5)
-    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)#/xp.std(IM,axis=0))
+    ssao.initialize_turbulence()
+    ssao.sc.calibrate_sensor(tn, prefix_str='',
+                            piston=1-ssao.cmask, 
+                            lambdaOverD = ssao.pyr.lambdaInM/ssao.pupilSizeInM,
+                            Npix = ssao.subapertureSize) 
+
+    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
+    Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    ssao.sc.load_reconstructor(Rec,m2c)
+    
 
     print('Running the loop ...')
     try:
@@ -32,17 +40,17 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
         input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
     except FileNotFoundError:
-        sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, Rec, m2c, save_prefix='')
-    ssao.SR_in = xp.exp(-input_sig2)
-    ssao.SR_out = xp.exp(-sig2)
+        sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
+    # ssao.SR_in = xp.exp(-input_sig2)
+    # ssao.SR_out = xp.exp(-sig2)
     
     if starMagnitudes is not None:
         sig = xp.zeros([len(starMagnitudes),ssao.Nits])
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
             print(f'Now simulating for magnitude: {starMag:1.1f}')
-            sig[k,:],_ = ssao.run_loop(ssao.pyr.lambdaInM, starMag, Rec, m2c, save_prefix=f'magV{starMag:1.0f}_')
-        ssao.SR = xp.exp(-sig)
+            sig[k,:],_ = ssao.run_loop(ssao.pyr.lambdaInM, starMag, save_prefix=f'magV{starMag:1.0f}_')
+        # ssao.SR = xp.exp(-sig)
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -50,7 +58,6 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
         plt.figure()
         myimshow(subap_masks,title='Subaperture masks')
-        plt.show()
 
         KL = myfits.read_fits(op.join(ssao.savecalibpath,'KLmodes.fits'))
         N=9
@@ -98,11 +105,11 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     # psf = abs(ssao.pyr.field_on_focal_plane)**2
 
     cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
-    SR = ssao.SR.get() if xp.on_gpu else ssao.SR.copy()
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
-        sig = sig.get()
+        if starMagnitudes is not None:
+            sig = sig.get()
         rec_modes = rec_modes.get()
 
     plt.figure(figsize=(9,9))
