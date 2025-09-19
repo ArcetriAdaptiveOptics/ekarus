@@ -28,6 +28,7 @@ class SingleStageAO(HighLevelAO):
             "DMcommands",
         ]
 
+
     def _initialize_devices(self):
         """
         Initializes the devices used in the AO system.
@@ -80,7 +81,7 @@ class SingleStageAO(HighLevelAO):
         self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels)
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, Rec, m2c, save_telemetry:bool = False):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, Rec, m2c, save_telemetry_prefix:str=None):
         """
         Main loop for the single stage AO system.
 
@@ -92,8 +93,8 @@ class SingleStageAO(HighLevelAO):
             The reconstruction matrix.
         m2c : array_like
             The modal-to-command matrix.
-        save_telemetry : bool, optional
-            Whether to save telemetry data (default is False).
+        save_telemetry_prefix : str, optional
+            String prefix to save telemetry data (default is None: telemetry is not saved).
         """
         m2rad = 2 * xp.pi / lambdaInM
         electric_field_amp = 1 - self.cmask
@@ -112,7 +113,7 @@ class SingleStageAO(HighLevelAO):
         self.dm.set_position(dm_cmd, absolute=True)
         dm_cmds = xp.zeros([self.Nits, self.dm.Nacts])
 
-        if save_telemetry:
+        if save_telemetry_prefix is not None:
             dm_phases = xp.zeros([self.Nits, mask_len])
             residual_phases = xp.zeros([self.Nits, mask_len])
             input_phases = xp.zeros([self.Nits, mask_len])
@@ -140,6 +141,10 @@ class SingleStageAO(HighLevelAO):
 
             if i >= self.sc.delay:
                 self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
+                
+            # if i>0 and int(i%200)==0 and i < 700:
+            #     self.integratorGain += 0.1
+
             residual_phase = input_phase - self.dm.surface
             delta_phase_in_rad = reshape_on_mask(residual_phase * m2rad, self.cmask)
 
@@ -153,14 +158,15 @@ class SingleStageAO(HighLevelAO):
 
             residual_phases[i, :] = residual_phase
             input_phases[i, :] = input_phase
-            if save_telemetry:
+            if save_telemetry_prefix is not None:
                 dm_phases[i, :] = self.dm.surface
                 detector_images[i, :, :] = self.ccd.last_frame
 
         errRad2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
         inputErrRad2 = xp.std(input_phases * m2rad, axis=-1) ** 2
+        
 
-        if save_telemetry:
+        if save_telemetry_prefix is not None:
             print("Saving telemetry to .fits ...")
             ma_input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask)for i in range(self.Nits)])
             ma_dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
@@ -182,3 +188,4 @@ class SingleStageAO(HighLevelAO):
             self.save_telemetry_data(data_dict)
 
         return errRad2, inputErrRad2
+

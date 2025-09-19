@@ -39,7 +39,6 @@ def main(tn:str='example_dual_stage', show:bool=False):
         except:
             pass
 
-
     # 2. Define the system modes
     print('Obtaining the Karhunen-Loeve mirror modes for DM1 ...')
     KL1, m2c_dm1 = cascao.define_KL_modes(cascao.dm1, cascao.pyr1.oversampling, zern_modes=5, save_prefix='DM1_')
@@ -134,14 +133,10 @@ def main(tn:str='example_dual_stage', show:bool=False):
         dm2_sig2 = dm2_sig2.get()
         input_sig2 = input_sig2.get()
 
-    shrink = 0.45
-    plt.figure(figsize=(9,13.5))
+    shrink = 0.75
+    plt.figure()#figsize=(9,13.5))
     plt.subplot(2,3,1)
     myimshow(det1_frames[-1], title = 'Detector 1 image', shrink=shrink)
-    # myimshow(masked_array(atmo_phases[-1],cmask), \
-    #     title=f'Atmosphere phase [m]\nStrehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
-    #     cmap='RdBu',shrink=0.8)
-    # plt.axis('off')
     plt.subplot(2,3,2)    
     cascao.dm1.plot_position(shrink=shrink)
     plt.title('DM1 command [m]')
@@ -162,7 +157,6 @@ def main(tn:str='example_dual_stage', show:bool=False):
     plt.subplot(2,3,6)
     showZoomCenter(psf2, pixelsPerMAS, shrink=shrink, \
         title = f'PSF after DM2\nStrehl ratio = {xp.exp(-dm2_sig2[-1]):1.3f}',cmap='inferno') 
-
 
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(input_sig2,'-o',label='open loop')

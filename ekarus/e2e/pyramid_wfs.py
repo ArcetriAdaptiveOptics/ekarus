@@ -29,16 +29,16 @@ class PyramidWFS:
         self.cdtype = xp.cfloat
 
 
-    def get_intensity(self, input_field, lambdaOverD):
+    def get_intensity(self, input_field, lambdaOverD, wedgeShift=None):
 
-        D = max(input_field.shape) # TBI: deal with non-square input fields
-        padded_field = xp.pad(input_field, int((self.oversampling-1)/2*D), mode='constant', constant_values=0.0)
+        L = max(input_field.shape) # TBI: deal with non-square input fields
+        padded_field = self._xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
 
-        if self.modulationAngleInLambdaOverD == 0:
+        if self.modulationAngleInLambdaOverD*(2*self._xp.pi)*self.oversampling < 0.1:
             output_field = self.propagate(padded_field, lambdaOverD)
             intensity = xp.abs(output_field)**2
         else:
-            intensity = self.modulate(padded_field, lambdaOverD)
+            intensity = self.modulate(padded_field, lambdaOverD, wedgeShift)
 
         return intensity
 
@@ -47,7 +47,7 @@ class PyramidWFS:
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
         self.modulationNsteps = xp.ceil(modulationAngleInLambdaOverD*2.25*xp.pi)//4*4
         if verbose:
-            print(f'Now modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self.modulationNsteps:1.0f} modulation steps')
+            print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self.modulationNsteps:1.0f} modulation steps')
         
         
     @lru_cache(maxsize=5)
@@ -82,7 +82,7 @@ class PyramidWFS:
         """
         self.field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(input_field))
 
-        phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD / self.oversampling
+        phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
         self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype = self.cdtype)
 
         output_field = xp.fft.ifft2(xp.fft.ifftshift(self._ef_focal_plane_delayed))
@@ -105,10 +105,7 @@ class PyramidWFS:
         
         tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
 
-        pixelsPerRadian = lambdaOverD / self.oversampling
-        modulationAngle = self.modulationAngleInLambdaOverD * lambdaOverD
-
-        alpha_pix = modulationAngle/pixelsPerRadian*(2*xp.pi)
+        alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*xp.pi)
         phi_vec = (2*xp.pi)*xp.arange(self.modulationNsteps)/self.modulationNsteps
 
         intensity = xp.zeros(input_field.shape, dtype = self.dtype)
@@ -117,7 +114,7 @@ class PyramidWFS:
             tilt = tiltX * xp.cos(phi) + tiltY * xp.sin(phi)
             tilted_input = input_field * xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
 
-            output = self.propagate(tilted_input, pixelsPerRadian)
+            output = self.propagate(tilted_input, lambdaOverD)
             intensity += (abs(output**2))/self.modulationNsteps
 
         return intensity

@@ -1,5 +1,7 @@
 import xupy as xp
 np = xp.np
+# from arte.types.mask import CircularMask
+
 import matplotlib.pyplot as plt
 
 
@@ -45,7 +47,7 @@ def get_photocenter(image):
     qy += 0.5
     qx += 0.5
 
-    return qy,qx
+    return qx,qy 
 
 
 def get_circular_mask(mask_shape, mask_radius, mask_center=None):
@@ -64,8 +66,6 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None):
     mask = xp.fromfunction(lambda i,j: dist(j,i) >= mask_radius, [H,W])
     mask = xp.asarray(mask,dtype=bool)
     return mask
-
-
 
 def reshape_on_mask(vec, mask):
     """
@@ -109,11 +109,12 @@ def showZoomCenter(image, pixelSize, **kwargs):
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
 
-
-# def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
-#     if hasattr(image,'get'):
-#         image = image.get()
-#     plt.imshow(image,origin='lower', **kwargs)
-#     cbar = plt.colorbar(shrink=shrink)
-#     cbar.set_label(cbar_title,loc='top')
-#     plt.title(title)
+def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
+    if hasattr(image, 'asmarray'):
+        image = image.asmarray()
+    if hasattr(image,'get'):
+        image = image.get()
+    plt.imshow(image,origin='lower', **kwargs)
+    cbar = plt.colorbar(shrink=shrink)
+    cbar.set_label(cbar_title,loc='top')
+    plt.title(title)

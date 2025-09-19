@@ -1,53 +1,42 @@
-import xupy as xp
-masked_array = xp.masked_array
-
 import matplotlib.pyplot as plt
+from numpy.ma import masked_array
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask, myimshow
-from ekarus.e2e.single_stage_ao_class import SingleStageAO
+from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, reshape_on_mask
+from ekarus.e2e.decreasing_mod_ao_class import DecreasingModulationAO
 
-import ekarus.e2e.utils.my_fits_package as myfits
+try:
+    import cupy as xp
+    xptype = xp.float32
+    print('Now using GPU acceleration!')
+except:
+    import numpy as xp
+    xptype = xp.float64
 
 
-def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
+def main(tn:str='decreasing_modulation', show:bool=False):
 
     print('Initializing devices ...')
-    ssao = SingleStageAO(tn)
+    ssao = DecreasingModulationAO(tn, xp=xp)
 
+    lambdaInM, starMagnitude = ssao._config.read_target_pars()
+
+    # 1. Define the subapertures using a piston input wavefront
     print('Defining the detector subaperture masks ...')
     ssao.define_subaperture_masks(ssao.slope_computer, lambdaInM)
+    if show:
+        try:
+            detector_image = ssao.ccd.last_frame
+            plt.figure()
+            myimshow(detector_image,title='Subaperture masks')
+            plt.show()
+        except:
+            pass
 
+
+    # 2. Define the system modes
     print('Obtaining the Karhunen-Loeve mirror modes ...')
     KL, m2c = ssao.define_KL_modes(ssao.dm, ssao.pyr.oversampling, zern_modes=5)
-
-    print('Calibrating the KL modes ...')
-    Rec, IM = ssao.calibrate_modes(ssao.slope_computer, KL, lambdaInM, amps=0.2)#/xp.std(IM,axis=0))
-
-    print('Initializing turbulence ...')
-    ssao.initialize_turbulence()
-
-    print('Running the loop ...')
-    sig2, input_sig2 = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c, save_telemetry_prefix='')
-    ssao.SR_in = xp.exp(-input_sig2)
-    ssao.SR_out = xp.exp(-sig2)
-    
-    if starMagnitudes is not None:
-        sig = xp.zeros([len(starMagnitudes),ssao.Nits])
-        for k in range(len(starMagnitudes)):
-            starMag = starMagnitudes[k]
-            print(f'Now simulating for magnitude: {starMag:1.1f}')
-            sig[k,:],_ = ssao.run_loop(lambdaInM, starMag, Rec, m2c, save_telemetry_prefix=f'magV{starMag:1.0f}_')
-        ssao.SR = xp.exp(-sig)
-
-    # Post-processing and plotting
-    print('Plotting results ...')
     if show:
-        subap_masks = xp.sum(ssao.slope_computer._subaperture_masks,axis=0)
-        plt.figure()
-        myimshow(subap_masks,title='Subaperture masks')
-        plt.show()
-
-        KL = myfits.read_fits(op.join(ssao.savepath,'KLmodes.fits'))
         N=9
         plt.figure(figsize=(2*N,7))
         for i in range(N):
@@ -60,21 +49,47 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
             plt.subplot(4,N,i+1+N*3)
             ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
 
-        IM = myfits.read_fits(op.join(ssao.savepath,'IM.fits'))
-        IM_std = xp.std(IM,axis=0)
-        plt.figure()
-        plt.plot(IM_std,'-o')
-        plt.grid()
-        plt.title('Interaction matrix standard deviation')
 
+    # 3. Calibrate the system
+    RecCube = None
+    for k in range(4):
+        modAng = k
+        print(f'Calibrating the KL modes for modulation {modAng:1.0f} ...')
+        ssao.slope_computer._wfs.set_modulation_angle(modAng)
+        Rec, IM = ssao.calibrate_modes(ssao.slope_computer, KL, lambdaInM, amps=0.2/(2**(k)), save_prefix='mod'+str(k)+'_')
+        if RecCube is None:
+            RecCube = Rec.copy()
+        else:
+            RecCube =xp.dstack((RecCube,Rec))
+        if show:
+            IM_std = xp.std(IM,axis=0)
+            if xp.__name__ == 'cupy':
+                IM_std = IM_std.get()
+            plt.figure()
+            plt.plot(IM_std,'-o')
+            plt.grid()
+            plt.title('Interaction matrix standard deviation')
+            plt.show()
+    # print(RecCube.shape)
+
+    # 4. Get atmospheric phase screen
+    print('Initializing turbulence ...')
+    ssao.initialize_turbulence()
+    if show:
         screen = ssao.get_phasescreen_at_time(0)
-        if xp.on_gpu:
+        if xp.__name__ == 'cupy':
             screen = screen.get()
         plt.figure()
         plt.imshow(screen, cmap='RdBu')
         plt.colorbar()
         plt.title('Atmo screen')
 
+    # 5. Perform the iteration
+    print('Running the loop ...')
+    sig2, input_sig2 = ssao.run_loop(lambdaInM, starMagnitude, RecCube, m2c, save_telemetry=True)
+
+    # 6. Post-processing and plotting
+    print('Plotting results ...')
     masked_input_phases, _, masked_residual_phases, detector_frames, _ = ssao.load_telemetry_data()
 
     last_res_phase = xp.array(masked_residual_phases[-1,:,:])
@@ -84,14 +99,13 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)
     psf_mask = xp.pad(ssao.cmask, padding_len, mode='constant', constant_values=1)
     electric_field_amp = 1-psf_mask
-    input_phase = reshape_on_mask(residual_phase, psf_mask)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/ssao.pyr.lambdaInM))
+    input_phase = reshape_on_mask(residual_phase, psf_mask, xp=xp)
+    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf = abs(field_on_focal_plane)**2
-    # psf = abs(ssao.pyr.field_on_focal_plane)**2
 
     cmask = ssao.cmask.get() if xp.__name__ == 'cupy' else ssao.cmask.copy()
-    if xp.on_gpu: # Convert to numpy for plotting
+    if xp.__name__ == 'cupy': # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
 
@@ -102,8 +116,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         cmap='RdBu',shrink=0.8)
     plt.axis('off')
 
-
-    pixelsPerMAS = lambdaInM/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
+    pixelsPerMAS = lambdaInM/ssao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
     plt.subplot(2,2,2)
     showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
         title = f'Corrected PSF\nStrehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
@@ -115,6 +128,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     ssao.dm.plot_position()
     plt.title('Mirror command [m]')
     plt.axis('off')
+
 
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(input_sig2,'-o',label='open loop')
@@ -130,5 +144,3 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
 
     return ssao
 
-if __name__ == '__main__':
-    ssao = main(show=True)

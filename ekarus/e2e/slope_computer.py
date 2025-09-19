@@ -57,12 +57,19 @@ class SlopeComputer():
         return pupilPixelSizeOnDetector-0.5 
     
 
-    def compute_slopes(self, input_field, lambdaOverD, nPhotons, **kwargs):
+    def compute_slopes(self, input_field, lambdaOverD, nPhotons, wedgeShift=None, **kwargs):
         """
         Compute slopes from the input field
         """
 
-        intensity = self._wfs.get_intensity(input_field, lambdaOverD)
+        if isinstance(lambdaOverD,int) or isinstance(lambdaOverD,float):
+            intensity = self._wfs.get_intensity(input_field, lambdaOverD, wedgeShift)
+        else:
+            intensity = self._wfs.get_intensity(input_field, lambdaOverD[0], wedgeShift)
+            print(len(lambdaOverD))
+            for k in range(1,len(lambdaOverD)):
+                intensity += self._wfs.get_intensity(input_field, lambdaOverD[k], wedgeShift)
+
         detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
 
         match self.wfs_type:
@@ -112,8 +119,10 @@ class SlopeComputer():
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
 
         for i in range(4):
-            qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1)
-            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qy,qx))
+            # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
+            # subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qy,qx), xp=self._xp)
+            qx,qy = self.find_subaperture_center(subaperture_image, quad_n=i+1)
+            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qx,qy))
 
         self._subaperture_masks = subaperture_masks
 
@@ -125,20 +134,29 @@ class SlopeComputer():
         quadrant_mask = xp.zeros_like(detector_image, dtype=xp.float)
 
         match quad_n:
+            # case 1:
+            #     quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
+            # case 2:
+            #     quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
+            # case 3:
+            #     quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
+            # case 4:
+            #     quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
             case 1:
-                quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
+                quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
             case 2:
                 quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
             case 3:
                 quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
             case 4:
-                quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
+                quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
             case _:
                 raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
 
         quadrant_mask = xp.reshape(quadrant_mask, detector_image.shape)
         intensity = detector_image * quadrant_mask
-        qy,qx = get_photocenter(intensity)
+
+        qx,qy = get_photocenter(intensity)
 
         # return qy,qx
         return xp.round(qy), xp.round(qx)

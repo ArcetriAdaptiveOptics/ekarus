@@ -226,16 +226,16 @@ class HighLevelAO():
         return masked_phase
     
     
-    def save_telemetry_data(self, data_dict):
+    def save_telemetry_data(self, data_dict, save_prefix:str=''):
         """
         Saves the telemetry data to FITS files.
         """
         for key in data_dict:
-            file_path = os.path.join(self.savepath,str(key)+'.fits')
+            file_path = os.path.join(self.savepath,save_prefix+str(key)+'.fits')
             myfits.save_fits(file_path, data_dict[key])
     
             
-    def load_telemetry_data(self, data_keys:list[str]=None):
+    def load_telemetry_data(self, data_keys:list[str]=None, save_prefix:str=''):
         """
         Load telemetry data from FITS files.
         """
@@ -243,7 +243,7 @@ class HighLevelAO():
             data_keys = self.telemetry_keys
         loaded_data = []
         for key in data_keys:
-            file_path = os.path.join(self.savepath, key+'.fits')
+            file_path = os.path.join(self.savepath, save_prefix+key+'.fits')
             loaded_data.append(myfits.read_fits(file_path))
         return loaded_data
             
