@@ -69,14 +69,7 @@ class SlopeComputer():
         Compute slopes from the input field
         """
 
-        if isinstance(lambdaOverD,int) or isinstance(lambdaOverD,float):
-            intensity = self._wfs.get_intensity(input_field, lambdaOverD)
-        else:
-            intensity = self._wfs.get_intensity(input_field, lambdaOverD[0])
-            print(len(lambdaOverD))
-            for k in range(1,len(lambdaOverD)):
-                intensity += self._wfs.get_intensity(input_field, lambdaOverD[k])
-
+        intensity = self._wfs.get_intensity(input_field, lambdaOverD)
         detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
 
         match self.wfs_type:

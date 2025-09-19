@@ -3,28 +3,28 @@ DM:
   max_stroke_in_m: 5e-6   # Not yet used
 
 PYR:
-  # apex_angle: 0.0003906262449032515
-  oversampling: 4                     # oversampling for PSF computation
-  lambdaInM: 1000e-9                  # sensor wavelength
-  subapPixSize: 63
-  subapPixSep: 40
+  oversampling: 4           # oversampling for PSF computation
+  lambdaInM: 1000e-9        # [m] sensor wavelength
+  bandWidthInM: 200e-9      # [m] sensor band amplitude
+  subapPixSize: 63          # subaperture diameter in pix
+  subapPixSep: 40           # pixel distance between subaps
 
 DETECTOR:
-  detector_shape: [256, 256]
+  detector_shape: [256, 256]    # detector pixel size
   RON: 1.0                      # readout noise in e-
   quantum_efficiency: 0.7       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER:
-  loopFrequencyInHz: 1500
-  integratorGain: 0.9
+  loopFrequencyInHz: 1500     
+  integratorGain: 0.9         # loop integrator gain
   delay: 2                    # loop delay in steps
   nModes2Correct: 467         # number of reconstructor modes
   ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
 
 TELESCOPE:
-  pupilSizeInM: 1.8
-  pupilSizeInPixels: 128
+  pupilSizeInM: 1.8         # [m] telescope diameter
+  pupilSizeInPixels: 128    # pixels across the pupil diameter
   throughput: 0.11          # accounting for beam splitter
 
 ATMO:
@@ -34,6 +34,6 @@ ATMO:
   windAngle: [-120, 45, 0]  # [deg] CCW from East
 
 LOOP:
-  nIterations: 600
-  starMagnitude: 3.0
+  nIterations: 200
+  starMagnitude: 0.0
   modulationAngleInLambdaOverD: 3.0

@@ -13,7 +13,7 @@ class PyramidWFS:
     where the phase shift depends on the distance from the apex.
     """
 
-    def __init__(self, apex_angle, oversampling, sensorLambda):
+    def __init__(self, apex_angle, oversampling, sensorLambda, sensorBandwidth=0.0):
         """
         Pyramid wavefront sensor constructor.
 
@@ -23,30 +23,49 @@ class PyramidWFS:
         self.oversampling = oversampling
         self.lambdaInM = sensorLambda
 
+        self._lambdaRange = None
+        if sensorBandwidth >= 100e-9:
+            nLambdas = sensorBandwidth//50e-9
+            if nLambdas % 2: # make sure nLambdas is odd to include lambda0InM
+                nLambdas += 1
+            self._lambdaRange = xp.linspace(sensorLambda-sensorBandwidth/2, 
+                                            sensorLambda+sensorBandwidth/2, 
+                                            int(nLambdas))
+
         self.modulationAngleInLambdaOverD = None
 
         self.dtype = xp.float
         self.cdtype = xp.cfloat
 
 
-    def get_intensity(self, input_field, lambdaOverD):
-
+    def get_intensity(self, input_field, lambda0OverD):
         L = max(input_field.shape) # TBI: deal with non-square input fields
         padded_field = xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
 
+        if self._lambdaRange is None:
+            intensity = self._intensity_from_field(padded_field, lambda0OverD)
+        else:
+            intensity = xp.zeros(padded_field.shape)
+            lambdasOverD = lambda0OverD/self.lambdaInM*self._lambdaRange
+            for lambdaOverD in lambdasOverD:
+                intensity += self._intensity_from_field(padded_field, lambdaOverD)
+
+        return intensity
+    
+    def _intensity_from_field(self, padded_field, lambdaOverD):
         if self.modulationAngleInLambdaOverD*(2*xp.pi)*self.oversampling < 0.1:
             output_field = self.propagate(padded_field, lambdaOverD)
             intensity = xp.abs(output_field)**2
         else:
             intensity = self.modulate(padded_field, lambdaOverD)
-
         return intensity
+
 
 
     def set_modulation_angle(self, modulationAngleInLambdaOverD):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
-        self.modulationNsteps = xp.ceil(modulationAngleInLambdaOverD*2.25*xp.pi)//4*4
-        print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self.modulationNsteps:1.0f} modulation steps')
+        self._modNsteps = xp.ceil(modulationAngleInLambdaOverD*2.25*xp.pi)//4*4
+        print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self._modNsteps:1.0f} modulation steps')
         
         
     @lru_cache(maxsize=5)
@@ -105,7 +124,7 @@ class PyramidWFS:
         tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
 
         alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*xp.pi)
-        phi_vec = (2*xp.pi)*xp.arange(self.modulationNsteps)/self.modulationNsteps
+        phi_vec = (2*xp.pi)*xp.arange(self._modNsteps)/self._modNsteps
 
         intensity = xp.zeros(input_field.shape, dtype = self.dtype)
 
@@ -114,7 +133,7 @@ class PyramidWFS:
             tilted_input = input_field * xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
 
             output = self.propagate(tilted_input, lambdaOverD)
-            intensity += (abs(output**2))/self.modulationNsteps
+            intensity += (abs(output**2))/self._modNsteps
 
         return intensity
     

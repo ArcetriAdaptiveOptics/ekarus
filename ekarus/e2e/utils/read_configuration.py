@@ -21,6 +21,7 @@ class ConfigReader():
     def read_sensor_pars(self, sensor_name: str = 'WFS'):
         """ Read sensor parameters from the configuration file."""
         self._cfile[sensor_name]['lambdaInM'] = eval(self._cfile[sensor_name]['lambdaInM'])
+        self._cfile[sensor_name]['bandWidthInM'] = eval(self._cfile[sensor_name]['bandWidthInM'])
         return self._cfile[sensor_name]
 
     def read_detector_pars(self, detector_name: str = 'DETECTOR'):

@@ -82,7 +82,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         plt.colorbar()
         plt.title('Atmo screen')
 
-    masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, _ = ssao.load_telemetry_data()
+    masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
 
     last_res_phase = xp.array(masked_residual_phases[-1,:,:])
     residual_phase = last_res_phase[~ssao.cmask]
@@ -102,6 +102,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
+        sig = sig.get()
         rec_modes = rec_modes.get()
 
     plt.figure(figsize=(9,9))
@@ -120,7 +121,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     myimshow(detector_frames[-1], title = 'Detector image', shrink=0.8)
 
     plt.subplot(2,2,4)
-    ssao.dm.plot_position()
+    ssao.dm.plot_position(dm_commands[-1])
     plt.title('Mirror command [m]')
     plt.axis('off')
 
@@ -137,22 +138,23 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     if starMagnitudes is not None:
         plt.figure()
         for k,mag in enumerate(starMagnitudes):
-            plt.plot(sig[k],label=f'magV{mag:1.1f}')
+            sr_ss = np.mean(np.exp(-sig[k,100:]))
+            plt.plot(sig[k],label=f'magV={mag:1.1f}, SR={sr_ss:1.2f}')
         plt.legend()
         plt.grid()
-        plt.ylabel('Strehl ratio')
+        plt.ylabel(r'$\sigma^2 [rad^2]$')
         plt.xlabel('# iteration')
         plt.gca().set_yscale('log')
         plt.xlim([-0.5,ssao.Nits-0.5])
         plt.title('Strehl vs star magnitude')
 
     plt.figure()
-    plt.plot(np.arange(ssao.Nits),rec_modes,'-o')
+    plt.plot(np.arange(ssao.Nits),rec_modes[:,:10],'-o')
     plt.grid()
     plt.xlim([-0.5,ssao.Nits+0.5])
     plt.xlabel('# Iteration')
     plt.ylabel('amplitude [m]')
-    plt.title('Reconstructor modes')
+    plt.title('Reconstructor modes\n(first 10)')
     plt.show()
 
     return ssao

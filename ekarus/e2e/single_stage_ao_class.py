@@ -52,11 +52,13 @@ class SingleStageAO(HighLevelAO):
         subapPixSep = wfs_pars["subapPixSep"]
         oversampling = wfs_pars["oversampling"]
         sensorLambda = wfs_pars["lambdaInM"]
+        sensorBandwidth = wfs_pars['bandWidthInM']
         apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(self.pupilSizeInPixels+subapPixSep)/2
         self.pyr = PyramidWFS(
             apex_angle=apex_angle, 
             oversampling=oversampling, 
-            sensorLambda=sensorLambda
+            sensorLambda=sensorLambda,
+            sensorBandwidth=sensorBandwidth
         )
 
         self.subapertureSize=wfs_pars["subapPixSize"]
