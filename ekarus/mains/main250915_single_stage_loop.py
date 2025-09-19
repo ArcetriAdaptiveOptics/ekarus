@@ -5,29 +5,20 @@ import matplotlib.pyplot as plt
 
 from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask, myimshow
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
+import os.path as op
 
 import ekarus.e2e.utils.my_fits_package as myfits
 
 
 def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
 
-    print('Initializing devices ...')
     ssao = SingleStageAO(tn)
 
-    print('Defining the detector subaperture masks ...')
-    ssao.define_subaperture_masks(ssao.slope_computer, lambdaInM)
-
-    print('Obtaining the Karhunen-Loeve mirror modes ...')
     KL, m2c = ssao.define_KL_modes(ssao.dm, ssao.pyr.oversampling, zern_modes=5)
-
-    print('Calibrating the KL modes ...')
-    Rec, IM = ssao.calibrate_modes(ssao.slope_computer, KL, lambdaInM, amps=0.2)#/xp.std(IM,axis=0))
-
-    print('Initializing turbulence ...')
-    ssao.initialize_turbulence()
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)#/xp.std(IM,axis=0))
 
     print('Running the loop ...')
-    sig2, input_sig2 = ssao.run_loop(lambdaInM, starMagnitude, Rec, m2c, save_telemetry_prefix='')
+    sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, Rec, m2c, save_telemetry_prefix='')
     ssao.SR_in = xp.exp(-input_sig2)
     ssao.SR_out = xp.exp(-sig2)
     
@@ -36,18 +27,18 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
             print(f'Now simulating for magnitude: {starMag:1.1f}')
-            sig[k,:],_ = ssao.run_loop(lambdaInM, starMag, Rec, m2c, save_telemetry_prefix=f'magV{starMag:1.0f}_')
+            sig[k,:],_ = ssao.run_loop(ssao.pyr.lambdaInM, starMag, Rec, m2c, save_telemetry_prefix=f'magV{starMag:1.0f}_')
         ssao.SR = xp.exp(-sig)
 
     # Post-processing and plotting
     print('Plotting results ...')
     if show:
-        subap_masks = xp.sum(ssao.slope_computer._subaperture_masks,axis=0)
+        subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
         plt.figure()
         myimshow(subap_masks,title='Subaperture masks')
         plt.show()
 
-        KL = myfits.read_fits(op.join(ssao.savepath,'KLmodes.fits'))
+        KL = myfits.read_fits(op.join(ssao.savecalibpath,'KLmodes.fits'))
         N=9
         plt.figure(figsize=(2*N,7))
         for i in range(N):
@@ -60,8 +51,10 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
             plt.subplot(4,N,i+1+N*3)
             ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
 
-        IM = myfits.read_fits(op.join(ssao.savepath,'IM.fits'))
+        IM = myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits'))
         IM_std = xp.std(IM,axis=0)
+        if xp.on_gpu:
+            IM_std = IM_std.get()
         plt.figure()
         plt.plot(IM_std,'-o')
         plt.grid()
@@ -90,7 +83,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     psf = abs(field_on_focal_plane)**2
     # psf = abs(ssao.pyr.field_on_focal_plane)**2
 
-    cmask = ssao.cmask.get() if xp.__name__ == 'cupy' else ssao.cmask.copy()
+    cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
@@ -102,8 +95,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         cmap='RdBu',shrink=0.8)
     plt.axis('off')
 
-
-    pixelsPerMAS = lambdaInM/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
+    pixelsPerMAS = ssao.pyr.lambdaInM/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
     plt.subplot(2,2,2)
     showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
         title = f'Corrected PSF\nStrehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 

@@ -29,25 +29,24 @@ class PyramidWFS:
         self.cdtype = xp.cfloat
 
 
-    def get_intensity(self, input_field, lambdaOverD, wedgeShift=None):
+    def get_intensity(self, input_field, lambdaOverD):
 
         L = max(input_field.shape) # TBI: deal with non-square input fields
-        padded_field = self._xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
+        padded_field = xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
 
-        if self.modulationAngleInLambdaOverD*(2*self._xp.pi)*self.oversampling < 0.1:
+        if self.modulationAngleInLambdaOverD*(2*xp.pi)*self.oversampling < 0.1:
             output_field = self.propagate(padded_field, lambdaOverD)
             intensity = xp.abs(output_field)**2
         else:
-            intensity = self.modulate(padded_field, lambdaOverD, wedgeShift)
+            intensity = self.modulate(padded_field, lambdaOverD)
 
         return intensity
 
 
-    def set_modulation_angle(self, modulationAngleInLambdaOverD, verbose:bool=True):
+    def set_modulation_angle(self, modulationAngleInLambdaOverD):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
         self.modulationNsteps = xp.ceil(modulationAngleInLambdaOverD*2.25*xp.pi)//4*4
-        if verbose:
-            print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self.modulationNsteps:1.0f} modulation steps')
+        print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self.modulationNsteps:1.0f} modulation steps')
         
         
     @lru_cache(maxsize=5)

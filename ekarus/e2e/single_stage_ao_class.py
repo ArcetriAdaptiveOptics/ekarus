@@ -8,7 +8,7 @@ from ekarus.e2e.pyramid_wfs import PyramidWFS
 from ekarus.e2e.detector import Detector
 from ekarus.e2e.slope_computer import SlopeComputer
 
-from ekarus.e2e.high_level_ao_class import HighLevelAO
+from ekarus.abstract_classes.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask  # , get_masked_array
 
 # from ekarus.e2e.utils.my_fits_package import read_fits
@@ -18,8 +18,9 @@ class SingleStageAO(HighLevelAO):
 
     def __init__(self, tn: str):
         """The constructor"""
-        super().__init__(tn)
-        self._initialize_devices()
+
+        super().__init__(tn)        
+        
         self.telemetry_keys = [
             "AtmoPhases",
             "DMphases",
@@ -27,6 +28,14 @@ class SingleStageAO(HighLevelAO):
             "DetectorFrames",
             "DMcommands",
         ]
+
+        self._initialize_devices()
+        self.sc.calibrate_sensor(tn, prefix_str='',
+                                  piston=1-self.cmask, 
+                                  lambdaOverD = self.pyr.lambdaInM/self.pupilSizeInM,
+                                  Npix = self.subapertureSize)  
+        self.initialize_turbulence()
+
 
 
     def _initialize_devices(self):
@@ -38,43 +47,31 @@ class SingleStageAO(HighLevelAO):
         - DM
         - Slope computer
         """
-        sensor_pars = self._config.read_sensor_pars()
-        apex_angle, oversampling, sensorLambda = (
-            sensor_pars["apex_angle"],
-            sensor_pars["oversampling"],
-            sensor_pars["lambdaInM"],
-        )
-        self.pyr = PyramidWFS(apex_angle, oversampling, sensorLambda)
 
-        detector_pars = self._config.read_detector_pars()
-        detector_shape, RON, quantum_efficiency, beam_split_ratio = (
-            detector_pars["detector_shape"],
-            detector_pars["RON"],
-            detector_pars["quantum_efficiency"],
-            detector_pars["beam_splitter_ratio"]
+        print('Initializing devices ...')
+
+        wfs_pars = self._config.read_sensor_pars('PYR') 
+        subapPixSep = wfs_pars["subapPixSep"]
+        oversampling = wfs_pars["oversampling"]
+        sensorLambda = wfs_pars["lambdaInM"]
+        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(self.pupilSizeInPixels+subapPixSep)/2
+        self.pyr = PyramidWFS(
+            apex_angle=apex_angle, 
+            oversampling=oversampling, 
+            sensorLambda=sensorLambda
         )
+        
+        self.subapertureSize=wfs_pars["subapPixSize"]
+        det_pars = self._config.read_detector_pars()
         self.ccd = Detector(
-            detector_shape=detector_shape,
-            RON=RON,
-            quantum_efficiency=quantum_efficiency,
-            beam_split_ratio=beam_split_ratio,
+            detector_shape=det_pars["detector_shape"],
+            RON=det_pars["RON"],
+            quantum_efficiency=det_pars["quantum_efficiency"],
+            beam_split_ratio=det_pars["beam_splitter_ratio"],
         )
 
         sc_pars = self._config.read_slope_computer_pars()
-        self.sc = SlopeComputer(self.pyr, self.ccd)
-        (
-            self.sc.dt,
-            self.sc.intGain,
-            self.sc.delay,
-            self.sc.nModes,
-            self.sc.ttOffloadFreqHz,
-        ) = (
-            1 / sc_pars["loopFrequencyInHz"],
-            sc_pars["integratorGain"],
-            sc_pars["delay"],
-            sc_pars["nModes2Correct"],
-            sc_pars["ttOffloadFrequencyInHz"],
-        )
+        self.sc = SlopeComputer(self.pyr, self.ccd, sc_pars)
 
         dm_pars = self._config.read_dm_pars()
         Nacts = dm_pars["Nacts"]

@@ -2,23 +2,25 @@ DM:
   Nacts: 468
   max_stroke_in_m: 5e-6   # Not yet used
 
-WFS:
-  apex_angle: 0.0003906262449032515
+PYR:
+  # apex_angle: 0.0003906262449032515
   oversampling: 4                     # oversampling for PSF computation
   lambdaInM: 1000e-9                  # sensor wavelength
+  subapPixSize: 63
+  subapPixSep: 40
 
 DETECTOR:
   detector_shape: [256, 256]
-  RON: 1.0
-  quantum_efficiency: 0.7
-  beam_splitter_ratio: 0.5  # fraction of light to WFS
+  RON: 1.0                      # readout noise in e-
+  quantum_efficiency: 0.7       # detector quantum efficiency
+  beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER:
   loopFrequencyInHz: 1500
   integratorGain: 0.9
-  delay: 2                  # loop delay in steps
-  nModes2Correct: 467
-  ttOffloadFrequencyInHz: 0 # if 0, no TT offloading
+  delay: 2                    # loop delay in steps
+  nModes2Correct: 467         # number of reconstructor modes
+  ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
 
 TELESCOPE:
   pupilSizeInM: 1.8

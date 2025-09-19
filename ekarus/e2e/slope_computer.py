@@ -9,10 +9,25 @@ from .utils.root import calibpath #resultspath
 
 class SlopeComputer():
 
-    def __init__(self, wfs, detector):
+    def __init__(self, wfs, detector, sc_pars):
+        """ The constructor """
 
         self._wfs = wfs
         self._detector = detector
+
+        (
+            self.dt,
+            self.intGain,
+            self.delay,
+            self.nModes,
+            self.ttOffloadFreqHz,
+        ) = (
+            1 / sc_pars["loopFrequencyInHz"],
+            sc_pars["integratorGain"],
+            sc_pars["delay"],
+            sc_pars["nModes2Correct"],
+            sc_pars["ttOffloadFrequencyInHz"],
+        )
 
         if hasattr(wfs,'apex_angle'):
             self.wfs_type = 'PyrWFS'
@@ -22,7 +37,7 @@ class SlopeComputer():
         self.dtype = xp.float
 
 
-    def calibrate_sensor(self, tn: str, prefix_str: str, **kwargs):
+    def calibrate_sensor(self, tn:str, prefix_str:str, **kwargs):
         """
         Calibrates the sensor.
         
@@ -32,43 +47,35 @@ class SlopeComputer():
         """
         match self.wfs_type:
             case 'PyrWFS':
-                # print(resultspath, tn, prefix_str)
+                print('Defining the detector subaperture masks ...')
                 subap_path = join(calibpath, tn, prefix_str+'SubapertureMasks.fits')
                 piston, lambdaOverD, subaperturePixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix']
                 try:
                     subaperture_masks = read_fits(subap_path).astype(bool)
                     self._subaperture_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
-                    subapertureSizeInPixels = self._get_subaperture_pixel_size(subaperturePixelSize)
-                    self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10,verbose=False) # modulate a lot during subaperture definition
+                    self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     self._define_subaperture_masks(detector_image, subaperturePixelSize)
-                    hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subapertureSizeInPixels}
+                    hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(subap_path, (self._subaperture_masks).astype(xp.uint8), hdr_dict)
             case _:
                 raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
-        
-
-    def _get_subaperture_pixel_size(self, pupilSizeInPixels): 
-        image_size = pupilSizeInPixels*self._wfs.oversampling
-        rebin_factor = min(self._detector.detector_shape)/image_size
-        pupilPixelSizeOnDetector = pupilSizeInPixels * rebin_factor
-        return pupilPixelSizeOnDetector-0.5 
     
 
-    def compute_slopes(self, input_field, lambdaOverD, nPhotons, wedgeShift=None, **kwargs):
+    def compute_slopes(self, input_field, lambdaOverD, nPhotons, **kwargs):
         """
         Compute slopes from the input field
         """
 
         if isinstance(lambdaOverD,int) or isinstance(lambdaOverD,float):
-            intensity = self._wfs.get_intensity(input_field, lambdaOverD, wedgeShift)
+            intensity = self._wfs.get_intensity(input_field, lambdaOverD)
         else:
-            intensity = self._wfs.get_intensity(input_field, lambdaOverD[0], wedgeShift)
+            intensity = self._wfs.get_intensity(input_field, lambdaOverD[0])
             print(len(lambdaOverD))
             for k in range(1,len(lambdaOverD)):
-                intensity += self._wfs.get_intensity(input_field, lambdaOverD[k], wedgeShift)
+                intensity += self._wfs.get_intensity(input_field, lambdaOverD[k])
 
         detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
 
@@ -120,7 +127,6 @@ class SlopeComputer():
 
         for i in range(4):
             # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
-            # subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qy,qx), xp=self._xp)
             qx,qy = self.find_subaperture_center(subaperture_image, quad_n=i+1)
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qx,qy))
 
