@@ -17,9 +17,9 @@ CCD1:
 
 SLOPE.COMPUTER1:
   loopFrequencyInHz: 1000     
-  integratorGain: 0.5         # loop integrator gain
-  delay: 2                    # loop delay in steps
-  nModes2Correct: 467         # number of reconstructor modes
+  integratorGain: 0.2         # loop integrator gain
+  delay: 6                    # loop delay in steps
+  nModes2Correct: 468         # number of reconstructor modes
   ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
   modulationInLambdaOverD: 3.0  # modulation amplitude
 
@@ -31,8 +31,8 @@ PYR2:
   oversampling: 4
   lambdaInM: 750e-9             # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
-  subapPixSize: 19.5            # subaperture diameter in pix
-  subapPixSep: 24               # pixel distance between subaps
+  subapPixSize: 19              # subaperture diameter in pix
+  subapPixSep: 32               # pixel distance between subaps
 
 CCD2:
   detector_shape: [80,80]       # detector pixel size
@@ -42,8 +42,8 @@ CCD2:
 
 SLOPE.COMPUTER2:
   loopFrequencyInHz: 4000     
-  integratorGain: 0.5         # loop integrator gain
-  delay: 2                    # loop delay in steps
+  integratorGain: 0.9         # loop integrator gain
+  delay: 4                    # loop delay in steps
   nModes2Correct: 240         # number of reconstructor modes
   ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
   modulationInLambdaOverD: 0.0  # modulation amplitude
@@ -61,6 +61,6 @@ ATMO:
   windAngle: [-120, 45, 0]  # [deg] CCW from East
 
 LOOP:
-  nIterations: 200
+  nIterations: 400
   starMagnitude: 0.0
   simFreqHz: 4000          # simulation frequency in Hz

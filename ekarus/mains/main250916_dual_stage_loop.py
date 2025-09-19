@@ -28,15 +28,17 @@ def main(tn:str='example_dual_stage', show:bool=False):
 
 
     KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
-    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL, cascao.pyr2.lambdaInM, amps=0.2, save_prefix='SC1_')
+    cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL, cascao.pyr1.lambdaInM, amps=0.2, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(Rec,m2c)
 
     KL, m2c = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
+    cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
     Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=0.2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(Rec,m2c)
 
     print('Running the loop ...')
-    lambdaInM = 800e-9
+    lambdaInM = 1000e-9
     dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaInM, cascao.starMagnitude, save_prefix='')
 
     # Post-processing and plotting
@@ -80,6 +82,7 @@ def main(tn:str='example_dual_stage', show:bool=False):
         IM2 = myfits.read_fits(op.join(cascao.savecalibpath,'SC2_IM.fits'))
         IM2_std = xp.std(IM2,axis=0)
         if xp.on_gpu:
+            IM1_std = IM1_std.get()
             IM2_std = IM2_std.get()
         plt.figure()
         plt.plot(IM1_std,'-o')
@@ -87,7 +90,7 @@ def main(tn:str='example_dual_stage', show:bool=False):
         plt.grid()
         plt.title('Interaction matrix standard deviation')
 
-        screen = cascao.get_phasescreen_at_time(0)
+        screen = cascao.get_phasescreen_at_time(0.5)
         if xp.on_gpu:
             screen = screen.get()
         plt.figure()
@@ -104,14 +107,14 @@ def main(tn:str='example_dual_stage', show:bool=False):
 
     last_res1_phase = xp.array(res1_phases[-1,:,:])
     residual1_phase = last_res1_phase[~cascao.cmask]
-    input_phase = reshape_on_mask(residual1_phase, psf_mask, xp=xp)
+    input_phase = reshape_on_mask(residual1_phase, psf_mask)
     electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf1 = abs(field_on_focal_plane)**2
 
     last_res2_phase = xp.array(res2_phases[-1,:,:])
     residual2_phase = last_res2_phase[~cascao.cmask]
-    input_phase = reshape_on_mask(residual2_phase, psf_mask, xp=xp)
+    input_phase = reshape_on_mask(residual2_phase, psf_mask)
     electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf2 = abs(field_on_focal_plane)**2
@@ -119,10 +122,12 @@ def main(tn:str='example_dual_stage', show:bool=False):
     pixelsPerMAS = lambdaInM/cascao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
-    if xp.__name__ == 'cupy': # Convert to numpy for plotting
+    if xp.on_gpu: # Convert to numpy for plotting
         dm1_sig2 = dm1_sig2.get()
         dm2_sig2 = dm2_sig2.get()
         input_sig2 = input_sig2.get()
+        rec1_modes = rec1_modes.get()
+        rec2_modes = rec2_modes.get()
 
     shrink = 0.75
     plt.figure()#figsize=(9,13.5))
@@ -149,31 +154,32 @@ def main(tn:str='example_dual_stage', show:bool=False):
     showZoomCenter(psf2, pixelsPerMAS, shrink=shrink, \
         title = f'PSF after DM2\nStrehl ratio = {xp.exp(-dm2_sig2[-1]):1.3f}',cmap='inferno') 
 
+    tvec = np.arange(cascao.Nits)*cascao.dt*1e+3
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(input_sig2,'-o',label='open loop')
-    plt.plot(dm1_sig2,'-o',label='after DM1')
-    plt.plot(dm2_sig2,'-o',label='after DM2')
-    plt.legend()
+    plt.plot(tvec,input_sig2,'-o',label='open loop')
+    plt.plot(tvec,dm1_sig2,'-o',label='after DM1')
+    plt.plot(tvec,dm2_sig2,'-o',label='after DM2')
     plt.grid()
+    plt.xlim([0.0,tvec[-1]*1e+3])
+    plt.xlabel('Time [ms]')
     plt.ylabel(r'$\sigma^2 [rad^2]$')
-    plt.xlabel('# iteration')
     plt.gca().set_yscale('log')
     plt.xlim([-0.5,cascao.Nits-0.5])
 
     plt.figure()
-    plt.plot(np.arange(cascao.Nits),rec1_modes[:,:10],'-o')
+    plt.plot(tvec,rec1_modes[:,:10],'-o')
     plt.grid()
-    plt.xlim([-0.5,cascao.Nits+0.5])
-    plt.xlabel('# Iteration')
+    plt.xlim([0.0,tvec[-1]*1e+3])
+    plt.xlabel('Time [ms]')
     plt.ylabel('amplitude [m]')
     plt.title('Reconstructor 1 modes\n(first 10)')
     plt.show()
 
     plt.figure()
-    plt.plot(np.arange(cascao.Nits),rec2_modes[:,:10],'-o')
+    plt.plot(tvec,rec2_modes[:,:10],'-o')
     plt.grid()
-    plt.xlim([-0.5,cascao.Nits+0.5])
-    plt.xlabel('# Iteration')
+    plt.xlim([0.0,tvec[-1]*1e+3])
+    plt.xlabel('Time [ms]')
     plt.ylabel('amplitude [m]')
     plt.title('Reconstructor 2 modes\n(first 10)')
     plt.show()
@@ -184,4 +190,4 @@ def main(tn:str='example_dual_stage', show:bool=False):
     return cascao
 
 if __name__ == '__main__':
-    ssao = main(show=True)
+    cascao = main(show=True)

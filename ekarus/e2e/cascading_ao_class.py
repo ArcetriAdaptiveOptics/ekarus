@@ -44,8 +44,6 @@ class CascadingAO(HighLevelAO):
         - Slope computer 1,2
         """
 
-        print('Initializing devices ...')
-
         wfs_pars = self._config.read_sensor_pars('PYR1') 
         subapPixSep = wfs_pars["subapPixSep"]
         oversampling = wfs_pars["oversampling"]
@@ -155,17 +153,17 @@ class CascadingAO(HighLevelAO):
             input_phase = atmo_phase[~self.cmask]
             input_phase -= xp.mean(input_phase)  # remove piston
 
-            if sim_time/self.sc1.dt >= self.sc1.delay:
+            if i >= self.sc1.delay and i % int(self.sc1.dt/self.dt) == 0:
                 self.dm1.set_position(dm1_cmds[i - self.sc1.delay, :], absolute=True)
 
             residual1_phase = input_phase - self.dm1.surface
-            dm1_cmd, modes1 = self.perform_loop_iteration(residual1_phase, self.sc1, starMagnitude)
+            dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual1_phase, dm1_cmd, self.sc1, starMagnitude)
 
-            if sim_time/self.sc2.dt >= self.sc2.delay:
+            if i >= self.sc2.delay and i % int(self.sc2.dt/self.dt) == 0:
                 self.dm2.set_position(dm2_cmds[i - self.sc2.delay, :], absolute=True)
 
             residual2_phase = residual1_phase - self.dm2.surface
-            dm2_cmd, modes2 = self.perform_loop_iteration(residual2_phase, self.sc2, starMagnitude)
+            dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual2_phase, dm2_cmd, self.sc2, starMagnitude)
 
             res2_phase_rad2[i] = xp.std(residual2_phase*m2rad)**2
             res1_phase_rad2[i] = xp.std(residual1_phase*m2rad)**2

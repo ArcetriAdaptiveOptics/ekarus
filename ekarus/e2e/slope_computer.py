@@ -49,13 +49,13 @@ class SlopeComputer():
         """
         match self.wfs_type:
             case 'PyrWFS':
-                print('Defining the detector subaperture masks ...')
                 subap_path = join(calibpath, tn, prefix_str+'SubapertureMasks.fits')
                 piston, lambdaOverD, subaperturePixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix']
                 try:
                     subaperture_masks = read_fits(subap_path).astype(bool)
                     self._subaperture_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
+                    print('Defining the detector subaperture masks ...')
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)

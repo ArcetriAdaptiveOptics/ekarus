@@ -131,7 +131,6 @@ class SingleStageAO(HighLevelAO):
             residual_phase = input_phase - self.dm.surface
 
             # delta_phase_in_rad = reshape_on_mask(residual_phase * m2rad, self.cmask)
-
             # input_field = electric_field_amp * xp.exp(1j * delta_phase_in_rad)
             # slopes = self.sc.compute_slopes(input_field, lambdaOverD, Nphotons)
             # modes = self.sc.Rec @ slopes
@@ -140,7 +139,7 @@ class SingleStageAO(HighLevelAO):
             # dm_cmd += cmd * self.sc.intGain
             # dm_cmds[i, :] = dm_cmd / m2rad  # convert to meters
 
-            dm_cmd, modes = self.perform_loop_iteration(residual_phase, self.sc, starMagnitude)
+            dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, starMagnitude)
 
             res_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2
@@ -150,7 +149,7 @@ class SingleStageAO(HighLevelAO):
                 input_phases[i, :] = input_phase
                 dm_phases[i, :] = self.dm.surface
                 detector_images[i, :, :] = self.ccd.last_frame
-                rec_modes[i, :] = modes / m2rad  # convert to meters
+                rec_modes[i, :] = modes
         
 
         if save_prefix is not None:

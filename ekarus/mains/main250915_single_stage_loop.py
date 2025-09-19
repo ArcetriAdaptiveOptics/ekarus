@@ -22,9 +22,10 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
                             Npix = ssao.subapertureSize) 
 
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
+    ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
     ssao.sc.load_reconstructor(Rec,m2c)
-    
+
 
     print('Running the loop ...')
     try:
@@ -156,10 +157,10 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         plt.title('Strehl vs star magnitude')
 
     plt.figure()
-    plt.plot(np.arange(ssao.Nits),rec_modes[:,:10],'-o')
+    plt.plot(np.arange(ssao.Nits)*ssao.dt*1e+3,rec_modes[:,:10],'-o')
     plt.grid()
-    plt.xlim([-0.5,ssao.Nits+0.5])
-    plt.xlabel('# Iteration')
+    plt.xlim([0.0,ssao.Nits*ssao.dt*1e+3])
+    plt.xlabel('Time [ms]')
     plt.ylabel('amplitude [m]')
     plt.title('Reconstructor modes\n(first 10)')
     plt.show()

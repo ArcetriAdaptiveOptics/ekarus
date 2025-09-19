@@ -160,8 +160,8 @@ class TurbulenceLayers():
             # print(windAngle*180/xp.pi, ': ', sin_phi, cos_phi) # debugging
 
             Delta = min(abs((W-w)/(2*cos_phi)), abs((H-h)/(2*sin_phi)))
-            self.startX[k] = (W-w)/2 - Delta * cos_phi
-            self.startY[k] = (H-h)/2 - Delta * sin_phi
+            self.startX[k] = max(0.0,(W-w)/2 - Delta * cos_phi)
+            self.startY[k] = max(0.0,(H-h)/2 - Delta * sin_phi)
     
     
     def _check_same_length(self, a, b):

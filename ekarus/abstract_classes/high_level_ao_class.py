@@ -89,7 +89,6 @@ class HighLevelAO():
         m2c : array
             The mode-to-command matrix.
         """
-        print('Obtaining the Karhunen-Loeve mirror modes ...')
         KL_path = os.path.join(self.savecalibpath,str(save_prefix)+'KLmodes.fits')
         m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+'m2c.fits')
         try:
@@ -137,7 +136,6 @@ class HighLevelAO():
         IM : array
             The interaction matrix.
         """
-        print('Computing the reconstructor ...')
         IM_path = os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits')
         Rec_path = os.path.join(self.savecalibpath,str(save_prefix)+'Rec.fits')
         try:
@@ -149,7 +147,6 @@ class HighLevelAO():
             electric_field_amp = 1-self.cmask
             lambdaOverD = lambdaInM/self.pupilSizeInM
             Nphotons = None # perfect calibration: no noise
-            self.pyr.set_modulation_angle(self.modulationAngleInLambdaOverD)
             if isinstance(amps, float):
                 amps *= xp.ones(Nmodes)
             for i in range(Nmodes):
@@ -186,7 +183,6 @@ class HighLevelAO():
             Maximum time step, screen length is computed using the maximum wind speeds and simulation time.
         The minimum length for the screen is 20 pupil diameters.
         """
-        print('Initializing turbulence ...')
         if self.atmo_pars is None:
             self.atmo_pars = self._config.read_atmo_pars()
         r0s = self.atmo_pars['r0']
@@ -214,13 +210,15 @@ class HighLevelAO():
         self.layers.update_mask(self.cmask)
 
     
-    def perform_loop_iteration(self, phase, slope_computer, starMagnitude:float=None):
+    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, starMagnitude:float=None):
         """
         Performs a single iteration of the AO loop.
         Parameters
         ----------
         phase : array
             The input phase screen in meters.
+        dm_cmd : array
+            The current DM command in meters.
         slope_computer : SlopeComputer
             The slope computer object.
         starMagnitude : float
@@ -244,9 +242,9 @@ class HighLevelAO():
         modes = slope_computer.Rec @ slopes
         gmodes = modes * slope_computer.modal_gains
         cmd = slope_computer.m2c @ gmodes
-        dm_cmd += cmd * slope_computer.intGain
+        delta_cmd_rad = cmd * slope_computer.intGain
 
-        dm_cmd /= m2rad  # convert to meters
+        dm_cmd += delta_cmd_rad / m2rad  # convert to meters
         modes /= m2rad  # convert to meters
 
         return dm_cmd, modes
