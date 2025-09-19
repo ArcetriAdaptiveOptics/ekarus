@@ -86,7 +86,7 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
     """
 
     """Performs operations with NumPy or CuPy depending on the backend passed as an argument."""
-    if xp.__name__ == "cupy":
+    if xp.on_gpu: #xp.__name__ == "cupy":
         from cupy.linalg import svd, pinv
     else:
         from scipy.linalg import svd, pinv
@@ -114,8 +114,7 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
     modes_to_be_removed[0, :] = 1.0
 
     if zern_modes > 0:
-        zern_mask = pupil_mask.get() if xp.__name__ == 'cupy' else pupil_mask.copy()
-        zg = ZernikeGenerator(zern_mask, pupil_pix_radius)
+        zg = ZernikeGenerator(xp.asnumpy(pupil_mask), pupil_pix_radius)
         zern_modes_cube = xp.stack([xp.array(zg.getZernike(z), dtype=dtype) for z in range(2, zern_modes + 2)])
 
         if verbose:
@@ -278,6 +277,8 @@ def compute_ifs_covmat(pupil_mask, diameter, influence_functions, r0, L0, oversa
         cdtype = xp.complex64
     elif dtype == xp.float64:
         cdtype = xp.complex128
+    elif dtype == xp.float:
+        cdtype = xp.cfloat
     else:
         cdtype = complex
 
@@ -309,7 +310,7 @@ def compute_ifs_covmat(pupil_mask, diameter, influence_functions, r0, L0, oversa
     phase_spectrum = generate_phase_spectrum(sp_freq, r0, L0, xp=xp)
     norm_factor    = npupil_mask**2 * (oversampling * diameter)**2
 
-    if xp.__name__ == "cupy":
+    if xp.on_gpu: #__name__ == "cupy":
         prod_ft_shape = ft_shape[0] * ft_shape[1]
     else:
         prod_ft_shape = xp.prod(ft_shape)
@@ -360,7 +361,7 @@ def generate_phase_spectrum(f, r0, L0, xp=np, dtype=np.float32):
     """
 
     """Performs operations with NumPy or CuPy depending on the backend passed as an argument."""
-    if xp.__name__ == "cupy":
+    if xp.on_gpu: #__name__ == "cupy":
         from cupyx.scipy.special import gamma
     else:
         from scipy.special import gamma

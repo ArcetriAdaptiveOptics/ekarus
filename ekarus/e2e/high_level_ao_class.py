@@ -5,7 +5,7 @@ np = xp.np
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.analytical.turbulence_layers import TurbulenceLayers
 from ekarus.e2e.utils.read_configuration import ConfigReader
-from ekarus.e2e.utils.root import resultspath
+from ekarus.e2e.utils.root import resultspath, calibpath
 
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
@@ -18,6 +18,10 @@ class HighLevelAO():
         self.savepath = os.path.join(resultspath, tn)
         if not os.path.exists(self.savepath):
             os.mkdir(self.savepath)
+
+        self.savecalibpath = os.path.join(calibpath, tn)
+        if not os.path.exists(self.savecalibpath):
+            os.mkdir(self.savecalibpath)
 
         self.dtype = xp.float
 
@@ -58,6 +62,7 @@ class HighLevelAO():
         loop_pars = self._config.read_loop_pars()
         self.Nits = loop_pars['nIterations']
         self.starMagnitude = loop_pars['starMagnitude']
+        self.modulationAngleInLambdaOverD = loop_pars['modulationAngleInLambdaOverD']
     
 
     def define_KL_modes(self, dm, oversampling: int, zern_modes:int=5, save_prefix:str=''):
@@ -82,8 +87,8 @@ class HighLevelAO():
         m2c : array
             The mode-to-command matrix.
         """
-        KL_path = os.path.join(self.savepath,str(save_prefix)+'KLmodes.fits')
-        m2c_path = os.path.join(self.savepath,str(save_prefix)+'m2c.fits')
+        KL_path = os.path.join(self.savecalibpath,str(save_prefix)+'KLmodes.fits')
+        m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+'m2c.fits')
         try:
             KL = myfits.read_fits(KL_path)
             m2c = myfits.read_fits(m2c_path)
@@ -95,9 +100,10 @@ class HighLevelAO():
                 r0 = r0s
             else:
                 r0 = xp.sqrt(xp.sum(r0s**2))
+            print(xp.__name__)
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
-                oversampling=oversampling, verbose = True, xp=xp, dtype=self.dtype)
+                oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
             hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
             myfits.save_fits(KL_path, KL, hdr_dict)
             myfits.save_fits(m2c_path, m2c, hdr_dict)
@@ -126,8 +132,8 @@ class HighLevelAO():
         IM : array
             The interaction matrix.
         """
-        IM_path = os.path.join(self.savepath,str(save_prefix)+'IM.fits')
-        Rec_path = os.path.join(self.savepath,str(save_prefix)+'Rec.fits')
+        IM_path = os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits')
+        Rec_path = os.path.join(self.savecalibpath,str(save_prefix)+'Rec.fits')
         try:
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
@@ -137,12 +143,13 @@ class HighLevelAO():
             electric_field_amp = 1-self.cmask
             lambdaOverD = slope_computer._wfs.lambdaInM/self.pupilSizeInM
             Nphotons = None # perfect calibration: no noise
+            self.pyr.set_modulation_angle(self.modulationAngleInLambdaOverD)
             if isinstance(amps, float):
                 amps *= xp.ones(Nmodes)
             for i in range(Nmodes):
                 print(f'\rMode {i+1}/{Nmodes}', end='\r', flush=True)
                 amp = amps[i]
-                mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask, xp=self._xp)
+                mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
                 input_field = xp.exp(1j*mode_phase) * electric_field_amp
                 push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)/amp #self.get_slopes(input_field, Nphotons)/amp
                 input_field = xp.conj(input_field)
@@ -159,7 +166,7 @@ class HighLevelAO():
         return Rec, IM
 
     
-    def initialize_turbulence(self, N: int = None):
+    def initialize_turbulence(self, N:int=None, dt:float=None):
         """
         Initializes the turbulence layers based on atmospheric parameters.
 
@@ -168,8 +175,10 @@ class HighLevelAO():
         Parameters
         ----------
         N : int, optional
-            The number of phase screens to generate, by default None. 
-            By default, it will be computed based on wind speeds and simulation time.
+            The number of pupil lengths for the generated phase screens. 
+        dt : float, optional
+            Maximum time step, screen length is computed using the maximum wind speeds and simulation time.
+        The minimum length for the screen is 20 pupil diameters.
 
         """
         atmo_par = self._config.read_atmo_pars()
@@ -178,14 +187,17 @@ class HighLevelAO():
         windSpeeds = atmo_par['windSpeed']
         windAngles = atmo_par['windAngle']
         if N is None:
-            maxTime = self.dt * self.Nits
-            if isinstance(windSpeeds, (int, float)):
-                maxSpeed = windSpeeds
+            if dt is not None:
+                maxTime = dt * self.Nits
+                if isinstance(windSpeeds, (int, float)):
+                    maxSpeed = windSpeeds
+                else:
+                    maxSpeed = windSpeeds.max()
+                maxLen = maxSpeed*maxTime
+                N = int(np.ceil(maxLen/self.pupilSizeInM))
             else:
-                maxSpeed = windSpeeds.max()
-            maxLen = maxSpeed*maxTime
-            N = int(np.ceil(maxLen/self.pupilSizeInM))
-        N = int(np.max([10,N])) # set minimum N to 10
+                N = 20
+        N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
         atmo_path = os.path.join(self.savepath, 'AtmospherePhaseScreens.fits')
@@ -221,11 +233,14 @@ class HighLevelAO():
         for key in data_dict:
             file_path = os.path.join(self.savepath,str(key)+'.fits')
             myfits.save_fits(file_path, data_dict[key])
+    
             
-    def load_telemetry_data(self, data_keys: list[str]):
+    def load_telemetry_data(self, data_keys:list[str]=None):
         """
         Load telemetry data from FITS files.
         """
+        if data_keys is None:
+            data_keys = self.telemetry_keys
         loaded_data = []
         for key in data_keys:
             file_path = os.path.join(self.savepath, key+'.fits')

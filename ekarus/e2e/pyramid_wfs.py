@@ -1,4 +1,5 @@
-import numpy as np
+import xupy as xp
+np = xp.np
 
 from ekarus.e2e.utils.image_utils import image_grid
 from functools import lru_cache
@@ -12,7 +13,7 @@ class PyramidWFS:
     where the phase shift depends on the distance from the apex.
     """
 
-    def __init__(self, apex_angle, oversampling, xp=np):
+    def __init__(self, apex_angle, oversampling, sensorLambda):
         """
         Pyramid wavefront sensor constructor.
 
@@ -20,22 +21,22 @@ class PyramidWFS:
         """
         self.apex_angle = apex_angle
         self.oversampling = oversampling
+        self.lambdaInM = sensorLambda
 
         self.modulationAngleInLambdaOverD = None
 
-        self._xp = xp
-        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
-        self.cdtype = xp.complex64 if xp.__name__ == 'cupy' else xp.complex128
+        self.dtype = xp.float
+        self.cdtype = xp.cfloat
 
 
     def get_intensity(self, input_field, lambdaOverD):
 
-        H,W = input_field.shape # TBI: deal with non-square input fields
-        padded_field = self._xp.pad(input_field, int((self.oversampling-1)/2*H), mode='constant', constant_values=0.0)
+        D = max(input_field.shape) # TBI: deal with non-square input fields
+        padded_field = xp.pad(input_field, int((self.oversampling-1)/2*D), mode='constant', constant_values=0.0)
 
         if self.modulationAngleInLambdaOverD == 0:
             output_field = self.propagate(padded_field, lambdaOverD)
-            intensity = self._xp.abs(output_field)**2
+            intensity = xp.abs(output_field)**2
         else:
             intensity = self.modulate(padded_field, lambdaOverD)
 
@@ -44,7 +45,7 @@ class PyramidWFS:
 
     def set_modulation_angle(self, modulationAngleInLambdaOverD, verbose:bool=True):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
-        self.modulationNsteps = self._xp.ceil(modulationAngleInLambdaOverD*2.25*self._xp.pi)//4*4
+        self.modulationNsteps = xp.ceil(modulationAngleInLambdaOverD*2.25*xp.pi)//4*4
         if verbose:
             print(f'Now modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self.modulationNsteps:1.0f} modulation steps')
         
@@ -58,10 +59,10 @@ class PyramidWFS:
         :param shape: tuple (ny, nx) electric field dimensions
         :return: array numpy 2D float (phase delay in pixels)
         """
-        X,Y = image_grid(shape, recenter=True,  xp=self._xp)
+        X,Y = image_grid(shape, recenter=True)
         D = max(shape)
         phi = self.apex_angle*(1 - 1/D*(abs(X)+abs(Y)))
-        phi = self._xp.asarray(phi,dtype=self.dtype)
+        phi = xp.asarray(phi,dtype=self.dtype)
 
         return phi
     
@@ -79,12 +80,12 @@ class PyramidWFS:
 
         :return: complex array numpy 2D representing the output electric field
         """
-        self.field_on_focal_plane = self._xp.fft.fftshift(self._xp.fft.fft2(input_field))
+        self.field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(input_field))
 
         phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD / self.oversampling
-        self._ef_focal_plane_delayed = self.field_on_focal_plane * self._xp.exp(1j*phase_delay, dtype = self.cdtype)
+        self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype = self.cdtype)
 
-        output_field = self._xp.fft.ifft2(self._xp.fft.ifftshift(self._ef_focal_plane_delayed))
+        output_field = xp.fft.ifft2(xp.fft.ifftshift(self._ef_focal_plane_delayed))
 
         return output_field
     
@@ -107,14 +108,14 @@ class PyramidWFS:
         pixelsPerRadian = lambdaOverD / self.oversampling
         modulationAngle = self.modulationAngleInLambdaOverD * lambdaOverD
 
-        alpha_pix = modulationAngle/pixelsPerRadian*(2*self._xp.pi)
-        phi_vec = (2*self._xp.pi)*self._xp.arange(self.modulationNsteps)/self.modulationNsteps
+        alpha_pix = modulationAngle/pixelsPerRadian*(2*xp.pi)
+        phi_vec = (2*xp.pi)*xp.arange(self.modulationNsteps)/self.modulationNsteps
 
-        intensity = self._xp.zeros(input_field.shape, dtype = self.dtype)
+        intensity = xp.zeros(input_field.shape, dtype = self.dtype)
 
         for phi in phi_vec:
-            tilt = tiltX * self._xp.cos(phi) + tiltY * self._xp.sin(phi)
-            tilted_input = input_field * self._xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
+            tilt = tiltX * xp.cos(phi) + tiltY * xp.sin(phi)
+            tilted_input = input_field * xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
 
             output = self.propagate(tilted_input, pixelsPerRadian)
             intensity += (abs(output**2))/self.modulationNsteps
@@ -124,7 +125,7 @@ class PyramidWFS:
 
     @lru_cache(maxsize=5)
     def _get_XY_tilt_planes(self, input_shape):
-        tiltX,tiltY = image_grid(input_shape, recenter=True, xp=self._xp)
+        tiltX,tiltY = image_grid(input_shape, recenter=True)
         L = max(input_shape)
         return tiltX/L,tiltY/L
 

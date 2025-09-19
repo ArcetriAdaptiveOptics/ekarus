@@ -1,7 +1,10 @@
 import os.path as op
 from .root import configpath
-from ruamel.yaml import YAML
-yaml = YAML()
+# from ruamel.yaml import YAML
+import yaml
+
+import xupy as xp
+np = xp.np
 
 
 class ConfigReader():
@@ -15,9 +18,9 @@ class ConfigReader():
         """ Read telescope parameters from the configuration file."""
         return self._cfile['TELESCOPE']
 
-    
     def read_sensor_pars(self, sensor_name: str = 'WFS'):
         """ Read sensor parameters from the configuration file."""
+        self._cfile[sensor_name]['lambdaInM'] = eval(self._cfile[sensor_name]['lambdaInM'])
         return self._cfile[sensor_name]
 
     def read_detector_pars(self, detector_name: str = 'DETECTOR'):
@@ -30,6 +33,8 @@ class ConfigReader():
     
     def read_atmo_pars(self):
         """ Read atmosphere parameters from the configuration file."""
+        self._cfile['ATMO']['r0'] = xp.array([eval(x) for x in self._cfile['ATMO']['r0']])
+        self._cfile['ATMO']['windAngle'] = xp.asarray(self._cfile['ATMO']['windAngle'])*xp.pi/180
         return self._cfile['ATMO']
     
     def read_slope_computer_pars(self, slope_computer_name: str = 'SLOPE.COMPUTER'):
@@ -45,7 +50,7 @@ class ConfigReader():
         Read a YAML file and return the contents.
         """
         with open(file_path, 'r') as file:
-            data = yaml.load(file)
+            data = yaml.safe_load(file)
         return data
 
 

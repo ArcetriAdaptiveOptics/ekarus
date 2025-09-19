@@ -9,6 +9,8 @@ from ekarus.e2e.single_stage_ao_class import SingleStageAO
 def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
     if hasattr(image, 'asmarray'):
         image = image.asmarray()
+    if hasattr(image, 'get'):
+        image = image.get()
     plt.imshow(image, origin='lower', **kwargs)
     cbar = plt.colorbar(shrink=shrink)
     cbar.set_label(cbar_title, loc='top')
@@ -52,7 +54,7 @@ def main(tn:str='example_single_stage', show:bool=False):
 
     # 3. Calibrate the system
     print('Calibrating the KL modes ...')
-    Rec, IM = ssao.compute_reconstructor(ssao.slope_computer, KL, amps=0.2)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, amps=0.2)
     if show:
         IM_std = xp.std(IM, axis=0)
         if xp.on_gpu:
@@ -68,7 +70,7 @@ def main(tn:str='example_single_stage', show:bool=False):
     ssao.initialize_turbulence()
     if show:
         screen = ssao.get_phasescreen_at_time(0)
-        if xp.__name__ == 'cupy':
+        if xp.on_gpu:
             screen = screen.get()
         plt.figure()
         plt.imshow(screen, cmap='RdBu')
@@ -77,7 +79,7 @@ def main(tn:str='example_single_stage', show:bool=False):
 
     # 5. Perform the iteration
     print('Running the loop ...')
-    sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, Rec, m2c,save_telemetry=True)
+    sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, Rec, m2c, save_telemetry=True)
 
     # 6. Post-processing and plotting
     print('Plotting results ...')
@@ -90,13 +92,13 @@ def main(tn:str='example_single_stage', show:bool=False):
     padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)
     psf_mask = xp.pad(ssao.cmask, padding_len, mode='constant', constant_values=1)
     electric_field_amp = 1-psf_mask
-    input_phase = reshape_on_mask(residual_phase, psf_mask, xp=xp)
+    input_phase = reshape_on_mask(residual_phase, psf_mask)
     electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/ssao.pyr.lambdaInM))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf = abs(field_on_focal_plane)**2
 
     cmask = ssao.cmask.get() if xp.__name__ == 'cupy' else ssao.cmask.copy()
-    if xp.__name__ == 'cupy': # Convert to numpy for plotting
+    if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
 
