@@ -1,12 +1,12 @@
-import numpy as np
+import xupy as xp
+np = xp.np
 # from arte.types.mask import CircularMask
 
 import matplotlib.pyplot as plt
-from numpy.ma import masked_array
 
 
 
-def image_grid(shape, recenter:bool = False, xp=np):
+def image_grid(shape, recenter:bool = False):
     """
     Define a grid of X and Y coordinates on an image shape
 
@@ -19,7 +19,7 @@ def image_grid(shape, recenter:bool = False, xp=np):
     """
 
     ny, nx = shape
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    dtype = xp.float
 
     cy, cx = (0,0)
     if recenter:
@@ -32,7 +32,7 @@ def image_grid(shape, recenter:bool = False, xp=np):
     return X,Y
 
 
-def get_photocenter(image, xp=np):
+def get_photocenter(image):
     """ 
     Compute the image photocenter
     
@@ -40,7 +40,7 @@ def get_photocenter(image, xp=np):
     :param xp: (optional) numpy or cupy for GPU acceleration
     :return: y,x coordinates of the photocenter
     """
-    X,Y = image_grid(image.shape, xp=xp)
+    X,Y = image_grid(image.shape)
     qy = xp.sum(Y * image) / xp.sum(image)
     qx = xp.sum(X * image) / xp.sum(image)
 
@@ -50,7 +50,7 @@ def get_photocenter(image, xp=np):
     return qx,qy 
 
 
-def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
+def get_circular_mask(mask_shape, mask_radius, mask_center=None):
     """
     Create a circular mask for the given shape.
     :param shape: tuple (ny, nx) dimensions of the mask
@@ -64,36 +64,30 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None, xp=np):
 
     dist = lambda x,y: xp.sqrt((xp.asarray(x)-mask_center[0])**2+(xp.asarray(y)-mask_center[1])**2)
     mask = xp.fromfunction(lambda i,j: dist(j,i) >= mask_radius, [H,W])
-    mask = xp.asarray(mask,dtype=bool)  #mask.astype(bool)
+    mask = xp.asarray(mask,dtype=bool)
     return mask
 
-    # mask = CircularMask(shape, maskRadius=radius, maskCenter=center)
-    # return (mask.mask()).astype(bool)
-
-
-def reshape_on_mask(vec, mask, xp=np, dtype=None):
+def reshape_on_mask(vec, mask):
     """
     Reshape a given array on a 2D mask.
     :param flat_array: array of shape sum(1-mask)
     :param mask: boolean 2D mask
     :return: 2D array with flat_array in ~mask
     """
-    if dtype is None:
-        dtype = xp.float32
-    image = xp.zeros(mask.shape,dtype=dtype)
+    image = xp.zeros(mask.shape, dtype=xp.float)
     image[~mask] = vec
     image = xp.reshape(image, mask.shape)
     return image
 
 
-def get_masked_array(vec, mask):
-    if hasattr(vec, 'get'):
-        vec = vec.get()
-    if hasattr(mask, 'get'):
-        mask = mask.get() 
-    aux = reshape_on_mask(vec, mask)
-    ma_vec = masked_array(aux, mask)
-    return ma_vec
+# def get_masked_array(vec, mask):
+#     if hasattr(vec, 'get'):
+#         vec = vec.get()
+#     if hasattr(mask, 'get'):
+#         mask = mask.get() 
+#     aux = reshape_on_mask(vec, mask)
+#     ma_vec = xp.masked_array(aux, mask)
+#     return ma_vec
 
 
 def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0, **kwargs):
@@ -115,8 +109,9 @@ def showZoomCenter(image, pixelSize, **kwargs):
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
 
-
 def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
+    if hasattr(image, 'asmarray'):
+        image = image.asmarray()
     if hasattr(image,'get'):
         image = image.get()
     plt.imshow(image,origin='lower', **kwargs)

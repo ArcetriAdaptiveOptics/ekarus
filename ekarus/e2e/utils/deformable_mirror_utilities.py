@@ -1,10 +1,8 @@
-import numpy as np
+import xupy as xp
+np = xp.np
 
 from tps import ThinPlateSpline # for the simulated IFF
 from scipy.interpolate import griddata
-
-
-# import multiprocessing
 
 
 def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None, xp=np):
@@ -93,7 +91,7 @@ def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None, xp
     return slaved_cmd
     
 
-def compute_reconstructor(M, thr:float= 1e-12, xp=np):
+def compute_reconstructor(M, thr:float= 1e-12):
     """
     Computes the reconstructor (pseudo-inverse) 
     for the interaction matrix M.
@@ -126,25 +124,24 @@ def compute_reconstructor(M, thr:float= 1e-12, xp=np):
     return Rec, U
     
     
-def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0, xp=np):
+def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0):
     """ Simulate the influence functions by 
     imposing 'perfect' zonal commands """
     
-    if xp.__name__ == 'cupy':
-        local_mask = local_mask.get()
-        act_coords = act_coords.get()
+    local_mask = xp.asnumpy(local_mask)
+    act_coords = xp.asnumpy(act_coords)
 
     n_acts = max(act_coords.shape)
 
     mask_ids = np.arange(np.size(local_mask))
-    pix_ids = mask_ids[~(local_mask).flatten()]
+    pix_ids = mask_ids[np.invert(local_mask).flatten()]
     
-    pix_coords = getMaskPixelCoords(local_mask).T
-    act_pix_coords = get_pixel_coords(local_mask, act_coords, pix_scale).T
+    pix_coords = xp.asnumpy(getMaskPixelCoords(local_mask)).T
+    act_pix_coords = xp.asnumpy(get_pixel_coords(local_mask, act_coords, pix_scale)).T
         
     IFF = np.zeros([len(pix_ids),n_acts])
     for k in range(n_acts):
-        print(f'\rSimulating influence functions: {k+1}/{n_acts}', end='')
+        print(f'\rSimulating influence functions: {k+1}/{n_acts}', end='\r', flush=True)
         act_data = np.zeros(n_acts)
         act_data[k] = 1.0
         tps = ThinPlateSpline(alpha=0.0)
@@ -152,14 +149,12 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0, xp
         img = tps.transform(pix_coords[pix_ids,:])
         IFF[:,k] = img[:,0]
 
-    if xp.__name__ == 'cupy': # tps seems to only work with numpy
-        IFF = xp.asarray(IFF,dtype=xp.float32)
-    print(' ')
+    IFF = xp.asarray(IFF,dtype=xp.float)
 
     return IFF
 
 
-def get_pixel_coords(mask, coords, pix_scale:float = 1.0, xp=np):
+def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
     """ 
     Convert x,y coordinates in coords to pixel coordinates
     or get the pixel coordinates of a mask
@@ -184,15 +179,15 @@ def get_pixel_coords(mask, coords, pix_scale:float = 1.0, xp=np):
     """
     
     H,W = mask.shape
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
-    pix_coords = xp.zeros([2,xp.shape(coords)[-1]], dtype=dtype)
+    dtype = xp.float
+    pix_coords = np.zeros([2,np.shape(coords)[-1]], dtype=dtype)
     pix_coords[0,:] = coords[1,:]*pix_scale + H/2 #(coords[1,:]*pix_scale/2 + H)/2
     pix_coords[1,:] = coords[0,:]*pix_scale + W/2 #(coords[0,:]*pix_scale/2 + W)/2
     
     return pix_coords
 
 
-def get_coords_from_IFF(IFF, mask, use_peak=True, xp=np):
+def get_coords_from_IFF(IFF, mask, use_peak=True):
     """
     Get the coordinates of the actuators from the influence functions matrix.
 
@@ -222,10 +217,10 @@ def get_coords_from_IFF(IFF, mask, use_peak=True, xp=np):
     y_coords = xy_pix_coords[1,:]
 
     mask = (mask).astype(bool) # ensure mask is boolean
-    x_coords = x_coords[~mask.flatten()]
-    y_coords = y_coords[~mask.flatten()]
+    x_coords = x_coords[xp.invert(mask).flatten()]
+    y_coords = y_coords[xp.invert(mask).flatten()]
 
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    dtype = xp.float
 
     # Get the coordinates of the actuators
     n_acts = IFF.shape[1]
@@ -246,7 +241,7 @@ def get_coords_from_IFF(IFF, mask, use_peak=True, xp=np):
     return act_coords, iff_pix_coords
 
 
-def estimate_stiffness_from_IFF(IFF, CMat, act_pix_coords, cmdAmps=None, xp=np):
+def estimate_stiffness_from_IFF(IFF, CMat, act_pix_coords, cmdAmps=None):
     """
     Get the coordinates of the actuators from the influence functions matrix.
 
@@ -261,7 +256,7 @@ def estimate_stiffness_from_IFF(IFF, CMat, act_pix_coords, cmdAmps=None, xp=np):
         The stiffness matrix of the DM.
     """
     n_acts = IFF.shape[1]
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    dtype = xp.float
     PMat = xp.zeros([n_acts,n_acts], dtype=dtype)
 
     for k in range(n_acts):
@@ -276,23 +271,23 @@ def estimate_stiffness_from_IFF(IFF, CMat, act_pix_coords, cmdAmps=None, xp=np):
     return K
 
 
-def cube2mat(cube, xp=np):
+def cube2mat(cube):
     """ Get influence functions matrix 
     from the image cube """
     
     n_acts = cube.shape[2]
     valid_len = int(xp.sum(1-cube.mask)/n_acts)
-    
-    flat_cube = cube.data[~cube.mask]
+
+    flat_cube = cube.data[xp.invert(cube.mask)]
     local_IFF = xp.reshape(flat_cube, [valid_len, n_acts])
 
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    dtype = xp.float
     IFF = xp.array(local_IFF, dtype=dtype)
     
     return IFF
 
 
-def getMaskPixelCoords(mask, xp=np):
+def getMaskPixelCoords(mask):
     """ 
     Get the pixel coordinates of a mask
 
@@ -308,7 +303,7 @@ def getMaskPixelCoords(mask, xp=np):
     """
     
     H,W = mask.shape
-    dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+    dtype = xp.float
     pix_coords = xp.zeros([2,H*W], dtype=dtype)
     pix_coords[0,:] = xp.repeat(xp.arange(H),W)
     pix_coords[1,:] = xp.tile(xp.arange(W),H)

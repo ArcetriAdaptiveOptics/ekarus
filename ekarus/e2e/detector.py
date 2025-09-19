@@ -1,16 +1,18 @@
-import numpy as np
+import xupy as xp
+np = xp.np
 from arte.math.toccd import toccd
 
 
 class Detector:
 
-    def __init__(self, detector_shape = None, RON:float = 0.0, quantum_efficiency:float = 1.0, max_bits:int = 12, xp=np):
+    def __init__(self, detector_shape = None, RON:float = 0.0, quantum_efficiency:float = 1.0, beam_split_ratio:float = 1.0, max_bits:int = 12):
         """
         Detector constructor.
         
         :param detector_shape: number of pixels in the detector
         :param RON: readout noise in electrons
         :param quantum_efficiency: the quantum efficiency of the detector
+        :param beam_split_ratio: the percentage of light directed to the detetctor 
         :param max_bits: the maximum number of counts per pixel
         """
 
@@ -18,11 +20,11 @@ class Detector:
         self.RON = RON
         self.quantum_efficiency = quantum_efficiency
         self.max_bits = max_bits
+        self.beam_split_ratio = beam_split_ratio
 
         self.subapertures = None
 
-        self._xp = xp
-        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+        self.dtype = xp.float
 
 
     def image_on_detector(self, image, rebin_fact:int = 0, photon_flux = None):
@@ -54,18 +56,18 @@ class Detector:
         """
 
         # Re-scale the intensity based on the flux and quantum efficiency
-        norm_intensity = self.quantum_efficiency * flux * intensity/self._xp.sum(intensity)
+        norm_intensity = self.beam_split_ratio * self.quantum_efficiency * flux * intensity/xp.sum(intensity)
 
         # Noise
-        poisson_noise = self._xp.random.poisson(norm_intensity, self._xp.shape(intensity)) # Possion noise
-        readout_noise = self._xp.random.normal(0, self.RON, size=self._xp.shape(intensity)) # readout noise
+        poisson_noise = xp.random.poisson(norm_intensity, xp.shape(intensity)) # Possion noise
+        readout_noise = xp.random.normal(0, self.RON, size=xp.shape(intensity)) # readout noise
         
-        noisy_intensity = self._xp.round(norm_intensity + poisson_noise + readout_noise)
+        noisy_intensity = xp.round(norm_intensity + poisson_noise + readout_noise)
 
         # Saturation
-        noisy_intensity = self._xp.minimum(2**self.max_bits,noisy_intensity)
+        noisy_intensity = xp.minimum(2**self.max_bits,noisy_intensity)
         
-        return self._xp.maximum(0,noisy_intensity)
+        return xp.maximum(0,noisy_intensity)
     
 
     

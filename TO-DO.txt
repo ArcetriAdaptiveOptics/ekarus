@@ -8,8 +8,8 @@ Zernike WFS
 Shack Hartmann WFS
 Pass the mask as input to the DM constructor!
 Control Filter Class ('leaky' integrator)
-Multiprocessing: modulation + IFFs
 Define WFS and CCD from confing in SlopeComputer
+Convert DM sim with GPU
 
 
 CODING/EASE-OF_USE:

@@ -1,27 +1,18 @@
-import matplotlib.pyplot as plt
-from numpy.ma import masked_array
-import os.path as op
+import xupy as xp
+masked_array = xp.masked_array
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, reshape_on_mask
+import matplotlib.pyplot as plt
+
+from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask, myimshow
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 
 import ekarus.e2e.utils.my_fits_package as myfits
-
-try:
-    import cupy as xp
-    xptype = xp.float32
-    print('Now using GPU acceleration!')
-except:
-    import numpy as xp
-    xptype = xp.float64
 
 
 def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
 
     print('Initializing devices ...')
-    ssao = SingleStageAO(tn, xp=xp)
-
-    lambdaInM, starMagnitude = ssao._config.read_target_pars()
+    ssao = SingleStageAO(tn)
 
     print('Defining the detector subaperture masks ...')
     ssao.define_subaperture_masks(ssao.slope_computer, lambdaInM)
@@ -77,7 +68,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         plt.title('Interaction matrix standard deviation')
 
         screen = ssao.get_phasescreen_at_time(0)
-        if xp.__name__ == 'cupy':
+        if xp.on_gpu:
             screen = screen.get()
         plt.figure()
         plt.imshow(screen, cmap='RdBu')
@@ -93,14 +84,14 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)
     psf_mask = xp.pad(ssao.cmask, padding_len, mode='constant', constant_values=1)
     electric_field_amp = 1-psf_mask
-    input_phase = reshape_on_mask(residual_phase, psf_mask, xp=xp)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
+    input_phase = reshape_on_mask(residual_phase, psf_mask)
+    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/ssao.pyr.lambdaInM))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf = abs(field_on_focal_plane)**2
     # psf = abs(ssao.pyr.field_on_focal_plane)**2
 
     cmask = ssao.cmask.get() if xp.__name__ == 'cupy' else ssao.cmask.copy()
-    if xp.__name__ == 'cupy': # Convert to numpy for plotting
+    if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
 
@@ -110,6 +101,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         title=f'Atmosphere phase [m]\nStrehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
         cmap='RdBu',shrink=0.8)
     plt.axis('off')
+
 
     pixelsPerMAS = lambdaInM/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
     plt.subplot(2,2,2)
@@ -138,3 +130,5 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
 
     return ssao
 
+if __name__ == '__main__':
+    ssao = main(show=True)
