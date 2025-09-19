@@ -3,7 +3,7 @@ import configparser
 import os
 import xupy as xp
 
-from ekarus.e2e.deformable_mirror import DeformableMirror
+from ekarus.abstract_classes.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
 from ekarus.e2e.utils.image_utils import get_circular_mask
 from ekarus.e2e.utils import my_fits_package as myfits

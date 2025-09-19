@@ -6,7 +6,7 @@ from ekarus.e2e.pyramid_wfs import PyramidWFS
 from ekarus.e2e.detector import Detector
 from ekarus.e2e.slope_computer import SlopeComputer
 
-from ekarus.e2e.high_level_ao_class import HighLevelAO
+from ekarus.abstract_classes.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 
 from ekarus.e2e.utils.my_fits_package import read_fits

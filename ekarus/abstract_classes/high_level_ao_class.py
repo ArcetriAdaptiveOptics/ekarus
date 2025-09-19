@@ -14,6 +14,7 @@ from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
 class HighLevelAO():
 
     def __init__(self, tn: str):
+        """ The constructor """
 
         self.savepath = os.path.join(resultspath, tn)
         if not os.path.exists(self.savepath):
@@ -24,6 +25,7 @@ class HighLevelAO():
             os.mkdir(self.savecalibpath)
 
         self.dtype = xp.float
+        self.atmo_pars = None
 
         self._config = ConfigReader(tn)
         
@@ -65,7 +67,7 @@ class HighLevelAO():
         self.modulationAngleInLambdaOverD = loop_pars['modulationAngleInLambdaOverD']
     
 
-    def define_KL_modes(self, dm, oversampling: int, zern_modes:int=5, save_prefix:str=''):
+    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=5, save_prefix:str=''):
         """
         Defines the Karhunen-Loève (KL) modes for the given DM and oversampling.
         
@@ -87,20 +89,21 @@ class HighLevelAO():
         m2c : array
             The mode-to-command matrix.
         """
+        print('Obtaining the Karhunen-Loeve mirror modes ...')
         KL_path = os.path.join(self.savecalibpath,str(save_prefix)+'KLmodes.fits')
         m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+'m2c.fits')
         try:
             KL = myfits.read_fits(KL_path)
             m2c = myfits.read_fits(m2c_path)
         except FileNotFoundError:
-            atmo_par = self._config.read_atmo_pars()
-            r0s = atmo_par['r0']
-            L0 = atmo_par['outerScaleInM']
+            if self.atmo_pars is None:
+                self.atmo_pars = self._config.read_atmo_pars()
+            r0s = self.atmo_pars['r0']
+            L0 = self.atmo_pars['outerScaleInM']
             if isinstance(r0s, float):
                 r0 = r0s
             else:
                 r0 = xp.sqrt(xp.sum(r0s**2))
-            print(xp.__name__)
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
                 oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
@@ -110,7 +113,7 @@ class HighLevelAO():
         return KL, m2c
     
 
-    def compute_reconstructor(self, slope_computer, MM, amps, save_prefix:str=''):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, save_prefix:str=''):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
         
@@ -120,6 +123,8 @@ class HighLevelAO():
             The slope computer object.
         MM : array
             The mirror modes to calibrate/correct (e.g. KL Modes).
+        lambdaInM : float | array
+            The wavelength(s) at which calibration is performed.
         amps : float or array
             The amplitudes for each mode.
         save_prefix : str, optional
@@ -132,6 +137,7 @@ class HighLevelAO():
         IM : array
             The interaction matrix.
         """
+        print('Computing the reconstructor ...')
         IM_path = os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits')
         Rec_path = os.path.join(self.savecalibpath,str(save_prefix)+'Rec.fits')
         try:
@@ -141,7 +147,7 @@ class HighLevelAO():
             Nmodes = xp.shape(MM)[0]
             slopes = None
             electric_field_amp = 1-self.cmask
-            lambdaOverD = slope_computer._wfs.lambdaInM/self.pupilSizeInM
+            lambdaOverD = lambdaInM/self.pupilSizeInM
             Nphotons = None # perfect calibration: no noise
             self.pyr.set_modulation_angle(self.modulationAngleInLambdaOverD)
             if isinstance(amps, float):
@@ -179,13 +185,14 @@ class HighLevelAO():
         dt : float, optional
             Maximum time step, screen length is computed using the maximum wind speeds and simulation time.
         The minimum length for the screen is 20 pupil diameters.
-
         """
-        atmo_par = self._config.read_atmo_pars()
-        r0s = atmo_par['r0']
-        L0 = atmo_par['outerScaleInM']
-        windSpeeds = atmo_par['windSpeed']
-        windAngles = atmo_par['windAngle']
+        print('Initializing turbulence ...')
+        if self.atmo_pars is None:
+            self.atmo_pars = self._config.read_atmo_pars()
+        r0s = self.atmo_pars['r0']
+        L0 = self.atmo_pars['outerScaleInM']
+        windSpeeds = self.atmo_pars['windSpeed']
+        windAngles = self.atmo_pars['windAngle']
         if N is None:
             if dt is not None:
                 maxTime = dt * self.Nits
