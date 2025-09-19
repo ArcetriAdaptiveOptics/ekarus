@@ -1,4 +1,5 @@
 import xupy as xp
+np = xp.np
 masked_array = xp.masked_array
 
 import matplotlib.pyplot as plt
@@ -18,7 +19,20 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)#/xp.std(IM,axis=0))
 
     print('Running the loop ...')
-    sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, Rec, m2c, save_telemetry_prefix='')
+    try:
+        masked_input_phases, _, masked_residual_phases, _, _, _ = ssao.load_telemetry_data()
+        m2rad = 2 * xp.pi / ssao.pyr.lambdaInM
+        residual_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
+        input_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
+        for i in range(ssao.Nits):
+            ma_res_phase = masked_residual_phases[i,:,:]
+            residual_phases[i,:] = ma_res_phase[~ssao.cmask]
+            ma_in_phase = masked_input_phases[i,:,:]
+            input_phases[i,:] = ma_in_phase[~ssao.cmask]
+        sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
+        input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
+    except FileNotFoundError:
+        sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, Rec, m2c, save_prefix='')
     ssao.SR_in = xp.exp(-input_sig2)
     ssao.SR_out = xp.exp(-sig2)
     
@@ -27,7 +41,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
             print(f'Now simulating for magnitude: {starMag:1.1f}')
-            sig[k,:],_ = ssao.run_loop(ssao.pyr.lambdaInM, starMag, Rec, m2c, save_telemetry_prefix=f'magV{starMag:1.0f}_')
+            sig[k,:],_ = ssao.run_loop(ssao.pyr.lambdaInM, starMag, Rec, m2c, save_prefix=f'magV{starMag:1.0f}_')
         ssao.SR = xp.exp(-sig)
 
     # Post-processing and plotting
@@ -68,12 +82,12 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         plt.colorbar()
         plt.title('Atmo screen')
 
-    masked_input_phases, _, masked_residual_phases, detector_frames, _ = ssao.load_telemetry_data()
+    masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, _ = ssao.load_telemetry_data()
 
     last_res_phase = xp.array(masked_residual_phases[-1,:,:])
     residual_phase = last_res_phase[~ssao.cmask]
 
-    oversampling = 4
+    oversampling = 8
     padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)
     psf_mask = xp.pad(ssao.cmask, padding_len, mode='constant', constant_values=1)
     electric_field_amp = 1-psf_mask
@@ -84,9 +98,11 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     # psf = abs(ssao.pyr.field_on_focal_plane)**2
 
     cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
+    SR = ssao.SR.get() if xp.on_gpu else ssao.SR.copy()
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
+        rec_modes = rec_modes.get()
 
     plt.figure(figsize=(9,9))
     plt.subplot(2,2,1)
@@ -118,6 +134,25 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     plt.gca().set_yscale('log')
     plt.xlim([-0.5,ssao.Nits-0.5])
 
+    if starMagnitudes is not None:
+        plt.figure()
+        for k,mag in enumerate(starMagnitudes):
+            plt.plot(sig[k],label=f'magV{mag:1.1f}')
+        plt.legend()
+        plt.grid()
+        plt.ylabel('Strehl ratio')
+        plt.xlabel('# iteration')
+        plt.gca().set_yscale('log')
+        plt.xlim([-0.5,ssao.Nits-0.5])
+        plt.title('Strehl vs star magnitude')
+
+    plt.figure()
+    plt.plot(np.arange(ssao.Nits),rec_modes,'-o')
+    plt.grid()
+    plt.xlim([-0.5,ssao.Nits+0.5])
+    plt.xlabel('# Iteration')
+    plt.ylabel('amplitude [m]')
+    plt.title('Reconstructor modes')
     plt.show()
 
     return ssao
