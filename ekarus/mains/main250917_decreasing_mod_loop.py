@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from numpy.ma import masked_array
 
 from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, reshape_on_mask
-from ekarus.e2e.decreasing_mod_ao_class import SingleStageAO
+from ekarus.e2e.decreasing_mod_ao_class import DecreasingModulationAO
 
 try:
     import cupy as xp
@@ -16,7 +16,7 @@ except:
 def main(tn:str='decreasing_modulation', show:bool=False):
 
     print('Initializing devices ...')
-    ssao = SingleStageAO(tn, xp=xp)
+    ssao = DecreasingModulationAO(tn, xp=xp)
 
     lambdaInM, starMagnitude = ssao._config.read_target_pars()
 

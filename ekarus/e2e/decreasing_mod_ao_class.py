@@ -13,7 +13,7 @@ from ekarus.e2e.utils.my_fits_package import read_fits
 
 
 
-class SingleStageAO(HighLevelAO):
+class DecreasingModulationAO(HighLevelAO):
 
     def __init__(self, tn, xp=np):
 

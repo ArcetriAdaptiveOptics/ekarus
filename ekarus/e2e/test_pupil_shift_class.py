@@ -12,7 +12,7 @@ from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 from ekarus.e2e.utils.my_fits_package import read_fits
 
 
-class SingleStageAO(HighLevelAO):
+class PupilShiftAO(HighLevelAO):
 
     def __init__(self, tn, xp=np):
 
@@ -35,7 +35,7 @@ class SingleStageAO(HighLevelAO):
         self.subapSizeInPixels = subapSize
 
 
-    def run_loop(self, lambdaInM, starMagnitude, Rec, m2c, wedgeShift=None, save_telemetry:bool=False):
+    def run_loop(self, lambdaInM, starMagnitude, Rec, m2c, wedgeShift=None, save_telemetry_prefix:str=None):
         electric_field_amp = 1-self.cmask
 
         modal_gains = self._xp.zeros(Rec.shape[0])
@@ -50,7 +50,7 @@ class SingleStageAO(HighLevelAO):
         self.dm.set_position(dm_cmd, absolute=True)
         dm_cmds = self._xp.zeros([self.Nits,self.dm.Nacts])
 
-        if save_telemetry:
+        if save_telemetry_prefix is not None:
             dm_phases = self._xp.zeros([self.Nits,mask_len])
             residual_phases = self._xp.zeros([self.Nits,mask_len])
             input_phases = self._xp.zeros([self.Nits,mask_len])
@@ -92,7 +92,7 @@ class SingleStageAO(HighLevelAO):
 
             residual_phases[i,:] = residual_phase
             input_phases[i,:] = input_phase
-            if save_telemetry:
+            if save_telemetry_prefix is not None:
                 dm_phases[i,:] = self.dm.surface
                 detector_images[i,:,:] = self.ccd.last_frame
         print('')
@@ -100,25 +100,25 @@ class SingleStageAO(HighLevelAO):
         errRad2 = self._xp.std(residual_phases*(2*self._xp.pi)/lambdaInM,axis=-1)**2
         inputErrRad2 = self._xp.std(input_phases*(2*self._xp.pi)/lambdaInM,axis=-1)**2 
 
-        if save_telemetry:
+        if save_telemetry_prefix is not None:
             print('Saving telemetry to .fits ...')
             ma_input_phases = np.stack([reshape_on_mask(input_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
             ma_dm_phases = np.stack([reshape_on_mask(dm_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
             ma_res_phases = np.stack([reshape_on_mask(residual_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
 
-            data_dict = {'AtmoPhases': ma_input_phases, 'DMphases': ma_dm_phases, 'ResPhases': ma_res_phases, \
-                         'DetectorFrames': detector_images, 'DMcommands': dm_cmds}
+            data_dict = {save_telemetry_prefix+'AtmoPhases': ma_input_phases, save_telemetry_prefix+'DMphases': ma_dm_phases, save_telemetry_prefix+'ResPhases': ma_res_phases, \
+                         save_telemetry_prefix+'DetectorFrames': detector_images, save_telemetry_prefix+'DMcommands': dm_cmds}
             self.save_telemetry_data(data_dict)
 
         return errRad2, inputErrRad2
     
 
-    def load_telemetry_data(self):
-        atmo_phases = read_fits(os.path.join(self.savepath,'AtmoPhases.fits'))
-        dm_phases = read_fits(os.path.join(self.savepath,'DMphases.fits'))
-        res_phases = read_fits(os.path.join(self.savepath,'ResPhases.fits'))
-        det_frames = read_fits(os.path.join(self.savepath,'DetectorFrames.fits'))
-        dm_cmds =  read_fits(os.path.join(self.savepath,'DMcommands.fits'))
+    def load_telemetry_data(self, prefix:str=''):
+        atmo_phases = read_fits(os.path.join(self.savepath,prefix+'AtmoPhases.fits'))
+        dm_phases = read_fits(os.path.join(self.savepath,prefix+'DMphases.fits'))
+        res_phases = read_fits(os.path.join(self.savepath,prefix+'ResPhases.fits'))
+        det_frames = read_fits(os.path.join(self.savepath,prefix+'DetectorFrames.fits'))
+        dm_cmds =  read_fits(os.path.join(self.savepath,prefix+'DMcommands.fits'))
         return atmo_phases, dm_phases, res_phases, det_frames, dm_cmds
 
 
