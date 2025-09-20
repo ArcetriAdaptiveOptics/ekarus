@@ -48,6 +48,7 @@ class PyramidWFS:
             intensity = xp.zeros(padded_field.shape)
             lambdasOverD = lambda0OverD/self.lambdaInM*self._lambdaRange
             for lambdaOverD in lambdasOverD:
+                rescaled_field = padded_field * (self.lambdaInM/lambdaOverD)
                 intensity += self._intensity_from_field(padded_field, lambdaOverD)/len(self._lambdaRange)
 
         return intensity
@@ -60,29 +61,10 @@ class PyramidWFS:
             intensity = self.modulate(padded_field, lambdaOverD)
         return intensity
 
-
-
     def set_modulation_angle(self, modulationAngleInLambdaOverD):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
         self._modNsteps = xp.ceil(modulationAngleInLambdaOverD*2.25*xp.pi)//4*4
         print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self._modNsteps:1.0f} modulation steps')
-        
-        
-    @lru_cache(maxsize=5)
-    def pyramid_phase_delay(self, shape):
-        """
-        Computes the phase delay introduced by the pyramid wavefront sensor
-        in the focal plane.
-
-        :param shape: tuple (ny, nx) electric field dimensions
-        :return: array numpy 2D float (phase delay in pixels)
-        """
-        X,Y = image_grid(shape, recenter=True)
-        D = max(shape)
-        phi = self.apex_angle*(1 - 1/D*(abs(X)+abs(Y)))
-        phi = xp.asarray(phi,dtype=self.dtype)
-
-        return phi
     
 
     def propagate(self, input_field, lambdaOverD):
@@ -136,6 +118,22 @@ class PyramidWFS:
             intensity += (abs(output**2))/self._modNsteps
 
         return intensity
+    
+    @lru_cache(maxsize=5)
+    def pyramid_phase_delay(self, shape):
+        """
+        Computes the phase delay introduced by the pyramid wavefront sensor
+        in the focal plane.
+
+        :param shape: tuple (ny, nx) electric field dimensions
+        :return: array numpy 2D float (phase delay in pixels)
+        """
+        X,Y = image_grid(shape, recenter=True)
+        D = max(shape)
+        phi = self.apex_angle*(1 - 1/D*(abs(X)+abs(Y)))
+        phi = xp.asarray(phi,dtype=self.dtype)
+
+        return phi
     
 
     @lru_cache(maxsize=5)

@@ -3,8 +3,8 @@ import xupy as xp
 # import numpy as np
 
 from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circular_mask
-from .utils.my_fits_package import save_fits, read_fits
-from .utils.root import calibpath #resultspath
+from ..utils.my_fits_package import save_fits, read_fits
+from ..utils.root import calibpath #resultspath
 
 
 class SlopeComputer():

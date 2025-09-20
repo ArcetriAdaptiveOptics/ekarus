@@ -201,7 +201,7 @@ class HighLevelAO():
         N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_path = os.path.join(self.atmopath, 'AtmospherePhaseScreens.fits')
+        atmo_path = os.path.join(atmopath, 'atmospheric_phase_layers.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens() # rescale in meters
@@ -213,9 +213,9 @@ class HighLevelAO():
         Initialize devices for PyrWFS slope computation
         """
 
-        from ekarus.e2e.pyramid_wfs import PyramidWFS
-        from ekarus.e2e.detector import Detector
-        from ekarus.e2e.slope_computer import SlopeComputer
+        from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
+        from ekarus.e2e.devices.detector import Detector
+        from ekarus.e2e.devices.slope_computer import SlopeComputer
 
         wfs_pars = self._config.read_sensor_pars(pyr_id) 
         subapPixSep = wfs_pars["subapPixSep"]
