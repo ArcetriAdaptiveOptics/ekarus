@@ -30,6 +30,10 @@ class ConfigReader():
     
     def read_dm_pars(self, dm_name: str = 'DM'):
         """ Read deformable mirror parameters from the configuration file."""
+        try:
+            self._cfile[dm_name]['max_stroke_in_m'] = eval(self._cfile[dm_name]['max_stroke_in_m'])
+        except KeyError:
+            self._cfile[dm_name]['max_stroke_in_m'] = None
         return self._cfile[dm_name]
     
     def read_atmo_pars(self):

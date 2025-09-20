@@ -1,16 +1,16 @@
 DM: 
   Nacts: 468
-  max_stroke_in_m: 5e-6   # Not yet used
+  max_stroke_in_m: 5e-6   
 
 PYR:
   oversampling: 4           # oversampling for PSF computation
   lambdaInM: 1000e-9        # [m] sensor wavelength
   bandWidthInM: 0e-9        # [m] sensor band amplitude
-  subapPixSize: 63          # subaperture diameter in pix
-  subapPixSep: 40           # pixel distance between subaps
+  subapPixSize: 39.5          # subaperture diameter in pix
+  subapPixSep: 20           # pixel distance between subaps
 
-DETECTOR:
-  detector_shape: [256, 256]    # detector pixel size
+CCD:
+  detector_shape: [160,160]    # detector pixel size
   RON: 1.0                      # readout noise in e-
   quantum_efficiency: 0.7       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
@@ -25,7 +25,7 @@ SLOPE.COMPUTER:
 
 TELESCOPE:
   pupilSizeInM: 1.8         # [m] telescope diameter
-  pupilSizeInPixels: 128    # pixels across the pupil diameter
+  pupilSizeInPixels: 160    # pixels across the pupil diameter
   throughput: 0.11          # accounting for beam splitter
 
 ATMO:

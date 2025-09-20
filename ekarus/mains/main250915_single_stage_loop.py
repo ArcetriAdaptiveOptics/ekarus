@@ -16,10 +16,6 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     ssao = SingleStageAO(tn)
 
     ssao.initialize_turbulence()
-    ssao.sc.calibrate_sensor(tn, prefix_str='',
-                            piston=1-ssao.cmask, 
-                            lambdaOverD = ssao.pyr.lambdaInM/ssao.pupilSizeInM,
-                            Npix = ssao.subapertureSize) 
 
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)

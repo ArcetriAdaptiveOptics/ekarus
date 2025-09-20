@@ -41,33 +41,10 @@ class SingleStageAO(HighLevelAO):
 
         print('Initializing devices ...')
 
-        wfs_pars = self._config.read_sensor_pars('PYR') 
-        subapPixSep = wfs_pars["subapPixSep"]
-        oversampling = wfs_pars["oversampling"]
-        sensorLambda = wfs_pars["lambdaInM"]
-        sensorBandwidth = wfs_pars['bandWidthInM']
-        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(self.pupilSizeInPixels+subapPixSep)/2
-        self.pyr = PyramidWFS(
-            apex_angle=apex_angle, 
-            oversampling=oversampling, 
-            sensorLambda=sensorLambda,
-            sensorBandwidth=sensorBandwidth
-        )
-        self.subapertureSize=wfs_pars["subapPixSize"]
-
-        det_pars = self._config.read_detector_pars()
-        self.ccd = Detector(
-            detector_shape=det_pars["detector_shape"],
-            RON=det_pars["RON"],
-            quantum_efficiency=det_pars["quantum_efficiency"],
-            beam_split_ratio=det_pars["beam_splitter_ratio"],
-        )
-
-        sc_pars = self._config.read_slope_computer_pars()
-        self.sc = SlopeComputer(self.pyr, self.ccd, sc_pars)
+        self.pyr, self.ccd, self.sc = self._initialize_pyr_slope_computer('PYR','CCD','SLOPE.COMPUTER')
 
         dm_pars = self._config.read_dm_pars()
-        self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels)
+        self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):

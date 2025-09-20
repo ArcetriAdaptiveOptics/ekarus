@@ -31,17 +31,20 @@ class ALPAODM(DeformableMirror):
         self.config.read(config_path)
 
         if isinstance(input, int):
-            self._init_ALPAO_from_Nacts(input, **kwargs)
+            Npix = kwargs['Npix']
+            self._init_ALPAO_from_Nacts(input,Npix=Npix)
         elif isinstance(input, str):
-            self._init_ALPAO_from_tn_data(input, **kwargs)
+            self._init_ALPAO_from_tn_data(input)
         elif isinstance(input, xp.array):
-            self._init_ALPAO_from_act_coords(input, **kwargs)
+            self._init_ALPAO_from_act_coords(input)
         else:
             raise NotImplementedError(f'Initialization method for {input} not implemented, please pass a data tracking number or the number of actuators')
 
         self.act_pos = xp.zeros(self.Nacts, dtype=self.dtype)
         self.surface = self.IFF @ self.act_pos
         self.R, self.U = dmutils.compute_reconstructor(self.IFF)
+
+        self.max_stroke = kwargs['max_stroke']
         
 
     def enslave_cmd(self, cmd, max_cmd: float = 0.9):

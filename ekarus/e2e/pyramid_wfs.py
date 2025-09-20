@@ -48,7 +48,7 @@ class PyramidWFS:
             intensity = xp.zeros(padded_field.shape)
             lambdasOverD = lambda0OverD/self.lambdaInM*self._lambdaRange
             for lambdaOverD in lambdasOverD:
-                intensity += self._intensity_from_field(padded_field, lambdaOverD)
+                intensity += self._intensity_from_field(padded_field, lambdaOverD)/len(self._lambdaRange)
 
         return intensity
     

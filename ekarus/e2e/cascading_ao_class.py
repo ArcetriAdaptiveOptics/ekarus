@@ -1,9 +1,9 @@
 import xupy as xp
 
 from ekarus.e2e.alpao_deformable_mirror import ALPAODM
-from ekarus.e2e.pyramid_wfs import PyramidWFS
-from ekarus.e2e.detector import Detector
-from ekarus.e2e.slope_computer import SlopeComputer
+# from ekarus.e2e.pyramid_wfs import PyramidWFS
+# from ekarus.e2e.detector import Detector
+# from ekarus.e2e.slope_computer import SlopeComputer
 
 from ekarus.abstract_classes.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
@@ -15,7 +15,7 @@ class CascadingAO(HighLevelAO):
     def __init__(self, tn: str):
         """The constructor"""
 
-        super().__init__(tn)        
+        super().__init__(tn)
         
         self.telemetry_keys = [
             "AtmoPhases",
@@ -44,62 +44,16 @@ class CascadingAO(HighLevelAO):
         - Slope computer 1,2
         """
 
-        wfs_pars = self._config.read_sensor_pars('PYR1') 
-        subapPixSep = wfs_pars["subapPixSep"]
-        oversampling = wfs_pars["oversampling"]
-        sensorLambda = wfs_pars["lambdaInM"]
-        sensorBandwidth = wfs_pars['bandWidthInM']
-        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(self.pupilSizeInPixels+subapPixSep)/2
-        self.pyr1 = PyramidWFS(
-            apex_angle=apex_angle, 
-            oversampling=oversampling, 
-            sensorLambda=sensorLambda,
-            sensorBandwidth=sensorBandwidth
-        )
-        self.subap1Size=wfs_pars["subapPixSize"]
-
-        det_pars = self._config.read_detector_pars('CCD1')
-        self.ccd1 = Detector(
-            detector_shape=det_pars["detector_shape"],
-            RON=det_pars["RON"],
-            quantum_efficiency=det_pars["quantum_efficiency"],
-            beam_split_ratio=det_pars["beam_splitter_ratio"],
-        )
-
-        sc_pars = self._config.read_slope_computer_pars('SLOPE.COMPUTER1')
-        self.sc1 = SlopeComputer(self.pyr1, self.ccd1, sc_pars)
+        self.pyr1, self.ccd1, self.sc1 = self._initialize_pyr_slope_computer('PYR1','CCD1','SLOPE.COMPUTER1')
 
         dm_pars = self._config.read_dm_pars('DM1')
-        self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels)
+        self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
 
 
-        wfs_pars = self._config.read_sensor_pars('PYR2') 
-        subapPixSep = wfs_pars["subapPixSep"]
-        oversampling = wfs_pars["oversampling"]
-        sensorLambda = wfs_pars["lambdaInM"]
-        sensorBandwidth = wfs_pars['bandWidthInM']
-        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(self.pupilSizeInPixels+subapPixSep)/2
-        self.pyr2 = PyramidWFS(
-            apex_angle=apex_angle, 
-            oversampling=oversampling, 
-            sensorLambda=sensorLambda,
-            sensorBandwidth=sensorBandwidth
-        )
-        self.subap2Size=wfs_pars["subapPixSize"]
-
-        det_pars = self._config.read_detector_pars('CCD2')
-        self.ccd2 = Detector(
-            detector_shape=det_pars["detector_shape"],
-            RON=det_pars["RON"],
-            quantum_efficiency=det_pars["quantum_efficiency"],
-            beam_split_ratio=det_pars["beam_splitter_ratio"],
-        )
-
-        sc_pars = self._config.read_slope_computer_pars('SLOPE.COMPUTER2')
-        self.sc2 = SlopeComputer(self.pyr2, self.ccd2, sc_pars)
+        self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR2','CCD2','SLOPE.COMPUTER2')
 
         dm_pars = self._config.read_dm_pars('DM2')
-        self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels)
+        self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):

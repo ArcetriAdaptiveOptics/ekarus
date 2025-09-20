@@ -28,6 +28,7 @@ class HighLevelAO():
         self.atmo_pars = None
 
         self._config = ConfigReader(tn)
+        self._tn = tn
         
         self._read_configuration()
         self._read_loop_parameters()
@@ -203,11 +204,53 @@ class HighLevelAO():
         N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_path = os.path.join(self.savepath, 'AtmospherePhaseScreens.fits')
+        atmo_path = os.path.join(self.savecalibpath, 'AtmospherePhaseScreens.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens() # rescale in meters
         self.layers.update_mask(self.cmask)
+
+
+    def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):
+        """ 
+        Initialize devices for PyrWFS slope computation
+        """
+
+        from ekarus.e2e.pyramid_wfs import PyramidWFS
+        from ekarus.e2e.detector import Detector
+        from ekarus.e2e.slope_computer import SlopeComputer
+
+        wfs_pars = self._config.read_sensor_pars(pyr_id) 
+        subapPixSep = wfs_pars["subapPixSep"]
+        oversampling = wfs_pars["oversampling"]
+        sensorLambda = wfs_pars["lambdaInM"]
+        sensorBandwidth = wfs_pars['bandWidthInM']
+        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(self.pupilSizeInPixels+subapPixSep)/2*oversampling
+        pyr= PyramidWFS(
+            apex_angle=apex_angle, 
+            oversampling=oversampling, 
+            sensorLambda=sensorLambda,
+            sensorBandwidth=sensorBandwidth
+        )
+        subapertureSize=wfs_pars["subapPixSize"]
+
+        det_pars = self._config.read_detector_pars(detector_id)
+        det = Detector(
+            detector_shape=det_pars["detector_shape"],
+            RON=det_pars["RON"],
+            quantum_efficiency=det_pars["quantum_efficiency"],
+            beam_split_ratio=det_pars["beam_splitter_ratio"],
+        )
+
+        sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
+        sc = SlopeComputer(pyr, det, sc_pars)
+        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_',
+                        piston=1-self.cmask, 
+                        lambdaOverD = sensorLambda/self.pupilSizeInM,
+                        Npix = subapertureSize) 
+        
+        return pyr, det, sc
+
 
     
     def perform_loop_iteration(self, phase, dm_cmd, slope_computer, starMagnitude:float=None):

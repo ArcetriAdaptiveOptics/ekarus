@@ -16,16 +16,6 @@ def main(tn:str='example_dual_stage', show:bool=False):
     cascao = CascadingAO(tn)
 
     cascao.initialize_turbulence()
-    cascao.sc1.calibrate_sensor(tn, prefix_str='Pyr1_',
-                            piston=1-cascao.cmask, 
-                            lambdaOverD = cascao.pyr1.lambdaInM/cascao.pupilSizeInM,
-                            Npix = cascao.subap1Size) 
-
-    cascao.sc2.calibrate_sensor(tn, prefix_str='Pyr2_',
-                    piston=1-cascao.cmask, 
-                    lambdaOverD = cascao.pyr2.lambdaInM/cascao.pupilSizeInM,
-                    Npix = cascao.subap2Size) 
-
 
     KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
