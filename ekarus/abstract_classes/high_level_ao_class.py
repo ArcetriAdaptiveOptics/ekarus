@@ -5,7 +5,7 @@ np = xp.np
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.analytical.turbulence_layers import TurbulenceLayers
 from ekarus.e2e.utils.read_configuration import ConfigReader
-from ekarus.e2e.utils.root import resultspath, calibpath, configpath
+from ekarus.e2e.utils.root import resultspath, calibpath #, configpath
 
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
@@ -204,7 +204,7 @@ class HighLevelAO():
         N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_path = os.path.join(configpath, self._tn, 'AtmospherePhaseScreens.fits')
+        atmo_path = os.path.join(self.savepath, 'AtmospherePhaseScreens.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens() # rescale in meters

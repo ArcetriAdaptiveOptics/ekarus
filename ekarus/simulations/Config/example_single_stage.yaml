@@ -6,11 +6,11 @@ PYR:
   oversampling: 4           # oversampling for PSF computation
   lambdaInM: 1000e-9        # [m] sensor wavelength
   bandWidthInM: 0e-9        # [m] sensor band amplitude
-  subapPixSize: 39.5        # subaperture diameter in pix
+  subapPixSize: 39          # subaperture diameter in pix
   subapPixSep: 8            # pixel distance between subaps
 
 CCD:
-  detector_shape: [240,240]    # detector pixel size
+  detector_shape: [160,160]    # detector pixel size
   RON: 1.0                      # readout noise in e-
   quantum_efficiency: 0.7       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS

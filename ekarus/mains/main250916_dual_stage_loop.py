@@ -143,6 +143,7 @@ def main(tn:str='example_dual_stage', show:bool=False):
         title = f'PSF after DM2\nStrehl ratio = {xp.exp(-dm2_sig2[-1]):1.3f}',cmap='inferno') 
 
     tvec = np.arange(cascao.Nits)*cascao.dt*1e+3
+    tvec = tvec.get() if xp.on_gpu else tvec.copy()
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(tvec,input_sig2,'-o',label='open loop')
     plt.plot(tvec,dm1_sig2,'-o',label='after DM1')

@@ -36,7 +36,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
             input_phases[i,:] = ma_in_phase[~ssao.cmask]
         sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
         input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
-    except FileNotFoundError:
+    except:
         sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
     # ssao.SR_in = xp.exp(-input_sig2)
     # ssao.SR_out = xp.exp(-sig2)
@@ -128,6 +128,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     plt.axis('off')
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
+    tvec = tvec.get() if xp.on_gpu else tvec.copy()
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(tvec,input_sig2,'-o',label='open loop')
     plt.plot(tvec,sig2,'-o',label='closed loop')
