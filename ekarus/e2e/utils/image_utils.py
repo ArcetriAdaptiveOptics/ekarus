@@ -1,5 +1,5 @@
 import xupy as xp
-np = xp.np
+import numpy as np
 # from arte.types.mask import CircularMask
 
 import matplotlib.pyplot as plt

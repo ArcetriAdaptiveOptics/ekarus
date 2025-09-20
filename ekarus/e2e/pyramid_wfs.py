@@ -1,5 +1,5 @@
 import xupy as xp
-np = xp.np
+# import numpy as np
 
 from ekarus.e2e.utils.image_utils import image_grid
 from functools import lru_cache

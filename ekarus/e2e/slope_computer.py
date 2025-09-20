@@ -1,6 +1,6 @@
 from os.path import join
 import xupy as xp
-np = xp.np
+# import numpy as np
 
 from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circular_mask
 from .utils.my_fits_package import save_fits, read_fits

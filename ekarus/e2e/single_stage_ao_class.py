@@ -61,24 +61,12 @@ class SingleStageAO(HighLevelAO):
         )
 
         sc_pars = self._config.read_slope_computer_pars()
-        self.sc = SlopeComputer(self.pyr, self.ccd)
-        (
-            self.sc.dt,
-            self.sc.intGain,
-            self.sc.delay,
-            self.sc.nModes,
-            self.sc.ttOffloadFreqHz,
-        ) = (
-            1 / sc_pars["loopFrequencyInHz"],
-            sc_pars["integratorGain"],
-            sc_pars["delay"],
-            sc_pars["nModes2Correct"],
-            sc_pars["ttOffloadFrequencyInHz"],
-        )
+        self.sc = SlopeComputer(self.pyr, self.ccd, sc_pars)
 
         dm_pars = self._config.read_dm_pars()
         Nacts = dm_pars["Nacts"]
-        self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels)
+        max_stroke = dm_pars["maxStrokeInM"]
+        self.dm = ALPAODM(Nacts, Npix=self.pupilSizeInPixels, max_stroke=max_stroke)
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, Rec, m2c, save_telemetry_prefix:str=None):
