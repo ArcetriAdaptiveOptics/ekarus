@@ -42,6 +42,7 @@ class ALPAODM(DeformableMirror):
         self.act_pos = xp.zeros(self.Nacts, dtype=self.dtype)
         self.surface = self.IFF @ self.act_pos
         self.R, self.U = dmutils.compute_reconstructor(self.IFF)
+        self.max_stroke = kwargs['max_stroke'] if 'max_stroke' in kwargs else None
         
 
     def enslave_cmd(self, cmd, max_cmd: float = 0.9):
