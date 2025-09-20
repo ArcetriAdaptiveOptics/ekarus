@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ekarus.e2e.pyramid_wfs import PyramidWFS
-from ekarus.e2e.detector import Detector
-from ekarus.e2e.slope_computer import SlopeComputer
+from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
+from ekarus.e2e.devices.detector import Detector
+from ekarus.e2e.devices.slope_computer import SlopeComputer
 
 from ekarus.analytical.zernike_generator import ZernikeGenerator
 from ekarus.e2e.utils.image_utils import get_circular_mask
@@ -22,7 +22,7 @@ detector_shape = (256,256)
 subaperture_size = 63.5
 
 # Initialize devices
-wfs = PyramidWFS(apex_angle)
+wfs = PyramidWFS(apex_angle, oversampling, lambdaInM)
 ccd = Detector(detector_shape=detector_shape)
 slope_computer = SlopeComputer(wfs_type = 'PyrWFS')
 
