@@ -108,7 +108,7 @@ class HighLevelAO():
             if isinstance(r0s, float):
                 r0 = r0s
             else:
-                r0 = xp.sqrt(xp.sum(r0s**2))
+                r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
                 oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
@@ -233,8 +233,8 @@ class HighLevelAO():
         oversampling = wfs_pars["oversampling"]
         sensorLambda = wfs_pars["lambdaInM"]
         sensorBandwidth = wfs_pars['bandWidthInM']
-        subapertureSize=wfs_pars["subapPixSize"]
-        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)/2*oversampling
+        subapertureSize = wfs_pars["subapPixSize"]
+        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*oversampling #/2
         pyr= PyramidWFS(
             apex_angle=apex_angle, 
             oversampling=oversampling, 

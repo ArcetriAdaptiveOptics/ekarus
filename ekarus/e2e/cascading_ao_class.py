@@ -48,13 +48,14 @@ class CascadingAO(HighLevelAO):
 
         dm_pars = self._config.read_dm_pars('DM1')
         self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-
+        self.dm1.mask = self.cmask
 
         self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR2','CCD2','SLOPE.COMPUTER2')
 
         dm_pars = self._config.read_dm_pars('DM2')
         self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-    
+        self.dm2.mask = self.cmask
+        
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
         """

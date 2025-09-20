@@ -45,6 +45,7 @@ class SingleStageAO(HighLevelAO):
 
         dm_pars = self._config.read_dm_pars()
         self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm.mask = self.cmask
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
