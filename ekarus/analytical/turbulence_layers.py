@@ -4,12 +4,11 @@ np = xp.np
 from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 from ekarus.e2e.utils.image_utils import reshape_on_mask
 
-# from ekarus.e2e.utils import my_fits_package as myfits
-
 
 class TurbulenceLayers():
 
     def __init__(self, r0s, L0, windSpeeds, windAngles, savepath:str):
+        """ The constructor """
 
         self.r0s = r0s
         self.L0 = L0
@@ -30,12 +29,21 @@ class TurbulenceLayers():
 
 
     def update_mask(self, mask):
+        """ Update the mask and set the start coordinates on the phase screens """
         self.mask = mask
         self._define_start_coordinates_on_phasescreens(mask.shape)
 
 
     def generate_phase_screens(self, screenSizeInPixels, screenSizeInMeters):
+        """ Generate or load phase screens 
         
+        Parameters
+        ----------
+        screenSizeInPixels : int
+            Size of the phase screen in pixels (assumed square)
+        screenSizeInMeters : float 
+            Size of the phase screen in meters (assumed square)
+        """  
         self.pixelsPerMeter = screenSizeInPixels/screenSizeInMeters
         self._phs = PhaseScreenGenerator(screenSizeInPixels, screenSizeInMeters, \
                             outerScaleInMeters=self.L0, seed=42)
@@ -56,6 +64,7 @@ class TurbulenceLayers():
 
 
     def rescale_phasescreens(self):
+        """ Rescale the phase screens to meters """
         if self.nLayers > 1:
             for k in range(self.nLayers):
                 self.phase_screens[k,:,:] *= 500e-9 / (2*xp.pi) * self._normalization_factors[k]
@@ -64,6 +73,14 @@ class TurbulenceLayers():
     
 
     def rescale_phasescreens_in_radians(self, lambdaInM):
+        """ 
+        Rescale the phase screens to radians at a given wavelength.
+
+        Parameters
+        ----------
+        lambdaInM : float
+            Wavelength in meters
+        """
         if self.nLayers > 1:
             for k in range(self.nLayers):
                 self.phase_screens[k,:,:] *= 500e-9 / lambdaInM * self._normalization_factors[k]
@@ -72,6 +89,20 @@ class TurbulenceLayers():
         
         
     def move_mask_on_phasescreens(self, dt):
+        """ 
+        Move the mask on the phase screens according
+        to the wind speeds and angles.
+
+        Parameters
+        ----------
+        dt : float
+            Simulation elapsed time in seconds
+        
+        Returns
+        -------
+        masked_phases : 3D xp.array
+            Masked phases for each layer (nLayers, H, W)
+        """
 
         masked_phases = xp.zeros([self.nLayers,self.mask_shape[0],self.mask_shape[1]])
         if self.nLayers > 1:
@@ -86,6 +117,29 @@ class TurbulenceLayers():
     
 
     def _get_single_masked_phase(self, dt, screen, windSpeed, windAngle, xStart, yStart):
+        """ 
+        Get the masked phase for a single phase screen
+
+        Parameters
+        ----------
+        dt : float
+            Simulation elapsed time in seconds
+        screen : 2D xp.array
+            Phase screen
+        windSpeed : float
+            Wind speed in m/s
+        windAngle : float
+            Wind angle in radians
+        xStart : float
+            Starting x coordinate of the mask on the phase screen
+        yStart : float
+            Starting y coordinate of the mask on the phase screen
+
+        Returns
+        -------
+        phase_mask : 2D xp.array
+            Masked phase
+        """
         screen_shape = self.screen_shape
         mask_shape = self.mask.shape
 
@@ -132,7 +186,16 @@ class TurbulenceLayers():
     
 
     def _define_start_coordinates_on_phasescreens(self, mask_shape):
+        """
+        Define the starting coordinates of the mask on the phase screens
+        so that the mask can travel the maximum distance according to
+        wind angles without going out of bounds.
 
+        Parameters
+        ----------
+        mask_shape : tuple
+            Shape of the mask (H, W)
+        """
         self.mask_shape = mask_shape
 
         H,W = self.screen_shape
@@ -168,7 +231,8 @@ class TurbulenceLayers():
         lenA = self._get_len(a)
         lenB = self._get_len(b)
         if lenA != lenB:
-            raise ValueError(f'Vector {a} of length {lenA} is not compatible with vector {b} of length {lenB}')
+            raise ValueError(f'Vector {a} of length {lenA} is not \
+                              compatible with vector {b} of length {lenB}')
     
     @staticmethod
     def _get_len(a):
