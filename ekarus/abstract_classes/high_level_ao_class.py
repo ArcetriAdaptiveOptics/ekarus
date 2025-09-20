@@ -5,7 +5,7 @@ np = xp.np
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.analytical.turbulence_layers import TurbulenceLayers
 from ekarus.e2e.utils.read_configuration import ConfigReader
-from ekarus.e2e.utils.root import resultspath, calibpath
+from ekarus.e2e.utils.root import resultspath, calibpath, configpath
 
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
@@ -204,7 +204,7 @@ class HighLevelAO():
         N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_path = os.path.join(self.savecalibpath, 'AtmospherePhaseScreens.fits')
+        atmo_path = os.path.join(configpath, self._tn, 'AtmospherePhaseScreens.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens() # rescale in meters
@@ -225,14 +225,14 @@ class HighLevelAO():
         oversampling = wfs_pars["oversampling"]
         sensorLambda = wfs_pars["lambdaInM"]
         sensorBandwidth = wfs_pars['bandWidthInM']
-        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(self.pupilSizeInPixels+subapPixSep)/2*oversampling
+        subapertureSize=wfs_pars["subapPixSize"]
+        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(subapertureSize+subapPixSep)/2*oversampling
         pyr= PyramidWFS(
             apex_angle=apex_angle, 
             oversampling=oversampling, 
             sensorLambda=sensorLambda,
             sensorBandwidth=sensorBandwidth
         )
-        subapertureSize=wfs_pars["subapPixSize"]
 
         det_pars = self._config.read_detector_pars(detector_id)
         det = Detector(
