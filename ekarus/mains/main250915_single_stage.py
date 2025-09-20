@@ -11,7 +11,7 @@ import os.path as op
 import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='20250920_200000', show:bool=False, starMagnitudes=None): #example_single_stage
+def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
 
     ssao = SingleStageAO(tn)
 

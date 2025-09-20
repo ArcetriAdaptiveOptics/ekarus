@@ -40,7 +40,7 @@ class HighLevelAO():
         if starMagnitude is None:
             starMagnitude = self.starMagnitude
         total_flux = B0 * 10**(-starMagnitude/2.5)
-        collecting_area = xp.pi/4*(self.pupilSizeInM**2-self.obscurationSizeInM**2)
+        collecting_area = xp.pi/4*(self.pupilSizeInM**2-self.centerObscurationInM**2)
         collected_flux = self.throughput * total_flux * collecting_area
         return collected_flux
     
@@ -59,7 +59,7 @@ class HighLevelAO():
             obs_mask = get_circular_mask(mask_shape, mask_radius=obscSizeInPixels/2)
             self.cmask = (self.cmask + (1-obs_mask)).astype(bool)
         except KeyError:
-            self.obscurationSizeInM = 0.0
+            self.centerObscurationInM = 0.0
 
 
 
@@ -209,7 +209,10 @@ class HighLevelAO():
         N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_path = os.path.join(atmopath,self._tn,'atmospheric_phase_layers.fits')
+        atmo_dir = os.path.join(atmopath,self._tn)
+        if not os.path.exists(atmo_dir):   
+            os.mkdir(atmo_dir)
+        atmo_path = os.path.join(atmo_dir,'atmospheric_phase_layers.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens() # rescale in meters
@@ -231,7 +234,7 @@ class HighLevelAO():
         sensorLambda = wfs_pars["lambdaInM"]
         sensorBandwidth = wfs_pars['bandWidthInM']
         subapertureSize=wfs_pars["subapPixSize"]
-        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(subapertureSize+subapPixSep)/2*oversampling
+        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)/2*oversampling
         pyr= PyramidWFS(
             apex_angle=apex_angle, 
             oversampling=oversampling, 
