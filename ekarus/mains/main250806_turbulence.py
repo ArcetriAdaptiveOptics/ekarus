@@ -6,6 +6,8 @@ from ekarus.e2e.utils.image_utils import get_circular_mask
 # from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.analytical.turbulence_layers import TurbulenceLayers
 
+from root import atmopath
+
 lambdaInM = 1000e-9
 r0 = 5e-2
 L0 = 25
@@ -21,7 +23,7 @@ pixelsPerMeter = screenPixels/screenMeters
 Nscreens = 1
 
 basepath = os.getcwd()
-dir_path = os.path.join(basepath,'ekarus/mains/250806_atmo_data/')
+dir_path = os.path.join(atmopath,'250806_atmo_data')
 
 if not os.path.exists(dir_path):
     os.makedirs(dir_path)

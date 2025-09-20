@@ -1,6 +1,6 @@
 import xupy as xp
 
-from ekarus.e2e.alpao_deformable_mirror import ALPAODM
+from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.pyramid_wfs import PyramidWFS
 # from ekarus.e2e.detector import Detector
 # from ekarus.e2e.slope_computer import SlopeComputer
@@ -18,17 +18,17 @@ class CascadingAO(HighLevelAO):
         super().__init__(tn)
         
         self.telemetry_keys = [
-            "AtmoPhases",
-            "DM1phases",
-            "Res1Phases",
-            "CCD1Frames",
-            "Rec1Modes",
-            "DM1commands",
-            "DM2phases",
-            "Res2Phases",
-            "CCD2Frames",
-            "Rec2Modes",
-            "DM2commands",
+            "atmo_phases",
+            "dm1_phases",
+            "res1_phases",
+            "ccd1_frames",
+            "rec1_modes",
+            "dm1_commands",
+            "dm2_phases",
+            "res2_phases",
+            "ccd2_frames",
+            "rec2_modes",
+            "dm2_commands",
         ]
 
         self._initialize_devices()

@@ -7,7 +7,7 @@ from ekarus.e2e.cascading_ao_class import CascadingAO
 import ekarus.e2e.utils.my_fits_package as myfits   
 
 import xupy as xp
-np = xp.np
+import numpy as np
 
 
 def main(tn:str='example_dual_stage', show:bool=False):

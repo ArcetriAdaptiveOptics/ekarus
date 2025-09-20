@@ -1,10 +1,10 @@
 import xupy as xp
-np = xp.np
+import numpy as np
 
-from ekarus.e2e.alpao_deformable_mirror import ALPAODM
-from ekarus.e2e.pyramid_wfs import PyramidWFS
-from ekarus.e2e.detector import Detector
-from ekarus.e2e.slope_computer import SlopeComputer
+from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
+# from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
+# from ekarus.e2e.devices.detector import Detector
+# from ekarus.e2e.devices.slope_computer import SlopeComputer
 
 from ekarus.abstract_classes.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask  # , get_masked_array
@@ -18,12 +18,12 @@ class SingleStageAO(HighLevelAO):
         super().__init__(tn)        
         
         self.telemetry_keys = [
-            "AtmoPhases",
-            "DMphases",
-            "ResPhases",
-            "DetectorFrames",
-            "ReconstructorModes",
-            "DMcommands",
+            "atmo_phases",
+            "dm_phases",
+            "residual_phases",
+            "ccd_frames",
+            "reconstructor_modes",
+            "dm_commands",
         ]
 
         self._initialize_devices()

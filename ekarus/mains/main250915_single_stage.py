@@ -1,5 +1,5 @@
 import xupy as xp
-np = xp.np
+import numpy as np
 masked_array = xp.masked_array
 
 import matplotlib.pyplot as plt

@@ -1,5 +1,5 @@
 import xupy as xp
-np = xp.np
+# import numpy as np
 
 from arte.atmo.phase_screen_generator import PhaseScreenGenerator
 from ekarus.e2e.utils.image_utils import reshape_on_mask

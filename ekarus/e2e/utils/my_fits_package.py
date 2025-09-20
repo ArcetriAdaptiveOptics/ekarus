@@ -1,8 +1,8 @@
 from astropy.io import fits as pyfits
-from numpy import uint8
+# from numpy import uint8
 from numpy.ma import masked_array
 import xupy as xp
-np = xp.np
+import numpy as np
 
 
 def read_fits(filename, isBool:bool=False):
