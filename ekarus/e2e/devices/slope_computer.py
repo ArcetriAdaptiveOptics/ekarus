@@ -50,7 +50,7 @@ class SlopeComputer():
         match self.wfs_type:
             case 'PyrWFS':
                 subap_path = join(calibpath, tn, prefix_str+'SubapertureMasks.fits')
-                piston, lambdaOverD, subaperturePixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix']
+                piston, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
                     subaperture_masks = read_fits(subap_path).astype(bool)
                     self._subaperture_masks = xp.asarray(subaperture_masks)
@@ -59,7 +59,7 @@ class SlopeComputer():
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
-                    self._define_subaperture_masks(detector_image, subaperturePixelSize)
+                    self._define_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
                     hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(subap_path, (self._subaperture_masks).astype(xp.uint8), hdr_dict)
             case _:
@@ -121,7 +121,7 @@ class SlopeComputer():
         return slopes
     
     
-    def _define_subaperture_masks(self, subaperture_image, Npix):
+    def _define_subaperture_masks(self, subaperture_image, Npix, centerObscPixDiam:float = 0.0):
         """
         Create subaperture masks for the given shape and pixel size.
 
@@ -134,7 +134,10 @@ class SlopeComputer():
         for i in range(4):
             # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
             qx,qy = self.find_subaperture_center(subaperture_image, quad_n=i+1)
-            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix//2, mask_center=(qx,qy))
+            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
+            if centerObscPixDiam > 0.0:
+                obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam/2+0.5, mask_center=(qx,qy))
+                subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)
 
         self._subaperture_masks = subaperture_masks
 

@@ -5,7 +5,7 @@ from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.detector import Detector
 # from ekarus.e2e.slope_computer import SlopeComputer
 
-from ekarus.abstract_classes.high_level_ao_class import HighLevelAO
+from ekarus.e2e.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 
 
@@ -107,17 +107,26 @@ class CascadingAO(HighLevelAO):
             input_phase = atmo_phase[~self.cmask]
             input_phase -= xp.mean(input_phase)  # remove piston
 
-            if i >= self.sc1.delay and i % int(self.sc1.dt/self.dt) == 0:
+            if i >= self.sc1.delay:
                 self.dm1.set_position(dm1_cmds[i - self.sc1.delay, :], absolute=True)
 
             residual1_phase = input_phase - self.dm1.surface
-            dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual1_phase, dm1_cmd, self.sc1, starMagnitude)
 
-            if i >= self.sc2.delay and i % int(self.sc2.dt/self.dt) == 0:
+            if i % int(self.sc1.dt/self.dt) == 0:
+                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual1_phase, dm1_cmd, self.sc1, starMagnitude)
+            else:
+                dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
+
+
+            if i >= self.sc2.delay:
                 self.dm2.set_position(dm2_cmds[i - self.sc2.delay, :], absolute=True)
 
             residual2_phase = residual1_phase - self.dm2.surface
-            dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual2_phase, dm2_cmd, self.sc2, starMagnitude)
+
+            if i % int(self.sc2.dt/self.dt) == 0:
+                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual2_phase, dm2_cmd, self.sc2, starMagnitude)
+            else:
+                dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
             res2_phase_rad2[i] = xp.std(residual2_phase*m2rad)**2
             res1_phase_rad2[i] = xp.std(residual1_phase*m2rad)**2

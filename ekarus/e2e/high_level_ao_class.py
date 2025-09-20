@@ -40,7 +40,7 @@ class HighLevelAO():
         if starMagnitude is None:
             starMagnitude = self.starMagnitude
         total_flux = B0 * 10**(-starMagnitude/2.5)
-        collecting_area = xp.pi/4*self.pupilSizeInM**2
+        collecting_area = xp.pi/4*(self.pupilSizeInM**2-self.obscurationSizeInM**2)
         collected_flux = self.throughput * total_flux * collecting_area
         return collected_flux
     
@@ -52,7 +52,15 @@ class HighLevelAO():
         self.pupilSizeInPixels = telescope_pars['pupilSizeInPixels']
         self.throughput = telescope_pars['throughput']
         mask_shape = (self.pupilSizeInPixels, self.pupilSizeInPixels)
-        self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels//2)
+        self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels/2)
+        try:
+            self.centerObscurationInM = telescope_pars['centerObscuration']
+            obscSizeInPixels = self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
+            obs_mask = get_circular_mask(mask_shape, mask_radius=obscSizeInPixels/2)
+            self.cmask = (self.cmask + (1-obs_mask)).astype(bool)
+        except KeyError:
+            self.obscurationSizeInM = 0.0
+
 
 
     def _read_loop_parameters(self):
@@ -244,7 +252,10 @@ class HighLevelAO():
         sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_',
                         piston=1-self.cmask, 
                         lambdaOverD = sensorLambda/self.pupilSizeInM,
-                        Npix = subapertureSize) 
+                        Npix = subapertureSize,
+                        centerObscurationInPixels = 
+                        self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
+        ) 
         
         return pyr, det, sc
 
@@ -282,9 +293,8 @@ class HighLevelAO():
         modes = slope_computer.Rec @ slopes
         gmodes = modes * slope_computer.modal_gains
         cmd = slope_computer.m2c @ gmodes
-        delta_cmd_rad = cmd * slope_computer.intGain
-
-        dm_cmd += delta_cmd_rad / m2rad  # convert to meters
+        
+        dm_cmd += cmd * slope_computer.intGain / m2rad
         modes /= m2rad  # convert to meters
 
         return dm_cmd, modes

@@ -6,7 +6,7 @@ from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.devices.detector import Detector
 # from ekarus.e2e.devices.slope_computer import SlopeComputer
 
-from ekarus.abstract_classes.high_level_ao_class import HighLevelAO
+from ekarus.e2e.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask  # , get_masked_array
 
 
@@ -93,11 +93,6 @@ class SingleStageAO(HighLevelAO):
             atmo_phase = self.get_phasescreen_at_time(sim_time)
             input_phase = atmo_phase[~self.cmask]
             input_phase -= xp.mean(input_phase)  # remove piston
-
-            # # Tilt offloading
-            # if i>0 and ttOffloadFrequency > 0 and i % int(loopFrequencyInHz/ttOffloadFrequency) <= 1e-6:
-            #     tt_coeffs = modes[:2]
-            #     input_phase -= TTmat @ tt_coeffs
 
             if i >= self.sc.delay:
                 self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
