@@ -94,9 +94,7 @@ def main(tn:str='example_dual_stage', show:bool=False):
         if xp.on_gpu:
             screen = screen.get()
         plt.figure()
-        plt.imshow(screen, cmap='RdBu')
-        plt.colorbar()
-        plt.title('Atmo screen')
+        myimshow(screen, title='Atmo screen [m]', cmap='RdBu')
 
     atmo_phases, _, res1_phases, det1_frames, rec1_modes, _, _, res2_phases, det2_frames, rec2_modes, _ = cascao.load_telemetry_data()
 

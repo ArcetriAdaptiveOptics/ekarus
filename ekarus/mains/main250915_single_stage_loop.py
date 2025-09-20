@@ -86,9 +86,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         if xp.on_gpu:
             screen = screen.get()
         plt.figure()
-        plt.imshow(screen, cmap='RdBu')
-        plt.colorbar()
-        plt.title('Atmo screen')
+        myimshow(screen, title='Atmo screen [m]', cmap='RdBu')
 
     masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
 
@@ -164,6 +162,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
     plt.xlabel('Time [ms]')
     plt.ylabel('amplitude [m]')
     plt.title('Reconstructor modes\n(first 10)')
+    
     plt.show()
 
     return ssao
