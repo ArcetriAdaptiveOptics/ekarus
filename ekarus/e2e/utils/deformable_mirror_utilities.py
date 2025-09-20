@@ -1,5 +1,5 @@
 import xupy as xp
-np = xp.np
+import numpy as np
 
 from tps import ThinPlateSpline # for the simulated IFF
 from scipy.interpolate import griddata

@@ -1,11 +1,12 @@
 import os
 import xupy as xp
-np = xp.np
+import numpy as np
 
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.analytical.turbulence_layers import TurbulenceLayers
 from ekarus.e2e.utils.read_configuration import ConfigReader
-from ekarus.e2e.utils.root import resultspath, calibpath #, configpath
+from ekarus.e2e.utils.root import resultspath, calibpath, atmopath
+
 
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
@@ -35,9 +36,7 @@ class HighLevelAO():
 
 
     def get_photons_per_second(self, starMagnitude: float, B0: float = 1e+10) -> float:
-        """
-        Compute the number of photons collected per second.
-        """
+        """ Compute the number of photons collected per second. """
         if starMagnitude is None:
             starMagnitude = self.starMagnitude
         total_flux = B0 * 10**(-starMagnitude/2.5)
@@ -47,9 +46,7 @@ class HighLevelAO():
     
 
     def _read_configuration(self):
-        """
-        Reads the Telescope configuration file and defines the mask.
-                """
+        """ Reads the Telescope configuration file, defining the mask """
         telescope_pars = self._config.read_telescope_pars()
         self.pupilSizeInM = telescope_pars['pupilSizeInM']
         self.pupilSizeInPixels = telescope_pars['pupilSizeInPixels']
@@ -204,7 +201,7 @@ class HighLevelAO():
         N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_path = os.path.join(self.savepath, 'AtmospherePhaseScreens.fits')
+        atmo_path = os.path.join(self.atmopath, 'AtmospherePhaseScreens.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens() # rescale in meters

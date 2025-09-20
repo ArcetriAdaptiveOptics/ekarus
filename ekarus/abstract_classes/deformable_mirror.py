@@ -20,6 +20,7 @@ class DeformableMirror():
     """
     
     def __init__(self, xp=np):
+        self.max_stroke = None
         self._xp = xp
         self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
@@ -63,7 +64,10 @@ class DeformableMirror():
             cmd_amps -= self.act_pos
 
         # Update positions and shape
+
         self.act_pos += cmd_amps
+        if self.max_stroke is not None:
+            self.act_pos = self._xp.maximum(self._xp.minimum(self.act_pos, self.max_stroke), -self.max_stroke)
         self.surface += self.IFF @ cmd_amps
         
 

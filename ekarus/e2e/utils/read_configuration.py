@@ -4,7 +4,7 @@ from .root import configpath
 import yaml
 
 import xupy as xp
-np = xp.np
+# import numpy as np
 
 
 class ConfigReader():
