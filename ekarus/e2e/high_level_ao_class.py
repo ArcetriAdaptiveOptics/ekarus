@@ -1,11 +1,12 @@
 import os
 import xupy as xp
-np = xp.np
+import numpy as np
 
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.analytical.turbulence_layers import TurbulenceLayers
 from ekarus.e2e.utils.read_configuration import ConfigReader
-from ekarus.e2e.utils.root import resultspath, calibpath, configpath
+from ekarus.e2e.utils.root import resultspath, calibpath, atmopath
+
 
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
@@ -25,8 +26,10 @@ class HighLevelAO():
             os.mkdir(self.savecalibpath)
 
         self.dtype = xp.float
+        self.atmo_pars = None
 
         self._config = ConfigReader(tn)
+        self._tn = tn
         
         self._read_configuration()
         self._read_loop_parameters()
@@ -37,7 +40,7 @@ class HighLevelAO():
         if starMagnitude is None:
             starMagnitude = self.starMagnitude
         total_flux = B0 * 10**(-starMagnitude/2.5)
-        collecting_area = xp.pi/4*self.pupilSizeInM**2
+        collecting_area = xp.pi/4*(self.pupilSizeInM**2-self.centerObscurationInM**2)
         collected_flux = self.throughput * total_flux * collecting_area
         return collected_flux
     
@@ -49,7 +52,15 @@ class HighLevelAO():
         self.pupilSizeInPixels = telescope_pars['pupilSizeInPixels']
         self.throughput = telescope_pars['throughput']
         mask_shape = (self.pupilSizeInPixels, self.pupilSizeInPixels)
-        self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels//2)
+        self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels/2)
+        try:
+            self.centerObscurationInM = telescope_pars['centerObscuration']
+            obscSizeInPixels = self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
+            obs_mask = get_circular_mask(mask_shape, mask_radius=obscSizeInPixels/2)
+            self.cmask = (self.cmask + (1-obs_mask)).astype(bool)
+        except KeyError:
+            self.centerObscurationInM = 0.0
+
 
 
     def _read_loop_parameters(self):
@@ -59,10 +70,10 @@ class HighLevelAO():
         loop_pars = self._config.read_loop_pars()
         self.Nits = loop_pars['nIterations']
         self.starMagnitude = loop_pars['starMagnitude']
-        self.modulationAngleInLambdaOverD = loop_pars['modulationAngleInLambdaOverD']
+        self.dt = 1/loop_pars['simFreqHz']
     
 
-    def define_KL_modes(self, dm, oversampling: int, zern_modes:int=5, save_prefix:str=''):
+    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=5, save_prefix:str=''):
         """
         Defines the Karhunen-Loève (KL) modes for the given DM and oversampling.
         
@@ -90,14 +101,14 @@ class HighLevelAO():
             KL = myfits.read_fits(KL_path)
             m2c = myfits.read_fits(m2c_path)
         except FileNotFoundError:
-            atmo_par = self._config.read_atmo_pars()
-            r0s = atmo_par['r0']
-            L0 = atmo_par['outerScaleInM']
+            if self.atmo_pars is None:
+                self.atmo_pars = self._config.read_atmo_pars()
+            r0s = self.atmo_pars['r0']
+            L0 = self.atmo_pars['outerScaleInM']
             if isinstance(r0s, float):
                 r0 = r0s
             else:
-                r0 = xp.sqrt(xp.sum(r0s**2))
-            print(xp.__name__)
+                r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
                 oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
@@ -107,7 +118,7 @@ class HighLevelAO():
         return KL, m2c
     
 
-    def compute_reconstructor(self, slope_computer, MM, amps, save_prefix:str=''):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, save_prefix:str=''):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
         
@@ -117,6 +128,8 @@ class HighLevelAO():
             The slope computer object.
         MM : array
             The mirror modes to calibrate/correct (e.g. KL Modes).
+        lambdaInM : float | array
+            The wavelength(s) at which calibration is performed.
         amps : float or array
             The amplitudes for each mode.
         save_prefix : str, optional
@@ -138,9 +151,8 @@ class HighLevelAO():
             Nmodes = xp.shape(MM)[0]
             slopes = None
             electric_field_amp = 1-self.cmask
-            lambdaOverD = slope_computer._wfs.lambdaInM/self.pupilSizeInM
+            lambdaOverD = lambdaInM/self.pupilSizeInM
             Nphotons = None # perfect calibration: no noise
-            self.pyr.set_modulation_angle(self.modulationAngleInLambdaOverD)
             if isinstance(amps, float):
                 amps *= xp.ones(Nmodes)
             for i in range(Nmodes):
@@ -176,13 +188,13 @@ class HighLevelAO():
         dt : float, optional
             Maximum time step, screen length is computed using the maximum wind speeds and simulation time.
         The minimum length for the screen is 20 pupil diameters.
-
         """
-        atmo_par = self._config.read_atmo_pars()
-        r0s = atmo_par['r0']
-        L0 = atmo_par['outerScaleInM']
-        windSpeeds = atmo_par['windSpeed']
-        windAngles = atmo_par['windAngle']
+        if self.atmo_pars is None:
+            self.atmo_pars = self._config.read_atmo_pars()
+        r0s = self.atmo_pars['r0']
+        L0 = self.atmo_pars['outerScaleInM']
+        windSpeeds = self.atmo_pars['windSpeed']
+        windAngles = self.atmo_pars['windAngle']
         if N is None:
             if dt is not None:
                 maxTime = dt * self.Nits
@@ -197,11 +209,98 @@ class HighLevelAO():
         N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_path = os.path.join(self.configpath, 'AtmospherePhaseScreens.fits')
+        atmo_dir = os.path.join(atmopath,self._tn)
+        if not os.path.exists(atmo_dir):   
+            os.mkdir(atmo_dir)
+        atmo_path = os.path.join(atmo_dir,'atmospheric_phase_layers.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
         self.layers.generate_phase_screens(screenPixels, screenMeters)
         self.layers.rescale_phasescreens() # rescale in meters
         self.layers.update_mask(self.cmask)
+
+
+    def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):
+        """ 
+        Initialize devices for PyrWFS slope computation
+        """
+
+        from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
+        from ekarus.e2e.devices.detector import Detector
+        from ekarus.e2e.devices.slope_computer import SlopeComputer
+
+        wfs_pars = self._config.read_sensor_pars(pyr_id) 
+        subapPixSep = wfs_pars["subapPixSep"]
+        oversampling = wfs_pars["oversampling"]
+        sensorLambda = wfs_pars["lambdaInM"]
+        sensorBandwidth = wfs_pars['bandWidthInM']
+        subapertureSize = wfs_pars["subapPixSize"]
+        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*oversampling #/2
+        pyr= PyramidWFS(
+            apex_angle=apex_angle, 
+            oversampling=oversampling, 
+            sensorLambda=sensorLambda,
+            sensorBandwidth=sensorBandwidth
+        )
+
+        det_pars = self._config.read_detector_pars(detector_id)
+        det = Detector(
+            detector_shape=det_pars["detector_shape"],
+            RON=det_pars["RON"],
+            quantum_efficiency=det_pars["quantum_efficiency"],
+            beam_split_ratio=det_pars["beam_splitter_ratio"],
+        )
+
+        sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
+        sc = SlopeComputer(pyr, det, sc_pars)
+        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_',
+                        piston=1-self.cmask, 
+                        lambdaOverD = sensorLambda/self.pupilSizeInM,
+                        Npix = subapertureSize,
+                        centerObscurationInPixels = 
+                        self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
+        ) 
+        
+        return pyr, det, sc
+
+
+    
+    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, starMagnitude:float=None):
+        """
+        Performs a single iteration of the AO loop.
+        Parameters
+        ----------
+        phase : array
+            The input phase screen in meters.
+        dm_cmd : array
+            The current DM command in meters.
+        slope_computer : SlopeComputer
+            The slope computer object.
+        starMagnitude : float
+            The magnitude of the star being observed.
+        
+        Returns
+        -------
+        dm_cmd : xp.array
+            The DM command in meters.
+        modes : xp.array
+            The reconstructed modes in meters.
+        """
+        lambda_ref = slope_computer._wfs.lambdaInM
+        m2rad = 2*xp.pi/lambda_ref
+        lambdaOverD = lambda_ref/self.pupilSizeInM
+        Nphotons = self.get_photons_per_second(starMagnitude) * slope_computer.dt
+
+        delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
+        input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
+        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+        modes = slope_computer.Rec @ slopes
+        gmodes = modes * slope_computer.modal_gains
+        cmd = slope_computer.m2c @ gmodes
+        
+        dm_cmd += cmd * slope_computer.intGain / m2rad
+        modes /= m2rad  # convert to meters
+
+        return dm_cmd, modes
 
 
     def get_phasescreen_at_time(self, time: float):

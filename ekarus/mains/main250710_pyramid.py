@@ -1,7 +1,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from ekarus.e2e.pyramid_wfs import PyramidWFS
+from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
 from arte.types.mask import CircularMask
 # from ekarus.e2e.utils.zernike_coefficients import create_field_from_zernike_coefficients
 from ekarus.e2e.utils.image_utils import image_grid
@@ -86,7 +86,7 @@ def main():
     input_field = create_field_from_zernike_coefficients(mask, 1, 1)
 
     apex_angle = 112*(2*np.pi)*lambdaOverD
-    wfs = PyramidWFS(apex_angle, oversampling)
+    wfs = PyramidWFS(apex_angle, oversampling, lambdaInM)
     padded_field = np.pad(input_field, int((oversampling-1)/2*nx), mode='constant', constant_values=0.0)
     output_field = wfs.propagate(padded_field, lambdaOverD)
 
@@ -170,3 +170,6 @@ def main():
     plt.colorbar(shrink=0.6)
 
     plt.show()
+
+if __name__ == '__main__':
+    main()

@@ -1,8 +1,9 @@
 # Added
 *.fits
 *.ini
-# !ekarus/simulations/Config/exampleTN.ini
+*.yaml
 !ekarus/simulations/Config/example*
+!ekarus/e2e/alpao_dms_data/config.ini
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

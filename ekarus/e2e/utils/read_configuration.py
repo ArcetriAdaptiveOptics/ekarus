@@ -4,7 +4,7 @@ from .root import configpath
 import yaml
 
 import xupy as xp
-np = xp.np
+# import numpy as np
 
 
 class ConfigReader():
@@ -21,6 +21,7 @@ class ConfigReader():
     def read_sensor_pars(self, sensor_name: str = 'WFS'):
         """ Read sensor parameters from the configuration file."""
         self._cfile[sensor_name]['lambdaInM'] = eval(self._cfile[sensor_name]['lambdaInM'])
+        self._cfile[sensor_name]['bandWidthInM'] = eval(self._cfile[sensor_name]['bandWidthInM'])
         return self._cfile[sensor_name]
 
     def read_detector_pars(self, detector_name: str = 'DETECTOR'):
@@ -30,9 +31,9 @@ class ConfigReader():
     def read_dm_pars(self, dm_name: str = 'DM'):
         """ Read deformable mirror parameters from the configuration file."""
         try:
-            self._cfile[dm_name]['maxStrokeInM'] = eval(self._cfile[dm_name]['maxStrokeInM'])
-        except (KeyError, TypeError):
-            self._cfile[dm_name]['maxStrokeInM'] = None
+            self._cfile[dm_name]['max_stroke_in_m'] = eval(self._cfile[dm_name]['max_stroke_in_m'])
+        except KeyError:
+            self._cfile[dm_name]['max_stroke_in_m'] = None
         return self._cfile[dm_name]
     
     def read_atmo_pars(self):

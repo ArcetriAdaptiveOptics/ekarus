@@ -3,7 +3,7 @@ import configparser
 import os
 import xupy as xp
 
-from ekarus.e2e.deformable_mirror import DeformableMirror
+from ekarus.e2e.devices.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
 from ekarus.e2e.utils.image_utils import get_circular_mask
 from ekarus.e2e.utils import my_fits_package as myfits
@@ -31,11 +31,12 @@ class ALPAODM(DeformableMirror):
         self.config.read(config_path)
 
         if isinstance(input, int):
-            self._init_ALPAO_from_Nacts(input, **kwargs)
+            Npix = kwargs['Npix']
+            self._init_ALPAO_from_Nacts(input,Npix=Npix)
         elif isinstance(input, str):
-            self._init_ALPAO_from_tn_data(input, **kwargs)
+            self._init_ALPAO_from_tn_data(input)
         elif isinstance(input, xp.array):
-            self._init_ALPAO_from_act_coords(input, **kwargs)
+            self._init_ALPAO_from_act_coords(input)
         else:
             raise NotImplementedError(f'Initialization method for {input} not implemented, please pass a data tracking number or the number of actuators')
 
