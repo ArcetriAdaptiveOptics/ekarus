@@ -3,16 +3,16 @@ Simulation tools for Ekarus. Python libraries to simulate AO loops with a pyrami
 
 ## Installation
 Unfortunately, the ekarus library has quite a few dependancies, which you will need to install:
-'''bash
+```bash
 pip install cupy
 pip install xupy
 pip install arte
 pip install thin-plate-spline
-'''
+```
 After pip installing the required dependencies, setup a conda environment:
-'''bash
+```bash
 conda create -name ekarus arte cupy xupy numpy matplotlib
-'''
+```
 
 ## Requirements
 - Python 3.11+
