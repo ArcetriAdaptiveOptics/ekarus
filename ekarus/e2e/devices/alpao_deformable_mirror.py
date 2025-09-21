@@ -31,8 +31,8 @@ class ALPAODM(DeformableMirror):
         self.config.read(config_path)
 
         if isinstance(input, int):
-            Npix = kwargs['Npix']
-            self._init_ALPAO_from_Nacts(input,Npix=Npix)
+            pupilDiamInPixels = kwargs['Npix']
+            self._init_ALPAO_from_Nacts(input,pupilDiamInPixels=pupilDiamInPixels)
         elif isinstance(input, str):
             self._init_ALPAO_from_tn_data(input)
         elif isinstance(input, xp.array):
@@ -85,7 +85,7 @@ class ALPAODM(DeformableMirror):
         return coords
 
 
-    def _init_ALPAO_from_Nacts(self, Nacts:int, Npix:int): #, multiprocessing:bool=False):
+    def _init_ALPAO_from_Nacts(self, Nacts:int, pupilDiamInPixels:int): #, multiprocessing:bool=False):
         """ 
         Initializes the ALPAO DM mask and actuator coordinates
 
@@ -93,7 +93,7 @@ class ALPAODM(DeformableMirror):
         ----------
         Nacts : int
             The number of actuators in the DM.
-        Npix : int
+        pupilDiamInPixels : int
             The number of pixels across the pupil
         """
         self.Nacts = Nacts
@@ -107,11 +107,11 @@ class ALPAODM(DeformableMirror):
         self.pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
         # Define mask & pixel scale
-        self.mask = get_circular_mask((Npix,Npix),Npix//2)
-        self.pixel_scale = Npix/self.pupil_size
+        self.mask = get_circular_mask((pupilDiamInPixels,pupilDiamInPixels),pupilDiamInPixels//2)
+        self.pixel_scale = pupilDiamInPixels/self.pupil_size
 
         dir_path = os.path.join(self.alpaopath,'DM'+str(self.Nacts)+'/')
-        hdr_dict = {'N_ACTS': self.Nacts, 'PUP_SIZE': self.pupil_size, 'PIX_SIZE': Npix}
+        hdr_dict = {'N_ACTS': self.Nacts, 'PUP_SIZE': self.pupil_size, 'PIX_SIZE': pupilDiamInPixels}
         try:
             os.mkdir(dir_path)
         except FileExistsError:
@@ -128,6 +128,8 @@ class ALPAODM(DeformableMirror):
             radii = xp.sqrt(coords[0]**2+coords[1]**2)/2
             self.act_coords = coords*self.pupil_size/2/(2*max(radii))
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
+
+        Npix = xp.sum(1-self.mask)
 
         iff_path = os.path.join(dir_path,str(Npix)+'pixels_InfluenceFunctions.fits')
         try:

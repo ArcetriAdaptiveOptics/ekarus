@@ -16,9 +16,9 @@ CCD.out:
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER.out:
-  loopFrequencyInHz: 1000     
+  loopFrequencyInHz: 2000     
   integratorGain: 0.4           # loop integrator gain
-  delay: 5                      # loop delay in steps
+  delay: 8                      # loop delay in steps
   nModes2Correct: 468           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
   modulationInLambdaOverD: 3.0  # modulation amplitude

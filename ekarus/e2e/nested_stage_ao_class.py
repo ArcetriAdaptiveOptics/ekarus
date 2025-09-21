@@ -109,10 +109,10 @@ class NestedStageAO(HighLevelAO):
             input_phase -= xp.mean(input_phase)  # remove piston
 
             if i >= self.sc2.delay:
-                self.dm2.set_position(dm1_cmds[i - self.sc2.delay, :], absolute=True)
+                self.dm2.set_position(dm2_cmds[i - self.sc2.delay, :], absolute=True)
             
             if i >= self.sc1.delay:
-                self.dm1.set_position(dm2_cmds[i - self.sc1.delay, :], absolute=True)
+                self.dm1.set_position(dm1_cmds[i - self.sc1.delay, :], absolute=True)
 
             residual2_phase = input_phase - self.dm2.surface
             residual_phase = residual2_phase - self.dm1.surface

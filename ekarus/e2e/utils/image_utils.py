@@ -67,6 +67,7 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None):
     mask = xp.asarray(mask,dtype=bool)
     return mask
 
+
 def reshape_on_mask(vec, mask):
     """
     Reshape a given array on a 2D mask.
@@ -80,14 +81,14 @@ def reshape_on_mask(vec, mask):
     return image
 
 
-# def get_masked_array(vec, mask):
-#     if hasattr(vec, 'get'):
-#         vec = vec.get()
-#     if hasattr(mask, 'get'):
-#         mask = mask.get() 
-#     aux = reshape_on_mask(vec, mask)
-#     ma_vec = xp.masked_array(aux, mask)
-#     return ma_vec
+def get_masked_array(vec, mask):
+    vec2D = reshape_on_mask(vec, mask)
+    if hasattr(vec2D, 'get'):
+        vec2D = vec2D.get()
+    if hasattr(mask, 'get'):
+        mask = mask.get() 
+    ma_vec = np.ma.masked_array(vec2D, mask)
+    return ma_vec
 
 
 def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0, **kwargs):

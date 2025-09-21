@@ -25,6 +25,7 @@ SLOPE.COMPUTER:
 
 TELESCOPE:
   pupilSizeInM: 1.8         # [m] telescope diameter
+  centerObscuration: 0.0    # [m] central obscuration diameter
   pupilSizeInPixels: 128    # pixels across the pupil diameter
   throughput: 0.11          # accounting for beam splitter
 
@@ -38,3 +39,5 @@ LOOP:
   nIterations: 300
   starMagnitude: 0.0
   simFreqHz: 1500          # simulation frequency in Hz
+  recompute: True          # if False, any calibration data saved from 
+                           # previous runs is loaded rather than recomputed

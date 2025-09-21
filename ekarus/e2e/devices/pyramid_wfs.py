@@ -38,28 +38,29 @@ class PyramidWFS:
         self.cdtype = xp.cfloat
 
 
-    def get_intensity(self, input_field, lambda0OverD):
+    def get_intensity(self, input_field, lambda0OverD, tiltError=None):
         L = max(input_field.shape) # TBI: deal with non-square input fields
         padded_field = xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
 
         if self._lambdaRange is None:
-            intensity = self._intensity_from_field(padded_field, lambda0OverD)
+            intensity = self._intensity_from_field(padded_field, lambda0OverD, tiltError)
         else:
             intensity = xp.zeros(padded_field.shape)
             lambdasOverD = lambda0OverD/self.lambdaInM*self._lambdaRange
             for lambdaOverD in lambdasOverD:
                 rescaled_field = padded_field * (self.lambdaInM/lambdaOverD)
-                intensity += self._intensity_from_field(padded_field, lambdaOverD)/len(self._lambdaRange)
+                intensity += self._intensity_from_field(rescaled_field, lambdaOverD, tiltError)/len(self._lambdaRange)
 
         return intensity
     
-    def _intensity_from_field(self, padded_field, lambdaOverD):
+    def _intensity_from_field(self, padded_field, lambdaOverD, tiltError=None):
         if self.modulationAngleInLambdaOverD*(2*xp.pi)*self.oversampling < 0.1:
-            output_field = self.propagate(padded_field, lambdaOverD)
+            output_field = self.propagate(padded_field, lambdaOverD, tiltError)
             intensity = xp.abs(output_field)**2
         else:
-            intensity = self.modulate(padded_field, lambdaOverD)
+            intensity = self.modulate(padded_field, lambdaOverD, tiltError)
         return intensity
+    
 
     def set_modulation_angle(self, modulationAngleInLambdaOverD):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
@@ -67,7 +68,7 @@ class PyramidWFS:
         print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self._modNsteps:1.0f} modulation steps')
     
 
-    def propagate(self, input_field, lambdaOverD):
+    def propagate(self, input_field, lambdaOverD, tiltError=None):
         """
         Propagate the electric field through the pyramid:
         1. From the pupil plane to the focal plane (FFT)
@@ -82,6 +83,13 @@ class PyramidWFS:
         """
         self.field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(input_field))
 
+        if tiltError is not None:
+            tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
+            wedgeX, wedgeY = tiltError
+            wedge_tilt = (tiltX*wedgeX + tiltY*wedgeY)*(2*self._xp.pi)
+            self.field_on_focal_plane = self.field_on_focal_plane * self._xp.exp(1j*wedge_tilt, dtype = self.cdtype)
+
+
         phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
         self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype = self.cdtype)
 
@@ -90,7 +98,7 @@ class PyramidWFS:
         return output_field
     
 
-    def modulate(self, input_field, lambdaOverD):
+    def modulate(self, input_field, lambdaOverD, tiltError=None):
         """
         Modulates the input electric field by tilting it in different directions
         and averaging the resulting intensities.
@@ -114,7 +122,7 @@ class PyramidWFS:
             tilt = tiltX * xp.cos(phi) + tiltY * xp.sin(phi)
             tilted_input = input_field * xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
 
-            output = self.propagate(tilted_input, lambdaOverD)
+            output = self.propagate(tilted_input, lambdaOverD, tiltError)
             intensity += (abs(output**2))/self._modNsteps
 
         return intensity

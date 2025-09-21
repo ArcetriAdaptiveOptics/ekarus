@@ -1,17 +1,15 @@
 import xupy as xp
 import numpy as np
-# from numpy.ma import masked_array
 
 from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
-# from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
-# from ekarus.e2e.devices.detector import Detector
-# from ekarus.e2e.devices.slope_computer import SlopeComputer
 
 from ekarus.e2e.high_level_ao_class import HighLevelAO
-from ekarus.e2e.utils.image_utils import reshape_on_mask, get_masked_array
+from ekarus.e2e.utils.image_utils import reshape_on_mask
+
+from typing import override
 
 
-class SingleStageAO(HighLevelAO):
+class PupilShift(HighLevelAO):
 
     def __init__(self, tn: str):
         """The constructor"""
@@ -46,7 +44,60 @@ class SingleStageAO(HighLevelAO):
 
         dm_pars = self._config.read_dm_pars()
         self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm.mask = self.cmask.copy()
+        self.dm.mask = self.cmask
+
+    @override
+    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, 
+                               tilt_before_DM:tuple=(0.0,0.0), tilt_after_DM:tuple=(0.0,0.0),
+                               starMagnitude:float=None):
+        """
+        Performs a single iteration of the AO loop.
+
+        Parameters
+        ----------
+        phase : array
+            The input phase screen in meters.
+        dm_cmd : array
+            The current DM command in meters.
+        slope_computer : SlopeComputer
+            The slope computer object.
+        starMagnitude : float
+            The magnitude of the star being observed.
+        
+        Returns
+        -------
+        dm_cmd : xp.array
+            The DM command in meters.
+        modes : xp.array
+            The reconstructed modes in meters.
+        """
+        lambda_ref = slope_computer._wfs.lambdaInM
+        m2rad = 2*xp.pi/lambda_ref
+        lambdaOverD = lambda_ref/self.pupilSizeInM
+        Nphotons = self.get_photons_per_second(starMagnitude) * slope_computer.dt
+
+        delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
+        input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
+        # slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+
+        L = max(input_field.shape)
+        padded_field = xp.pad(input_field, int((self.pyr.oversampling-1)/2*L), mode='constant', constant_values=0.0)
+        if tilt_before_DM != 0.0:
+            tiltX,tiltY = self.pyr._get_XY_tilt_planes(padded_field.shape)
+            wedge_tilt = (tiltX*tilt_before_DM[0] + tiltY*tilt_before_DM[1])*self.pyr.oversampling*(2*xp.pi)
+            padded_field = padded_field * xp.exp(1j*wedge_tilt, dtype = self.pyr.cdtype)
+        intensity = self.pyr._intensity_from_field(self, padded_field, lambdaOverD, tiltError=tilt_after_DM)
+
+        detector_image = self._detector.image_on_detector(intensity, photon_flux=Nphotons)
+        slopes = slope_computer._compute_pyramid_slopes(detector_image)
+        modes = slope_computer.Rec @ slopes
+        gmodes = modes * slope_computer.modal_gains
+        cmd = slope_computer.m2c @ gmodes
+        
+        dm_cmd += cmd * slope_computer.intGain / m2rad
+        modes /= m2rad  # convert to meters
+
+        return dm_cmd, modes
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
@@ -65,15 +116,7 @@ class SingleStageAO(HighLevelAO):
             String prefix to save telemetry data (default is None: telemetry is not saved).
         """
         m2rad = 2 * xp.pi / lambdaInM
-        # electric_field_amp = 1 - self.cmask
-
-        # lambdaOverD = lambdaInM / self.pupilSizeInM
-        # Nphotons = self.get_photons_per_second(starMagnitude) * self.sc.dt
-        # modal_gains = self.sc.modal_gains
-
         self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD)
-
-        # print(self.sc._wfs.lambdaInM, self.dm.max_stroke, self.pyr.modulationAngleInLambdaOverD)
 
         # Define variables
         mask_len = int(xp.sum(1 - self.dm.mask))
@@ -101,21 +144,8 @@ class SingleStageAO(HighLevelAO):
 
             if i >= self.sc.delay:
                 self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
-                
-            # if i>0 and int(i%200)==0 and i < 700:
-            #     self.integratorGain += 0.1
 
             residual_phase = input_phase - self.dm.surface
-
-            # delta_phase_in_rad = reshape_on_mask(residual_phase * m2rad, self.cmask)
-            # input_field = electric_field_amp * xp.exp(1j * delta_phase_in_rad)
-            # slopes = self.sc.compute_slopes(input_field, lambdaOverD, Nphotons)
-            # modes = self.sc.Rec @ slopes
-            # gmodes = modes * modal_gains
-            # cmd = self.sc.m2c @ gmodes
-            # dm_cmd += cmd * self.sc.intGain
-            # dm_cmds[i, :] = dm_cmd / m2rad  # convert to meters
-
             dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, starMagnitude)
 
             res_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
@@ -131,13 +161,9 @@ class SingleStageAO(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
-            # ma_input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            # ma_dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
-            # ma_res_phases = np.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
-
-            ma_input_phases = np.stack([get_masked_array(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            ma_dm_phases = np.stack([get_masked_array(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
-            ma_res_phases = np.stack([get_masked_array(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
+            ma_input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask)for i in range(self.Nits)])
+            ma_dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
+            ma_res_phases = np.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             data_dict = {}
             for key, value in zip(

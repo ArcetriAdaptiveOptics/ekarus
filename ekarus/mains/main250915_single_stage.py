@@ -109,17 +109,19 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
             sig = sig.get()
         rec_modes = rec_modes.get()
 
+    lambdaRef = ssao.pyr.lambdaInM
+
     plt.figure(figsize=(9,9))
     plt.subplot(2,2,1)
     myimshow(masked_array(masked_input_phases[-1],cmask), \
-        title=f'Atmosphere phase [m]\nStrehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
+        title=f'Atmosphere phase [m]\nSR = {xp.exp(-input_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',\
         cmap='RdBu',shrink=0.8)
     plt.axis('off')
 
     pixelsPerMAS = ssao.pyr.lambdaInM/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
     plt.subplot(2,2,2)
     showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
-        title = f'Corrected PSF\nStrehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
+        title = f'Corrected PSF\nSR = {xp.exp(-sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
 
     plt.subplot(2,2,3)
     myimshow(detector_frames[-1], title = 'Detector frame', shrink=0.8)
@@ -152,7 +154,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
         plt.xlabel('Time [ms]')
         plt.ylabel(r'$\sigma^2 [rad^2]$')
         plt.gca().set_yscale('log')
-        plt.title('Strehl vs star magnitude')
+        plt.title(f'Strehl @ {lambdaRef*1e+9:1.0f} [nm] vs star magnitude')
 
     plt.figure()
     plt.plot(tvec,rec_modes[:,:10],'-o')

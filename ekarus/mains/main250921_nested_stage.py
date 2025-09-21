@@ -28,8 +28,8 @@ def main(tn:str='example_nested_stage', show:bool=False):
     cascao.sc2.load_reconstructor(Rec,m2c)
 
     print('Running the loop ...')
-    lambdaInM = 1000e-9
-    dm_outer_sig2, dm_inner_sig2, input_sig2 = cascao.run_loop(lambdaInM, cascao.starMagnitude, save_prefix='')
+    lambdaRef = 1000e-9
+    dm_outer_sig2, dm_inner_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -96,18 +96,18 @@ def main(tn:str='example_nested_stage', show:bool=False):
     last_res1_phase = xp.array(res_in_phases[-1,:,:])
     residual1_phase = last_res1_phase[~cascao.cmask]
     input_phase = reshape_on_mask(residual1_phase, psf_mask)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
+    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaRef))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf_in = abs(field_on_focal_plane)**2
 
     last_res2_phase = xp.array(res_out_phases[-1,:,:])
     residual2_phase = last_res2_phase[~cascao.cmask]
     input_phase = reshape_on_mask(residual2_phase, psf_mask)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
+    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaRef))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     psf_out = abs(field_on_focal_plane)**2
 
-    pixelsPerMAS = lambdaInM/cascao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
+    pixelsPerMAS = lambdaRef/cascao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
@@ -129,7 +129,7 @@ def main(tn:str='example_nested_stage', show:bool=False):
 
     plt.subplot(2,3,3)
     showZoomCenter(psf_in, pixelsPerMAS, shrink=shrink, \
-        title = f'PSF after DM1 (inner loop)\nStrehl ratio = {xp.exp(-dm_inner_sig2[-1]):1.3f}',cmap='inferno') 
+        title = f'PSF after DM1 (inner loop)\nSR = {xp.exp(-dm_inner_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
 
     plt.subplot(2,3,4)
     myimshow(det_out_frames[-1], title = 'Detector (outer loop) frame', shrink=shrink)
@@ -141,7 +141,7 @@ def main(tn:str='example_nested_stage', show:bool=False):
 
     plt.subplot(2,3,6)
     showZoomCenter(psf_out, pixelsPerMAS, shrink=shrink, \
-        title = f'PSF after DM2\nStrehl ratio = {xp.exp(-dm_outer_sig2[-1]):1.3f}',cmap='inferno') 
+        title = f'PSF after DM2 (outer loop)\nSR = {xp.exp(-dm_outer_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
 
     tvec = np.arange(cascao.Nits)*cascao.dt*1e+3
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
