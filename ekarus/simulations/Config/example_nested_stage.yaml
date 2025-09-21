@@ -1,52 +1,52 @@
-DM1: 
+DM.out: 
   Nacts: 468
   mmax_stroke_in_m: 5e-6  
 
-PYR1:
+PYR.out:
   oversampling: 4 #5
   lambdaInM: 1000e-9            # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
   subapPixSize: 39.5            # subaperture diameter in pix
   subapPixSep: 8                # pixel distance between subaps
 
-CCD1:
+CCD.out:
   detector_shape: [160,160]     # detector pixel size
   RON: 1.0                      # readout noise in e-
   quantum_efficiency: 0.7       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
-SLOPE.COMPUTER1:
-  loopFrequencyInHz: 1500     
-  integratorGain: 0.9         # loop integrator gain
-  delay: 5                    # loop delay in steps
-  nModes2Correct: 468         # number of reconstructor modes
-  ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
+SLOPE.COMPUTER.out:
+  loopFrequencyInHz: 1000     
+  integratorGain: 0.4           # loop integrator gain
+  delay: 5                      # loop delay in steps
+  nModes2Correct: 468           # number of reconstructor modes
+  ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
   modulationInLambdaOverD: 3.0  # modulation amplitude
 
-DM2: 
+DM.in: 
   Nacts: 241
-  max_stroke_in_m: 40e-6   # Not yet used
+  max_stroke_in_m: 40e-6   
 
-PYR2:
+PYR.in:
   oversampling: 4
-  lambdaInM: 750e-9             # [m] sensor wavelength
+  lambdaInM: 800e-9             # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
-  subapPixSize: 19              # subaperture diameter in pix
-  subapPixSep: 8                # pixel distance between subaps
+  subapPixSize: 39.5            # subaperture diameter in pix
+  subapPixSep: 20               # pixel distance between subaps
 
-CCD2:
-  detector_shape: [80,80]       # detector pixel size
+CCD.in:
+  detector_shape: [160,160]       # detector pixel size
   RON: 1.0                      # readout noise in e-
   quantum_efficiency: 0.7       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
-SLOPE.COMPUTER2:
-  loopFrequencyInHz: 3000     
-  integratorGain: 0.1         # loop integrator gain
-  delay: 3                   # loop delay in steps
-  nModes2Correct: 240         # number of reconstructor modes
-  ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
-  modulationInLambdaOverD: 0.0  # modulation amplitude
+SLOPE.COMPUTER.in:
+  loopFrequencyInHz: 4000     
+  integratorGain: 0.2           # loop integrator gain
+  delay: 2                      # loop delay in steps
+  nModes2Correct: 240           # number of reconstructor modes
+  ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
+  modulationInLambdaOverD: 1.0  # modulation amplitude
 
 
 TELESCOPE:
@@ -63,4 +63,6 @@ ATMO:
 LOOP:
   nIterations: 400
   starMagnitude: 0.0
-  simFreqHz: 3000          # simulation frequency in Hz
+  simFreqHz: 4000          # simulation frequency in Hz
+  recompute: False         # if False, any calibration data saved from 
+                           # previous runs is loaded rather than recomputed

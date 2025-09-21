@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import os.path as op
 
 from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, reshape_on_mask
-from ekarus.e2e.cascading_stage_ao_class import CascadingAO
+from ekarus.e2e.nested_stage_ao_class import NestedStageAO
 
 import ekarus.e2e.utils.my_fits_package as myfits   
 
@@ -10,10 +10,10 @@ import xupy as xp
 import numpy as np
 
 
-def main(tn:str='example_cascading_stage', show:bool=False):
+def main(tn:str='example_nested_stage', show:bool=False):
 
     print('Initializing devices ...')
-    cascao = CascadingAO(tn)
+    cascao = NestedStageAO(tn)
 
     cascao.initialize_turbulence()
 
@@ -29,7 +29,7 @@ def main(tn:str='example_cascading_stage', show:bool=False):
 
     print('Running the loop ...')
     lambdaInM = 1000e-9
-    dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaInM, cascao.starMagnitude, save_prefix='')
+    dm_outer_sig2, dm_inner_sig2, input_sig2 = cascao.run_loop(lambdaInM, cascao.starMagnitude, save_prefix='')
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -86,68 +86,69 @@ def main(tn:str='example_cascading_stage', show:bool=False):
         plt.figure()
         myimshow(screen, title='Atmo screen [m]', cmap='RdBu')
 
-    atmo_phases, _, res1_phases, det1_frames, rec1_modes, _, _, res2_phases, det2_frames, rec2_modes, _ = cascao.load_telemetry_data()
+    atmo_phases, _, res_in_phases, det_in_frames, rec_in_modes, _, _, res_out_phases, det_out_frames, rec_out_modes, _ = cascao.load_telemetry_data()
 
     oversampling = 8
     padding_len = int(cascao.cmask.shape[0]*(oversampling-1)/2)
     psf_mask = xp.pad(cascao.cmask, padding_len, mode='constant', constant_values=1)
     electric_field_amp = 1-psf_mask
 
-    last_res1_phase = xp.array(res1_phases[-1,:,:])
+    last_res1_phase = xp.array(res_in_phases[-1,:,:])
     residual1_phase = last_res1_phase[~cascao.cmask]
     input_phase = reshape_on_mask(residual1_phase, psf_mask)
     electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-    psf1 = abs(field_on_focal_plane)**2
+    psf_in = abs(field_on_focal_plane)**2
 
-    last_res2_phase = xp.array(res2_phases[-1,:,:])
+    last_res2_phase = xp.array(res_out_phases[-1,:,:])
     residual2_phase = last_res2_phase[~cascao.cmask]
     input_phase = reshape_on_mask(residual2_phase, psf_mask)
     electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-    psf2 = abs(field_on_focal_plane)**2
+    psf_out = abs(field_on_focal_plane)**2
 
     pixelsPerMAS = lambdaInM/cascao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
-        dm1_sig2 = dm1_sig2.get()
-        dm2_sig2 = dm2_sig2.get()
+        dm_inner_sig2 = dm_inner_sig2.get()
+        dm_outer_sig2 = dm_outer_sig2.get()
         input_sig2 = input_sig2.get()
-        rec1_modes = rec1_modes.get()
-        rec2_modes = rec2_modes.get()
+        rec_in_modes = rec_in_modes.get()
+        rec_out_modes = rec_out_modes.get()
 
     shrink = 0.75
     plt.figure()#figsize=(9,13.5))
     plt.subplot(2,3,1)
-    myimshow(det1_frames[-1], title = 'Detector 1 frame', shrink=shrink)
+    myimshow(det_in_frames[-1], title = 'Detector (inner loop) frame', shrink=shrink)
+
     plt.subplot(2,3,2)    
     cascao.dm1.plot_position(shrink=shrink)
-    plt.title('DM1 command [m]')
+    plt.title('DM1 (inner loop) command [m]')
     plt.axis('off')
 
     plt.subplot(2,3,3)
-    showZoomCenter(psf1, pixelsPerMAS, shrink=shrink, \
-        title = f'PSF after DM1\nStrehl ratio = {xp.exp(-dm1_sig2[-1]):1.3f}',cmap='inferno') 
+    showZoomCenter(psf_in, pixelsPerMAS, shrink=shrink, \
+        title = f'PSF after DM1 (inner loop)\nStrehl ratio = {xp.exp(-dm_inner_sig2[-1]):1.3f}',cmap='inferno') 
 
     plt.subplot(2,3,4)
-    myimshow(det2_frames[-1], title = 'Detector 2 frame', shrink=shrink)
+    myimshow(det_out_frames[-1], title = 'Detector (outer loop) frame', shrink=shrink)
 
     plt.subplot(2,3,5)    
     cascao.dm2.plot_position(shrink=shrink)
-    plt.title('DM2 command [m]')
+    plt.title('DM2 (outer loop) command [m]')
     plt.axis('off')
 
     plt.subplot(2,3,6)
-    showZoomCenter(psf2, pixelsPerMAS, shrink=shrink, \
-        title = f'PSF after DM2\nStrehl ratio = {xp.exp(-dm2_sig2[-1]):1.3f}',cmap='inferno') 
+    showZoomCenter(psf_out, pixelsPerMAS, shrink=shrink, \
+        title = f'PSF after DM2\nStrehl ratio = {xp.exp(-dm_outer_sig2[-1]):1.3f}',cmap='inferno') 
 
     tvec = np.arange(cascao.Nits)*cascao.dt*1e+3
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,dm1_sig2,'-o',label='after DM1')
-    plt.plot(tvec,dm2_sig2,'-o',label='after DM2')
+    plt.plot(tvec,dm_inner_sig2,'-o',label='after DM1 (inner loop)')
+    plt.plot(tvec,dm_outer_sig2,'-o',label='after DM2 (outer loop)')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -156,20 +157,20 @@ def main(tn:str='example_cascading_stage', show:bool=False):
     plt.gca().set_yscale('log')
 
     plt.figure()
-    plt.plot(tvec,rec1_modes[:,:10],'-o')
+    plt.plot(tvec,rec_in_modes[:,:10],'-o')
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
     plt.xlabel('Time [ms]')
     plt.ylabel('amplitude [m]')
-    plt.title('Reconstructor 1 modes\n(first 10)')
+    plt.title('Reconstructor (inner loop) modes\n(first 10)')
 
     plt.figure()
-    plt.plot(tvec,rec2_modes[:,:10],'-o')
+    plt.plot(tvec,rec_in_modes[:,:10],'-o')
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
     plt.xlabel('Time [ms]')
     plt.ylabel('amplitude [m]')
-    plt.title('Reconstructor 2 modes\n(first 10)')
+    plt.title('Reconstructor (outer loop) modes\n(first 10)')
     plt.show()
 
 

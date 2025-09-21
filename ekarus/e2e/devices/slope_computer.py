@@ -39,7 +39,7 @@ class SlopeComputer():
         self.dtype = xp.float
 
 
-    def calibrate_sensor(self, tn:str, prefix_str:str, **kwargs):
+    def calibrate_sensor(self, tn:str, prefix_str:str, recompute:bool, **kwargs):
         """
         Calibrates the sensor.
         
@@ -52,6 +52,8 @@ class SlopeComputer():
                 subap_path = join(calibpath, tn, prefix_str+'SubapertureMasks.fits')
                 piston, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
+                    if recompute is True:
+                        raise FileNotFoundError('Recompute is True')
                     subaperture_masks = read_fits(subap_path).astype(bool)
                     self._subaperture_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:

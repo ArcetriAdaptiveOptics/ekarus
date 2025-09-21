@@ -68,8 +68,11 @@ class SingleStageAO(HighLevelAO):
 
         # lambdaOverD = lambdaInM / self.pupilSizeInM
         # Nphotons = self.get_photons_per_second(starMagnitude) * self.sc.dt
+        # modal_gains = self.sc.modal_gains
 
         self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD)
+
+        # print(self.sc._wfs.lambdaInM, self.dm.max_stroke, self.pyr.modulationAngleInLambdaOverD)
 
         # Define variables
         mask_len = int(xp.sum(1 - self.dm.mask))

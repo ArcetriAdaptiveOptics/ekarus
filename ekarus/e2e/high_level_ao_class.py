@@ -71,6 +71,10 @@ class HighLevelAO():
         self.Nits = loop_pars['nIterations']
         self.starMagnitude = loop_pars['starMagnitude']
         self.dt = 1/loop_pars['simFreqHz']
+        try:
+            self.recompute = loop_pars['recompute']
+        except KeyError:
+            self.recompute = False
     
 
     def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=5, save_prefix:str=''):
@@ -98,6 +102,8 @@ class HighLevelAO():
         KL_path = os.path.join(self.savecalibpath,str(save_prefix)+'KLmodes.fits')
         m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+'m2c.fits')
         try:
+            if self.recompute is True:
+                raise FileNotFoundError('Recompute is True')
             KL = myfits.read_fits(KL_path)
             m2c = myfits.read_fits(m2c_path)
         except FileNotFoundError:
@@ -105,10 +111,10 @@ class HighLevelAO():
                 self.atmo_pars = self._config.read_atmo_pars()
             r0s = self.atmo_pars['r0']
             L0 = self.atmo_pars['outerScaleInM']
-            if isinstance(r0s, float):
-                r0 = r0s
-            else:
-                r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
+            # if isinstance(r0s, float):
+            #     r0 = r0s
+            # else:
+            r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
                 oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
@@ -145,6 +151,8 @@ class HighLevelAO():
         IM_path = os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits')
         Rec_path = os.path.join(self.savecalibpath,str(save_prefix)+'Rec.fits')
         try:
+            if self.recompute is True:
+                raise FileNotFoundError('Recompute is True')
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
@@ -228,13 +236,23 @@ class HighLevelAO():
         from ekarus.e2e.devices.detector import Detector
         from ekarus.e2e.devices.slope_computer import SlopeComputer
 
+        det_pars = self._config.read_detector_pars(detector_id)
+        detector_shape=det_pars["detector_shape"]
+        det = Detector(
+            detector_shape=detector_shape,
+            RON=det_pars["RON"],
+            quantum_efficiency=det_pars["quantum_efficiency"],
+            beam_split_ratio=det_pars["beam_splitter_ratio"],
+        )
+
         wfs_pars = self._config.read_sensor_pars(pyr_id) 
         subapPixSep = wfs_pars["subapPixSep"]
         oversampling = wfs_pars["oversampling"]
         sensorLambda = wfs_pars["lambdaInM"]
         sensorBandwidth = wfs_pars['bandWidthInM']
         subapertureSize = wfs_pars["subapPixSize"]
-        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*oversampling #/2
+        rebin = oversampling*self.pupilSizeInPixels/max(detector_shape)
+        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2
         pyr= PyramidWFS(
             apex_angle=apex_angle, 
             oversampling=oversampling, 
@@ -242,17 +260,21 @@ class HighLevelAO():
             sensorBandwidth=sensorBandwidth
         )
 
-        det_pars = self._config.read_detector_pars(detector_id)
-        det = Detector(
-            detector_shape=det_pars["detector_shape"],
-            RON=det_pars["RON"],
-            quantum_efficiency=det_pars["quantum_efficiency"],
-            beam_split_ratio=det_pars["beam_splitter_ratio"],
-        )
+        # Size checks
+        if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
+            raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f} \
+                              separated by {subapPixSep:1.0f} cannot fit on a \
+                            {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
+        
+        if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
+            raise ValueError(f'Pupil center in the subquadrant is \
+                            {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} \
+                            meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
 
         sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
         sc = SlopeComputer(pyr, det, sc_pars)
-        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_',
+        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_', 
+                        recompute=self.recompute,
                         piston=1-self.cmask, 
                         lambdaOverD = sensorLambda/self.pupilSizeInM,
                         Npix = subapertureSize,

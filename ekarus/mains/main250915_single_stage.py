@@ -25,6 +25,8 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
 
     print('Running the loop ...')
     try:
+        if ssao.recompute is True:
+            raise FileNotFoundError('Recompute is True')
         masked_input_phases, _, masked_residual_phases, _, _, _ = ssao.load_telemetry_data()
         m2rad = 2 * xp.pi / ssao.pyr.lambdaInM
         residual_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
@@ -120,7 +122,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
         title = f'Corrected PSF\nStrehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
 
     plt.subplot(2,2,3)
-    myimshow(detector_frames[-1], title = 'Detector image', shrink=0.8)
+    myimshow(detector_frames[-1], title = 'Detector frame', shrink=0.8)
 
     plt.subplot(2,2,4)
     ssao.dm.plot_position(dm_commands[-1])

@@ -215,12 +215,10 @@ class TurbulenceLayers():
             cos_phi = xp.cos(windAngle) 
 
             # Avoid division by 0
-            if abs(sin_phi) < 1e-12:
-                sin_phi = 1e-12*xp.sign(sin_phi)
-            if abs(cos_phi) < 1e-12:
-                cos_phi = 1e-12*xp.sign(cos_phi)
-
-            # print(windAngle*180/xp.pi, ': ', sin_phi, cos_phi) # debugging
+            if abs(sin_phi) < 1e-10:
+                sin_phi = 1e-10*xp.sign(sin_phi)
+            if abs(cos_phi) < 1e-10:
+                cos_phi = 1e-10*xp.sign(cos_phi)
 
             Delta = min(abs((W-w)/(2*cos_phi)), abs((H-h)/(2*sin_phi)))
             self.startX[k] = max(0.0,(W-w)/2 - Delta * cos_phi)
