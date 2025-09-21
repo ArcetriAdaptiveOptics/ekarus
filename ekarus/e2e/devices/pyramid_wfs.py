@@ -89,7 +89,6 @@ class PyramidWFS:
             wedge_tilt = (tiltX*wedgeX + tiltY*wedgeY)*(2*self._xp.pi)
             self.field_on_focal_plane = self.field_on_focal_plane * self._xp.exp(1j*wedge_tilt, dtype = self.cdtype)
 
-
         phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
         self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype = self.cdtype)
 
