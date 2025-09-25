@@ -350,6 +350,7 @@ class HighLevelAO():
         """
         for key in data_dict:
             file_path = os.path.join(self.savepath,save_prefix+str(key)+'.fits')
+            # print(type(data_dict[key]), xp.shape(data_dict[key].data), xp.shape(data_dict[key][0].mask))
             myfits.save_fits(file_path, data_dict[key])
     
             

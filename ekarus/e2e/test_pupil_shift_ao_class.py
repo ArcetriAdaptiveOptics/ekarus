@@ -1,10 +1,11 @@
 import xupy as xp
 import numpy as np
+from numpy.ma import masked_array
 
 from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 
 from ekarus.e2e.high_level_ao_class import HighLevelAO
-from ekarus.e2e.utils.image_utils import reshape_on_mask
+from ekarus.e2e.utils.image_utils import reshape_on_mask, get_masked_array
 
 from typing import override
 
@@ -71,6 +72,7 @@ class PupilShift(HighLevelAO):
         modes : xp.array
             The reconstructed modes in meters.
         """
+
         lambda_ref = slope_computer._wfs.lambdaInM
         m2rad = 2*xp.pi/lambda_ref
         lambdaOverD = lambda_ref/self.pupilSizeInM
@@ -86,9 +88,9 @@ class PupilShift(HighLevelAO):
             tiltX,tiltY = self.pyr._get_XY_tilt_planes(padded_field.shape)
             wedge_tilt = (tiltX*tilt_before_DM[0] + tiltY*tilt_before_DM[1])*self.pyr.oversampling*(2*xp.pi)
             padded_field = padded_field * xp.exp(1j*wedge_tilt, dtype = self.pyr.cdtype)
-        intensity = self.pyr._intensity_from_field(self, padded_field, lambdaOverD, tiltError=tilt_after_DM)
+        intensity = self.pyr._intensity_from_field(padded_field, lambdaOverD, tiltError=tilt_after_DM)
 
-        detector_image = self._detector.image_on_detector(intensity, photon_flux=Nphotons)
+        detector_image = self.ccd.image_on_detector(intensity, photon_flux=Nphotons)
         slopes = slope_computer._compute_pyramid_slopes(detector_image)
         modes = slope_computer.Rec @ slopes
         gmodes = modes * slope_computer.modal_gains
@@ -100,7 +102,9 @@ class PupilShift(HighLevelAO):
         return dm_cmd, modes
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, 
+                 tilt_before_DM:tuple=(0.0,0.0), tilt_after_DM:tuple=(0.0,0.0),
+                 save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 
@@ -146,7 +150,9 @@ class PupilShift(HighLevelAO):
                 self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
 
             residual_phase = input_phase - self.dm.surface
-            dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, starMagnitude)
+            dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc,
+                                                              tilt_before_DM, tilt_after_DM,
+                                                              starMagnitude)
 
             res_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2
@@ -161,9 +167,14 @@ class PupilShift(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
-            ma_input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask)for i in range(self.Nits)])
-            ma_dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
-            ma_res_phases = np.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
+            mask_cube = np.stack([self.cmask for _ in range(self.Nits)])
+            input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
+            dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res_phases = np.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
+
+            ma_input_phases = masked_array(input_phases, mask=mask_cube)
+            ma_dm_phases = masked_array(dm_phases, mask=mask_cube)
+            ma_res_phases = masked_array(res_phases, mask=mask_cube)
 
             data_dict = {}
             for key, value in zip(

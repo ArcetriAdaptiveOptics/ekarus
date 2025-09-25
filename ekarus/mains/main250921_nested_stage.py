@@ -28,7 +28,7 @@ def main(tn:str='example_nested_stage', show:bool=False):
     cascao.sc2.load_reconstructor(Rec,m2c)
 
     print('Running the loop ...')
-    lambdaRef = 1000e-9
+    lambdaRef = 800e-9
     dm_outer_sig2, dm_inner_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
 
     # Post-processing and plotting

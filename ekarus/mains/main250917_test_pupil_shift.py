@@ -42,6 +42,7 @@ def main(tn:str='example_pupil_shift', show:bool=False, pupilPixelShift:float=0.
 
     pyr2det = ssao.pupilSizeInPixels*ssao.pyr.oversampling/max(ssao.ccd.detector_shape)
     wedgeAmp = pupilPixelShift * pyr2det
+    subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
 
     print('Testing pupil shifts before DM')
     phi = xp.linspace(0, xp.pi/2, 3)
@@ -54,7 +55,8 @@ def main(tn:str='example_pupil_shift', show:bool=False, pupilPixelShift:float=0.
         print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f})')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
-        sig_beforeDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_telemetry_prefix=f'wedge{mmWedgeAmp:1.0f}_ang{phi[k]*180/xp.pi:1.0f}_beforeDM_')
+        save_str = f'wedge{mmWedgeAmp:1.0f}_ang{phi[k]*180/xp.pi:1.0f}_beforeDM_'
+        sig_beforeDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
         ccd_frame = ssao.ccd.last_frame
         plt.figure()
         myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}')
@@ -67,7 +69,8 @@ def main(tn:str='example_pupil_shift', show:bool=False, pupilPixelShift:float=0.
         print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f})')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
-        sig_afterDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_telemetry_prefix=f'wedge{mmWedgeAmp:1.0f}_ang{phi[k]*180/xp.pi:1.0f}_afterDM_')
+        save_str = f'wedge{mmWedgeAmp:1.0f}_ang{phi[k]*180/xp.pi:1.0f}_afterDM_'
+        sig_afterDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
         ccd_frame = ssao.ccd.last_frame
         plt.figure()
         myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}')

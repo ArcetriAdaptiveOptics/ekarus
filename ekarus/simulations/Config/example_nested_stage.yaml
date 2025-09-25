@@ -4,7 +4,7 @@ DM.out:
 
 PYR.out:
   oversampling: 4 #5
-  lambdaInM: 1000e-9            # [m] sensor wavelength
+  lambdaInM: 800e-9             # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
   subapPixSize: 39.5            # subaperture diameter in pix
   subapPixSep: 8                # pixel distance between subaps
@@ -16,12 +16,12 @@ CCD.out:
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER.out:
-  loopFrequencyInHz: 2000     
-  integratorGain: 0.4           # loop integrator gain
+  loopFrequencyInHz: 1000     
+  integratorGain: 0.2           # loop integrator gain
   delay: 8                      # loop delay in steps
   nModes2Correct: 468           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
-  modulationInLambdaOverD: 3.0  # modulation amplitude
+  modulationInLambdaOverD: 1.0  # modulation amplitude
 
 DM.in: 
   Nacts: 241
@@ -42,11 +42,11 @@ CCD.in:
 
 SLOPE.COMPUTER.in:
   loopFrequencyInHz: 4000     
-  integratorGain: 0.2           # loop integrator gain
+  integratorGain: 0.4           # loop integrator gain
   delay: 2                      # loop delay in steps
   nModes2Correct: 240           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
-  modulationInLambdaOverD: 1.0  # modulation amplitude
+  modulationInLambdaOverD: 3.0  # modulation amplitude
 
 
 TELESCOPE:
@@ -64,5 +64,5 @@ LOOP:
   nIterations: 400
   starMagnitude: 0.0
   simFreqHz: 4000          # simulation frequency in Hz
-  recompute: False         # if False, any calibration data saved from 
+  recompute: True          # if False, any calibration data saved from 
                            # previous runs is loaded rather than recomputed

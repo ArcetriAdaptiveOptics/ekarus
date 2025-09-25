@@ -1,4 +1,6 @@
 import xupy as xp
+import numpy as np
+from numpy.ma import masked_array
 
 from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.pyramid_wfs import PyramidWFS
@@ -146,11 +148,18 @@ class NestedStageAO(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
-            ma_input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask)for i in range(self.Nits)])
-            ma_dm1_phases = xp.stack([reshape_on_mask(dm1_phases[i, :], self.cmask)for i in range(self.Nits)])
-            ma_res1_phases = xp.stack([reshape_on_mask(residual1_phases[i, :], self.cmask)for i in range(self.Nits)])
-            ma_dm2_phases = xp.stack([reshape_on_mask(dm2_phases[i, :], self.cmask)for i in range(self.Nits)])
-            ma_res2_phases = xp.stack([reshape_on_mask(residual2_phases[i, :], self.cmask)for i in range(self.Nits)])
+            mask_cube = np.stack([self.cmask for _ in range(self.Nits)])
+            input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
+            dm1_phases = np.stack([reshape_on_mask(dm1_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res1_phases = np.stack([reshape_on_mask(residual1_phases[i, :], self.cmask)for i in range(self.Nits)])
+            dm2_phases = np.stack([reshape_on_mask(dm2_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res2_phases = np.stack([reshape_on_mask(residual2_phases[i, :], self.cmask)for i in range(self.Nits)])
+
+            ma_input_phases = masked_array(input_phases, mask=mask_cube)
+            ma_dm1_phases = masked_array(dm1_phases, mask=mask_cube)
+            ma_res1_phases = masked_array(res1_phases, mask=mask_cube)
+            ma_dm2_phases = masked_array(dm2_phases, mask=mask_cube)
+            ma_res2_phases = masked_array(res2_phases, mask=mask_cube)
 
             data_dict = {}
             for key, value in zip(

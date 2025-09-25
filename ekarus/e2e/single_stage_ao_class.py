@@ -1,6 +1,6 @@
 import xupy as xp
 import numpy as np
-# from numpy.ma import masked_array
+from numpy.ma import masked_array
 
 from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
@@ -8,7 +8,7 @@ from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.devices.slope_computer import SlopeComputer
 
 from ekarus.e2e.high_level_ao_class import HighLevelAO
-from ekarus.e2e.utils.image_utils import reshape_on_mask, get_masked_array
+from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 
 
 class SingleStageAO(HighLevelAO):
@@ -131,13 +131,14 @@ class SingleStageAO(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
-            # ma_input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            # ma_dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
-            # ma_res_phases = np.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
+            mask_cube = np.stack([self.cmask for _ in range(self.Nits)])
+            input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
+            dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res_phases = np.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
-            ma_input_phases = np.stack([get_masked_array(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            ma_dm_phases = np.stack([get_masked_array(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
-            ma_res_phases = np.stack([get_masked_array(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
+            ma_input_phases = masked_array(input_phases, mask=mask_cube)
+            ma_dm_phases = masked_array(dm_phases, mask=mask_cube)
+            ma_res_phases = masked_array(res_phases, mask=mask_cube)
 
             data_dict = {}
             for key, value in zip(

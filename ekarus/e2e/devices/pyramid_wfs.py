@@ -38,7 +38,7 @@ class PyramidWFS:
         self.cdtype = xp.cfloat
 
 
-    def get_intensity(self, input_field, lambda0OverD, tiltError=None):
+    def get_intensity(self, input_field, lambda0OverD, tiltError:tuple=None):
         L = max(input_field.shape) # TBI: deal with non-square input fields
         padded_field = xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
 
@@ -53,7 +53,7 @@ class PyramidWFS:
 
         return intensity
     
-    def _intensity_from_field(self, padded_field, lambdaOverD, tiltError=None):
+    def _intensity_from_field(self, padded_field, lambdaOverD, tiltError:tuple):
         if self.modulationAngleInLambdaOverD*(2*xp.pi)*self.oversampling < 0.1:
             output_field = self.propagate(padded_field, lambdaOverD, tiltError)
             intensity = xp.abs(output_field)**2
@@ -68,7 +68,7 @@ class PyramidWFS:
         print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self._modNsteps:1.0f} modulation steps')
     
 
-    def propagate(self, input_field, lambdaOverD, tiltError=None):
+    def propagate(self, input_field, lambdaOverD, tiltError:tuple=None):
         """
         Propagate the electric field through the pyramid:
         1. From the pupil plane to the focal plane (FFT)
@@ -86,8 +86,8 @@ class PyramidWFS:
         if tiltError is not None:
             tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
             wedgeX, wedgeY = tiltError
-            wedge_tilt = (tiltX*wedgeX + tiltY*wedgeY)*(2*self._xp.pi)
-            self.field_on_focal_plane = self.field_on_focal_plane * self._xp.exp(1j*wedge_tilt, dtype = self.cdtype)
+            wedge_tilt = (tiltX*wedgeX + tiltY*wedgeY)*(2*xp.pi)
+            self.field_on_focal_plane = self.field_on_focal_plane * xp.exp(1j*wedge_tilt, dtype = self.cdtype)
 
         phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
         self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype = self.cdtype)
@@ -97,7 +97,7 @@ class PyramidWFS:
         return output_field
     
 
-    def modulate(self, input_field, lambdaOverD, tiltError=None):
+    def modulate(self, input_field, lambdaOverD, tiltError:tuple=None):
         """
         Modulates the input electric field by tilting it in different directions
         and averaging the resulting intensities.

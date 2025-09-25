@@ -84,7 +84,7 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
         if xp.on_gpu:
             screen = screen.get()
         plt.figure()
-        myimshow(screen, title='Atmo screen [m]', cmap='RdBu')
+        myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
 
