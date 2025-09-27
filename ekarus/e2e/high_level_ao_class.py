@@ -279,7 +279,8 @@ class HighLevelAO():
                         lambdaOverD = sensorLambda/self.pupilSizeInM,
                         Npix = subapertureSize,
                         centerObscurationInPixels = 
-                        self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
+                        # self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
+                        xp.floor(subapertureSize+1.0)*self.centerObscurationInM/self.pupilSizeInM
         ) 
         
         return pyr, det, sc

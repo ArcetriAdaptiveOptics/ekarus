@@ -29,7 +29,7 @@ def main(tn:str='example_single_stage_diag', show:bool=False):
             raise FileNotFoundError('Recompute is True')        
         m2rad = 2 * xp.pi / ssao.pyr.lambdaInM
         masked_input_phases, _, masked_residual_phases, _, _, _ = ssao.load_telemetry_data()        
-        _, _, diag_masked_residual_phases, _, _, _ = ssao.load_telemetry_data('diag_')
+        _, _, diag_masked_residual_phases, _, _, _ = ssao.load_telemetry_data(save_prefix='diag_')
         
         residual_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
         input_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
@@ -88,7 +88,7 @@ def main(tn:str='example_single_stage_diag', show:bool=False):
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
-    _, _, diag_ma_residual_phases, diag_det_frames, diag_rec_modes, diag_dm_commands = ssao.load_telemetry_data('diag_')
+    _, _, diag_ma_residual_phases, diag_det_frames, diag_rec_modes, diag_dm_commands = ssao.load_telemetry_data(save_prefix='diag_')
 
     oversampling = 8
     padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)

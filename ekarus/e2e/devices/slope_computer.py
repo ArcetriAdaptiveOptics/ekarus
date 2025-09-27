@@ -138,7 +138,7 @@ class SlopeComputer():
             qx,qy = self.find_subaperture_center(subaperture_image, quad_n=i+1)
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
             if centerObscPixDiam > 0.0:
-                obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam/2+0.5, mask_center=(qx,qy))
+                obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
                 subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)
 
         self._subaperture_masks = subaperture_masks
