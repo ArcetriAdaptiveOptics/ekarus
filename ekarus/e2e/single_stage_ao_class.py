@@ -45,11 +45,11 @@ class SingleStageAO(HighLevelAO):
         self.pyr, self.ccd, self.sc = self._initialize_pyr_slope_computer('PYR','CCD','SLOPE.COMPUTER')
 
         dm_pars = self._config.read_dm_pars()
-        self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm.mask = self.cmask.copy()
+        # self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm = ALPAODM(dm_pars["Nacts"], mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, use_diagonal:bool=False, save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 

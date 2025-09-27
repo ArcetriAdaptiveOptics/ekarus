@@ -8,6 +8,7 @@ import ekarus.e2e.utils.my_fits_package as myfits
 
 import xupy as xp
 import numpy as np
+from numpy.ma import masked_array
 
 
 def main(tn:str='example_cascading_stage', show:bool=False):
@@ -84,7 +85,7 @@ def main(tn:str='example_cascading_stage', show:bool=False):
         if xp.on_gpu:
             screen = screen.get()
         plt.figure()
-        myimshow(screen, title='Atmo screen [m]', cmap='RdBu')
+        myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     atmo_phases, _, res1_phases, det1_frames, rec1_modes, _, _, res2_phases, det2_frames, rec2_modes, _ = cascao.load_telemetry_data()
 

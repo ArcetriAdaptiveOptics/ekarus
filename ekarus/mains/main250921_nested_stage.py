@@ -8,6 +8,7 @@ import ekarus.e2e.utils.my_fits_package as myfits
 
 import xupy as xp
 import numpy as np
+from numpy.ma import masked_array
 
 
 def main(tn:str='example_nested_stage', show:bool=False):
@@ -84,7 +85,7 @@ def main(tn:str='example_nested_stage', show:bool=False):
         if xp.on_gpu:
             screen = screen.get()
         plt.figure()
-        myimshow(screen, title='Atmo screen [m]', cmap='RdBu')
+        myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     atmo_phases, _, res_in_phases, det_in_frames, rec_in_modes, _, _, res_out_phases, det_out_frames, rec_out_modes, _ = cascao.load_telemetry_data()
 

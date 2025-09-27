@@ -49,14 +49,15 @@ class NestedStageAO(HighLevelAO):
         self.pyr1, self.ccd1, self.sc1 = self._initialize_pyr_slope_computer('PYR.in','CCD.in','SLOPE.COMPUTER.in')
 
         dm_pars = self._config.read_dm_pars('DM.in')
-        self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm1.mask = self.cmask
+        # self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm1 = ALPAODM(dm_pars["Nacts"], mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
 
         self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR.out','CCD.out','SLOPE.COMPUTER.out')
 
         dm_pars = self._config.read_dm_pars('DM.out')
-        self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm2.mask = self.cmask
+        # self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm2 = ALPAODM(dm_pars["Nacts"], mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+  
         
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):

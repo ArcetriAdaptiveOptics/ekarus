@@ -25,7 +25,7 @@ SLOPE.COMPUTER:
 
 TELESCOPE:
   pupilSizeInM: 1.8         # [m] telescope diameter
-  centerObscuration: 0.0    # [m] central obscuration diameter
+  centerObscuration: 0.6    # [m] central obscuration diameter
   pupilSizeInPixels: 128    # pixels across the pupil diameter
   throughput: 0.11          # accounting for beam splitter
 

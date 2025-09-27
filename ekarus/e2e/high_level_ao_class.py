@@ -124,7 +124,7 @@ class HighLevelAO():
         return KL, m2c
     
 
-    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, save_prefix:str=''):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, use_diagonal:bool=False, save_prefix:str=''):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
         
@@ -168,9 +168,9 @@ class HighLevelAO():
                 amp = amps[i]
                 mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
                 input_field = xp.exp(1j*mode_phase) * electric_field_amp
-                push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)/amp #self.get_slopes(input_field, Nphotons)/amp
+                push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
                 input_field = xp.conj(input_field)
-                pull_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)/amp #self.get_slopes(input_field, Nphotons)/amp
+                pull_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
                 if slopes is None:
                     slopes = (push_slope-pull_slope)/2
                 else:
@@ -286,7 +286,7 @@ class HighLevelAO():
 
 
     
-    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, starMagnitude:float=None):
+    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, use_diagonal:bool=False, starMagnitude:float=None):
         """
         Performs a single iteration of the AO loop.
         Parameters
@@ -314,7 +314,7 @@ class HighLevelAO():
 
         delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
         input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
-        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)
         modes = slope_computer.Rec @ slopes
         gmodes = modes * slope_computer.modal_gains
         cmd = slope_computer.m2c @ gmodes

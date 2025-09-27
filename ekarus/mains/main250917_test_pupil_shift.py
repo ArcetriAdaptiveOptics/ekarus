@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 
 from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask, myimshow
 from ekarus.e2e.test_pupil_shift_ao_class import PupilShift
-import os.path as op
 
-import ekarus.e2e.utils.my_fits_package as myfits
+# import os.path as op
+# import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_pupil_shift', show:bool=False, pupilPixelShift:float=0.2): 
+def main(tn:str='example_pupil_shift', pupilPixelShift:float=1.0): 
 
     ssao = PupilShift(tn)
 
@@ -59,7 +59,7 @@ def main(tn:str='example_pupil_shift', show:bool=False, pupilPixelShift:float=0.
         sig_beforeDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
         ccd_frame = ssao.ccd.last_frame
         plt.figure()
-        myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}')
+        myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nAfter DM')
 
     print('Testing pupil shifts after DM')
     sig_afterDM = sig_beforeDM.copy()
@@ -73,42 +73,10 @@ def main(tn:str='example_pupil_shift', show:bool=False, pupilPixelShift:float=0.
         sig_afterDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
         ccd_frame = ssao.ccd.last_frame
         plt.figure()
-        myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}')
+        myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nBefore DM')
 
     # Post-processing and plotting
     print('Plotting results ...')
-    if show:
-        subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
-        plt.figure()
-        myimshow(subap_masks,title='Subaperture masks')
-
-        KL = myfits.read_fits(op.join(ssao.savecalibpath,'KLmodes.fits'))
-        N=9
-        plt.figure(figsize=(2*N,7))
-        for i in range(N):
-            plt.subplot(4,N,i+1)
-            ssao.dm.plot_surface(KL[i,:],title=f'KL Mode {i}')
-            plt.subplot(4,N,i+1+N)
-            ssao.dm.plot_surface(KL[i+N,:],title=f'KL Mode {i+N}')
-            plt.subplot(4,N,i+1+N*2)
-            ssao.dm.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-i-1-N}')
-            plt.subplot(4,N,i+1+N*3)
-            ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
-
-        IM = myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits'))
-        IM_std = xp.std(IM,axis=0)
-        if xp.on_gpu:
-            IM_std = IM_std.get()
-        plt.figure()
-        plt.plot(IM_std,'-o')
-        plt.grid()
-        plt.title('Interaction matrix standard deviation')
-
-        screen = ssao.get_phasescreen_at_time(0)
-        if xp.on_gpu:
-            screen = screen.get()
-        plt.figure()
-        myimshow(screen, title='Atmo screen [m]', cmap='RdBu')
 
     masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
 
@@ -210,4 +178,4 @@ def main(tn:str='example_pupil_shift', show:bool=False, pupilPixelShift:float=0.
     return ssao
 
 if __name__ == '__main__':
-    ssao = main(show=True)
+    ssao = main()
