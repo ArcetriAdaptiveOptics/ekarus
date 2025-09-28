@@ -11,7 +11,7 @@ from ekarus.e2e.test_pupil_shift_ao_class import PupilShift
 # import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_pupil_shift', pupilPixelShift:float=1.0): 
+def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2): 
 
     ssao = PupilShift(tn)
 
@@ -125,15 +125,15 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=1.0):
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
-    plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,sig2,'-o',label='closed loop')
-    plt.legend()
-    plt.grid()
-    plt.xlim([0.0,tvec[-1]])
-    plt.xlabel('Time [ms]')
-    plt.ylabel(r'$\sigma^2 [rad^2]$')
-    plt.gca().set_yscale('log')
+    # plt.figure()#figsize=(1.7*Nits/10,3))
+    # plt.plot(tvec,input_sig2,'-o',label='open loop')
+    # plt.plot(tvec,sig2,'-o',label='closed loop')
+    # plt.legend()
+    # plt.grid()
+    # plt.xlim([0.0,tvec[-1]])
+    # plt.xlabel('Time [ms]')
+    # plt.ylabel(r'$\sigma^2 [rad^2]$')
+    # plt.gca().set_yscale('log')
 
     plt.figure()
     plt.plot(tvec,sig_beforeDM[0],label=f'atmo')
@@ -165,13 +165,13 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=1.0):
     plt.gca().set_yscale('log')
     plt.title(f'{pupilPixelShift:1.2f} subaperture tilt after DM\nSR @ {lambdaRef*1e+9:1.0f} [nm]')
 
-    plt.figure()
-    plt.plot(tvec,rec_modes[:,:10],'-o')
-    plt.grid()
-    plt.xlim([0.0,tvec[-1]])
-    plt.xlabel('Time [ms]')
-    plt.ylabel('amplitude [m]')
-    plt.title('Reconstructor modes\n(first 10)')
+    # plt.figure()
+    # plt.plot(tvec,rec_modes[:,:10],'-o')
+    # plt.grid()
+    # plt.xlim([0.0,tvec[-1]])
+    # plt.xlabel('Time [ms]')
+    # plt.ylabel('amplitude [m]')
+    # plt.title('Reconstructor modes\n(first 10)')
     
     plt.show()
 

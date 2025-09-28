@@ -116,7 +116,7 @@ class SingleStageAO(HighLevelAO):
             # dm_cmd += cmd * self.sc.intGain
             # dm_cmds[i, :] = dm_cmd / m2rad  # convert to meters
 
-            dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, starMagnitude)
+            dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, use_diagonal=use_diagonal, starMagnitude=starMagnitude)
 
             res_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2

@@ -3,92 +3,6 @@ import numpy as np
 
 from tps import ThinPlateSpline # for the simulated IFF
 from scipy.interpolate import griddata
-
-
-def slaving(coords, cmd, slaving_method:str = 'interp', cmd_thr:float = None, xp=np):
-    """ 
-    Clip the command to avoid saturation
-
-    Parameters
-    ----------
-    coords : ndarray(float) [2,Nacts]
-        The actuator coordinates
-
-    cmd : ndarray(float) [Nacts]
-        The mirror command to be slaved
-
-    cmd_thr : float, optional
-        Threshold to define slave actuators.
-        Slave acts are defined as the actuators for which: cmd > cmd_thr.
-        Default: slave acts the ones outside 3 sigma of the mean cmd
-        
-    slaving_method : str, optional
-        The way to treat slave actuators.
-            'tps'     : thin plate spline interpolation. DEFAULT
-            'zero'    : set slave actuator command to zero 
-            'clip'    : clips the actuator commands to the given cmd_thr input
-            'nearest' : nearest actuators interpolation
-            'wmean'   : mean of nearby actuators weighted on 1/r^2
-
-            'exclude' : exclude slaves from the reconstructor computation (TBI)
-
-    """
-    # Define master ids
-    n_acts = len(cmd)
-    act_ids = xp.arange(n_acts)
-
-    if cmd_thr is None:
-        master_ids = act_ids[abs(cmd-xp.mean(cmd)) <= 3*xp.std(cmd)]
-    else:
-        master_ids = act_ids[abs(cmd) <= cmd_thr]
-    
-    match slaving_method:
-
-        case 'tps':
-            tps = ThinPlateSpline(alpha=0.0)
-            tps.fit(coords[master_ids], cmd[master_ids])
-            rescaled_cmd = tps.transform(coords)
-            slaved_cmd = rescaled_cmd[:,0]
-
-        case 'zero':
-            pad_cmd = xp.zeros_like(cmd)
-            pad_cmd[master_ids] = cmd[master_ids]
-            slaved_cmd = pad_cmd
-
-        case 'clip':
-            slaved_cmd = xp.minimum(abs(cmd), cmd_thr)
-            slaved_cmd *= xp.sign(cmd)
-
-        case 'nearest':
-            master_coords = coords[:,master_ids]
-            slaved_cmd = griddata(master_coords, cmd[master_ids], (coords[0], coords[1]), method='nearest')
-
-        case 'wmean':
-            master_coords = coords[:,master_ids]
-            master_cmd = cmd[master_ids]
-            dist2 = lambda xy: (xy[0]-master_coords[0])**2 + (xy[1]-master_coords[1])**2 
-            is_slave = xp.ones_like(cmd, dtype=bool)
-            is_slave[master_ids] = False
-            slave_ids = act_ids[is_slave]
-            slaved_cmd = cmd.copy()
-            for slave in slave_ids:
-                d2_slave = dist2(coords[:,slave])
-                weighted_cmd = master_cmd / d2_slave
-                slaved_cmd[slave] = xp.sum(weighted_cmd)*xp.sum(d2_slave)/n_acts
-
-        # case 'exclude':
-        #     masked_IFF = self.IFF[valid_ids,:]
-        #     masked_IFF = masked_IFF[:,visible_acts]
-        #     masked_R = np.linalg.pinv(masked_IFF)
-            
-        #     pad_cmd = np.zeros_like(act_cmd)
-        #     pad_cmd[visible_acts] = matmul(masked_R, masked_shape)
-        #     act_cmd = pad_cmd
-            
-        case _:
-            raise NotImplementedError(f"{slaving_method} is not an available slaving method. Available methods are: 'tps', 'zer', 'clip', 'nearest', 'wmean'")
-
-    return slaved_cmd
     
 
 def compute_reconstructor(M, thr:float= 1e-12):
@@ -309,6 +223,162 @@ def getMaskPixelCoords(mask):
     pix_coords[1,:] = xp.tile(xp.arange(W),H)
     
     return pix_coords
+
+
+def find_master_acts(mask, coords, pix_scale:float = 1.0):
+
+    nActs = len(coords[0,:])
+    act_pix_coords = get_pixel_coords(mask, coords, pix_scale)
+    mask_coords = getMaskPixelCoords(mask)
+
+    valid_mask_coords = mask_coords[:,~mask]
+    dist = lambda xy: xp.sqrt((xy[0]-valid_mask_coords[0])**2 
+                              + (xy[1]-valid_mask_coords[1])**2)
+    
+    master_ids = []
+    for i in range(nActs):
+        min_pix_dist = xp.min(dist[act_pix_coords[:,i]])
+        if min_pix_dist < 0.6:
+            master_ids.append(i)
+    
+    master_ids = xp.array(master_ids)
+    print(f'Unobscrued actuators: {len(master_ids)}/{nActs}')
+    
+    return master_ids
+
+
+def get_slaving_m2c(coords, master_ids, slaving_method:str = 'wmean'):
+    """ 
+    
+    """
+
+    nActs = len(coords[0,:])
+    nMasters = len(master_ids)
+
+    slaved_m2c = xp.zeros([nActs,nMasters])
+    slaved_m2c[master_ids,master_ids] = 1
+
+    act_ids = xp.arange(nActs)
+    slave_ids = act_ids[~master_ids]
+    # is_slave = xp.ones(nActs, dtype=bool)
+    # is_slave[master_ids] = False
+    # slave_ids = act_ids[is_slave]
+
+    master_coords = coords[:,master_ids]
+    dist = lambda xy: xp.sqrt((xy[0]-master_coords[0])**2 + (xy[1]-master_coords[1])**2)
+
+    match slaving_method:
+
+        case 'zero':
+            pass
+
+        case 'wmean':
+            for slave in slave_ids:
+                d_slave = dist(coords[:,slave])
+                d_slave /= xp.sum(d_slave) # normalize to 1
+                slaved_m2c[slave,master_ids] = 1-d_slave
+
+        case 'w2mean':
+            for slave in slave_ids:
+                d2_slave = dist(coords[:,slave])**2
+                d2_slave /= xp.sum(d2_slave) # normalize to 1
+                slaved_m2c[slave,master_ids] = 1-d2_slave
+
+        case 'nearest':
+            for slave in slave_ids:
+                d_slave = dist(coords[:,slave])
+                nearest_master = master_ids[xp.argmin(d_slave)]
+                slaved_m2c[slave,nearest_master] = 1
+        case _:
+            raise NotImplementedError(f"{slaving_method} is not an available slaving method.\
+                                       Available methods are: 'zero', 'nearest', 'wmean', 'w2mean'")
+
+    return slaved_m2c
+
+# def slaving(coords, cmd, slaving_method:str = 'wmean', cmd_thr:float = None, xp=np):
+#     """ 
+#     Clip the command to avoid saturation
+
+#     Parameters
+#     ----------
+#     coords : ndarray(float) [2,Nacts]
+#         The actuator coordinates
+
+#     cmd : ndarray(float) [Nacts]
+#         The mirror command to be slaved
+
+#     cmd_thr : float, optional
+#         Threshold to define slave actuators.
+#         Slave acts are defined as the actuators for which: cmd > cmd_thr.
+#         Default: slave acts the ones outside 3 sigma of the mean cmd
+        
+#     slaving_method : str, optional
+#         The way to treat slave actuators.
+#             'tps'     : thin plate spline interpolation. DEFAULT
+#             'zero'    : set slave actuator command to zero 
+#             'clip'    : clips the actuator commands to the given cmd_thr input
+#             'nearest' : nearest actuators interpolation
+#             'wmean'   : mean of nearby actuators weighted on 1/r^2
+
+#             'exclude' : exclude slaves from the reconstructor computation (TBI)
+
+#     """
+#     # Define master ids
+#     n_acts = len(cmd)
+#     act_ids = xp.arange(n_acts)
+
+#     if cmd_thr is None:
+#         master_ids = act_ids[abs(cmd-xp.mean(cmd)) <= 3*xp.std(cmd)]
+#     else:
+#         master_ids = act_ids[abs(cmd) <= cmd_thr]
+    
+#     match slaving_method:
+
+#         case 'tps':
+#             tps = ThinPlateSpline(alpha=0.0)
+#             tps.fit(coords[master_ids], cmd[master_ids])
+#             rescaled_cmd = tps.transform(coords)
+#             slaved_cmd = rescaled_cmd[:,0]
+
+#         case 'zero':
+#             pad_cmd = xp.zeros_like(cmd)
+#             pad_cmd[master_ids] = cmd[master_ids]
+#             slaved_cmd = pad_cmd
+
+#         case 'clip':
+#             slaved_cmd = xp.minimum(abs(cmd), cmd_thr)
+#             slaved_cmd *= xp.sign(cmd)
+
+#         case 'nearest':
+#             master_coords = coords[:,master_ids]
+#             slaved_cmd = griddata(master_coords, cmd[master_ids], (coords[0], coords[1]), method='nearest')
+
+#         case 'wmean':
+#             master_coords = coords[:,master_ids]
+#             master_cmd = cmd[master_ids]
+#             dist2 = lambda xy: (xy[0]-master_coords[0])**2 + (xy[1]-master_coords[1])**2 
+#             is_slave = xp.ones_like(cmd, dtype=bool)
+#             is_slave[master_ids] = False
+#             slave_ids = act_ids[is_slave]
+#             slaved_cmd = cmd.copy()
+#             for slave in slave_ids:
+#                 d2_slave = dist2(coords[:,slave])
+#                 weighted_cmd = master_cmd / d2_slave
+#                 slaved_cmd[slave] = xp.sum(weighted_cmd)*xp.sum(d2_slave)/n_acts
+
+#         # case 'exclude':
+#         #     masked_IFF = self.IFF[valid_ids,:]
+#         #     masked_IFF = masked_IFF[:,visible_acts]
+#         #     masked_R = np.linalg.pinv(masked_IFF)
+            
+#         #     pad_cmd = np.zeros_like(act_cmd)
+#         #     pad_cmd[visible_acts] = matmul(masked_R, masked_shape)
+#         #     act_cmd = pad_cmd
+            
+#         case _:
+#             raise NotImplementedError(f"{slaving_method} is not an available slaving method. Available methods are: 'tps', 'zer', 'clip', 'nearest', 'wmean'")
+
+#     return slaved_cmd
 
 
 

@@ -11,7 +11,7 @@ import os.path as op
 import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_single_stage_diag', show:bool=False):
+def main(tn:str='example_pyr_diag'):
 
     ssao = SingleStageAO(tn)
 
@@ -21,7 +21,8 @@ def main(tn:str='example_single_stage_diag', show:bool=False):
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
 
     Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
-    Rec_diag, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, use_diagonal=True, amps=0.2)
+    Rec_diag, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM,
+                                             use_diagonal=True, amps=0.2, save_prefix='diag_')
 
     print('Running the loop ...')
     try:
@@ -54,38 +55,20 @@ def main(tn:str='example_single_stage_diag', show:bool=False):
 
     # Post-processing and plotting
     print('Plotting results ...')
-    if show:
-        subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
-        plt.figure()
-        myimshow(subap_masks,title='Subaperture masks')
 
-        KL = myfits.read_fits(op.join(ssao.savecalibpath,'KLmodes.fits'))
-        N=9
-        plt.figure(figsize=(2*N,7))
-        for i in range(N):
-            plt.subplot(4,N,i+1)
-            ssao.dm.plot_surface(KL[i,:],title=f'KL Mode {i}')
-            plt.subplot(4,N,i+1+N)
-            ssao.dm.plot_surface(KL[i+N,:],title=f'KL Mode {i+N}')
-            plt.subplot(4,N,i+1+N*2)
-            ssao.dm.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-i-1-N}')
-            plt.subplot(4,N,i+1+N*3)
-            ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
-
-        IM = myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits'))
-        IM_std = xp.std(IM,axis=0)
-        if xp.on_gpu:
-            IM_std = IM_std.get()
-        plt.figure()
-        plt.plot(IM_std,'-o')
-        plt.grid()
-        plt.title('Interaction matrix standard deviation')
-
-        screen = ssao.get_phasescreen_at_time(0)
-        if xp.on_gpu:
-            screen = screen.get()
-        plt.figure()
-        myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
+    IM = myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits'))
+    IM_std = xp.std(IM,axis=0)
+    diag_IM = myfits.read_fits(op.join(ssao.savecalibpath,'diag_IM.fits'))
+    diag_IM_std = xp.std(diag_IM,axis=0)
+    if xp.on_gpu:
+        IM_std = IM_std.get()
+        diag_IM_std = diag_IM_std.get()
+    plt.figure()
+    plt.plot(IM_std,'-o',label='standard')
+    plt.plot(diag_IM_std,'-o',label='using diagonal')
+    plt.legend()
+    plt.grid()
+    plt.title('Interaction matrix standard deviation')
 
     masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
     _, _, diag_ma_residual_phases, diag_det_frames, diag_rec_modes, diag_dm_commands = ssao.load_telemetry_data(save_prefix='diag_')
@@ -110,7 +93,7 @@ def main(tn:str='example_single_stage_diag', show:bool=False):
     field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
     diag_psf = abs(field_on_focal_plane)**2
 
-    cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
+    # cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
@@ -167,4 +150,4 @@ def main(tn:str='example_single_stage_diag', show:bool=False):
     return ssao
 
 if __name__ == '__main__':
-    ssao = main(show=True)
+    ssao = main()
