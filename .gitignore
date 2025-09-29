@@ -2,7 +2,7 @@
 *.fits
 *.ini
 *.yaml
-!ekarus/simulations/Config/example*
+!ekarus/simulations/config/example*
 !ekarus/e2e/alpao_dms_data/configuration.ini
 
 # Byte-compiled / optimized / DLL files
