@@ -238,6 +238,7 @@ class TurbulenceLayers():
         if isinstance(a, int):
             a = float(a)
         if not isinstance(a, float):
+            # print(a)
             length = len(a)
         return length
 

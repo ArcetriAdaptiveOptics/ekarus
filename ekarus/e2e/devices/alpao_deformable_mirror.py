@@ -79,8 +79,7 @@ class ALPAODM(DeformableMirror):
         for i in range(n_rows):
             cx = xp.concatenate((cx, xp.arange(rows_number_of_acts[i]) + (n_dim - rows_number_of_acts[i]) // 2))
             cy = xp.concatenate((cy, xp.full(rows_number_of_acts[i], i)))
-        dtype = xp.float
-        coords = xp.array([cx, cy], dtype=dtype)
+        coords = xp.array([cx, cy], dtype=xp.float)
 
         return coords
 
@@ -135,7 +134,7 @@ class ALPAODM(DeformableMirror):
             coords[0] -= (max(coords[0])-min(coords[0]))/2
             coords[1] -= (max(coords[1])-min(coords[1]))/2
             radii = xp.sqrt(coords[0]**2+coords[1]**2)/2
-            self.act_coords = coords*self.pupil_size/2/(2*max(radii))
+            self.act_coords = xp.asarray(coords*self.pupil_size/2/(2*max(radii)))
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
         Npix = xp.sum(1-self.mask)

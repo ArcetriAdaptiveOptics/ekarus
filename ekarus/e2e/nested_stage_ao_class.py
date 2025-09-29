@@ -149,18 +149,18 @@ class NestedStageAO(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
-            mask_cube = np.stack([self.cmask for _ in range(self.Nits)])
-            input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm1_phases = np.stack([reshape_on_mask(dm1_phases[i, :], self.cmask)for i in range(self.Nits)])
-            res1_phases = np.stack([reshape_on_mask(residual1_phases[i, :], self.cmask)for i in range(self.Nits)])
-            dm2_phases = np.stack([reshape_on_mask(dm2_phases[i, :], self.cmask)for i in range(self.Nits)])
-            res2_phases = np.stack([reshape_on_mask(residual2_phases[i, :], self.cmask)for i in range(self.Nits)])
+            mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
+            input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
+            dm1_phases = xp.stack([reshape_on_mask(dm1_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res1_phases = xp.stack([reshape_on_mask(residual1_phases[i, :], self.cmask)for i in range(self.Nits)])
+            dm2_phases = xp.stack([reshape_on_mask(dm2_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res2_phases = xp.stack([reshape_on_mask(residual2_phases[i, :], self.cmask)for i in range(self.Nits)])
 
-            ma_input_phases = masked_array(input_phases, mask=mask_cube)
-            ma_dm1_phases = masked_array(dm1_phases, mask=mask_cube)
-            ma_res1_phases = masked_array(res1_phases, mask=mask_cube)
-            ma_dm2_phases = masked_array(dm2_phases, mask=mask_cube)
-            ma_res2_phases = masked_array(res2_phases, mask=mask_cube)
+            ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
+            ma_dm1_phases = masked_array(xp.asnumpy(dm1_phases), mask=mask_cube)
+            ma_res1_phases = masked_array(xp.asnumpy(res1_phases), mask=mask_cube)
+            ma_dm2_phases = masked_array(xp.asnumpy(dm2_phases), mask=mask_cube)
+            ma_res2_phases = masked_array(xp.asnumpy(res2_phases), mask=mask_cube)
 
             data_dict = {}
             for key, value in zip(

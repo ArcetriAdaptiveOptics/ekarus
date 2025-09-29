@@ -39,6 +39,10 @@ class PyramidWFS:
 
 
     def get_intensity(self, input_field, lambda0OverD, tiltError:tuple=None):
+        """
+        Computes the intensity on the detector of the pyramid wavefront sensor
+        given an input electric field.
+        """
         L = max(input_field.shape) # TBI: deal with non-square input fields
         padded_field = xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
 
@@ -125,6 +129,7 @@ class PyramidWFS:
             intensity += (abs(output**2))/self._modNsteps
 
         return intensity
+    
     
     @lru_cache(maxsize=5)
     def pyramid_phase_delay(self, shape):

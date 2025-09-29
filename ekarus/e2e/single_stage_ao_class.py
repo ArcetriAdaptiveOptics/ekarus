@@ -131,14 +131,14 @@ class SingleStageAO(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
-            mask_cube = np.stack([self.cmask for _ in range(self.Nits)])
-            input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
-            res_phases = np.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
+            mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
+            input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
+            dm_phases = xp.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
-            ma_input_phases = masked_array(input_phases, mask=mask_cube)
-            ma_dm_phases = masked_array(dm_phases, mask=mask_cube)
-            ma_res_phases = masked_array(res_phases, mask=mask_cube)
+            ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
+            ma_dm_phases = masked_array(xp.asnumpy(dm_phases), mask=mask_cube)
+            ma_res_phases = masked_array(xp.asnumpy(res_phases), mask=mask_cube)
 
             data_dict = {}
             for key, value in zip(

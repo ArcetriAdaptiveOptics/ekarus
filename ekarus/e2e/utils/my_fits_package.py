@@ -31,8 +31,8 @@ def read_fits(filename, isBool:bool=False):
         data_out = masked_array(data_out, mask=mask)
     #     print(mask.shape)
     #     data_out = xp.asmarray(data_out)
-    # else:
-    #     data_out = xp.asarray(data_out)
+    else:
+        data_out = xp.asarray(data_out)
     
     return data_out
 

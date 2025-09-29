@@ -87,8 +87,10 @@ class PupilShift(HighLevelAO):
         padded_field = xp.pad(input_field, int((self.pyr.oversampling-1)/2*L), mode='constant', constant_values=0.0)
         if tilt_before_DM != 0.0:
             tiltX,tiltY = self.pyr._get_XY_tilt_planes(padded_field.shape)
-            wedge_tilt = (tiltX*tilt_before_DM[0] + tiltY*tilt_before_DM[1])*self.pyr.oversampling*(2*xp.pi)
-            padded_field = padded_field * xp.exp(1j*wedge_tilt, dtype = self.pyr.cdtype)
+            wedge_tilt = (tiltX*tilt_before_DM[0] + tiltY*tilt_before_DM[1])*(2*xp.pi)
+            focal_plane_field = xp.fft.fftshift(xp.fft.fft2(padded_field))
+            delayed_field = focal_plane_field * xp.exp(1j*wedge_tilt, dtype = self.pyr.cdtype)
+            padded_field = xp.fft.ifft2(xp.fft.ifftshift(delayed_field))
         intensity = self.pyr._intensity_from_field(padded_field, lambdaOverD, tiltError=tilt_after_DM)
 
         detector_image = self.ccd.image_on_detector(intensity, photon_flux=Nphotons)
@@ -168,14 +170,14 @@ class PupilShift(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
-            mask_cube = np.stack([self.cmask for _ in range(self.Nits)])
-            input_phases = np.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm_phases = np.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
-            res_phases = np.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
+            mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
+            input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
+            dm_phases = xp.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
-            ma_input_phases = masked_array(input_phases, mask=mask_cube)
-            ma_dm_phases = masked_array(dm_phases, mask=mask_cube)
-            ma_res_phases = masked_array(res_phases, mask=mask_cube)
+            ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
+            ma_dm_phases = masked_array(xp.asnumpy(dm_phases), mask=mask_cube)
+            ma_res_phases = masked_array(xp.asnumpy(res_phases), mask=mask_cube)
 
             data_dict = {}
             for key, value in zip(

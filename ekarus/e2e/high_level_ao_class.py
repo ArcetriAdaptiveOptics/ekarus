@@ -227,6 +227,34 @@ class HighLevelAO():
         self.layers.update_mask(self.cmask)
 
 
+    def get_psf_from_frame(self, frame, lambdaInM, oversampling:int=8):
+        """
+        Computes the PSF from a given frame and mask.
+
+        Parameters
+        ----------
+        frame : array
+            The input frame.
+        lambdaInM : float
+            The wavelength in meters.
+        oversampling : int, optional
+            The oversampling factor, by default 8.
+
+        Returns
+        -------
+        psf : array
+            The computed PSF.
+        """
+        padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
+        psf_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
+        electric_field_amp = 1-psf_mask
+        input_phase = reshape_on_mask(frame[~self.cmask], psf_mask)
+        electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaInM))
+        field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
+        psf = abs(field_on_focal_plane)**2
+        return psf
+
+
     def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):
         """ 
         Initialize devices for PyrWFS slope computation

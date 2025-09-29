@@ -45,7 +45,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2):
     subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
 
     print('Testing pupil shifts before DM')
-    phi = xp.linspace(0, xp.pi/2, 3)
+    phi = xp.linspace(xp.pi/2, xp.pi, 3)
     sig_beforeDM = xp.zeros([len(phi)+2,ssao.Nits])
     sig_beforeDM[1,:] = sig2
     sig_beforeDM[0,:] = input_sig2
@@ -59,7 +59,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2):
         sig_beforeDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
         ccd_frame = ssao.ccd.last_frame
         plt.figure()
-        myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nAfter DM')
+        myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nBefore DM')
 
     print('Testing pupil shifts after DM')
     sig_afterDM = sig_beforeDM.copy()
@@ -73,11 +73,10 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2):
         sig_afterDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
         ccd_frame = ssao.ccd.last_frame
         plt.figure()
-        myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nBefore DM')
+        myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nAfter DM')
 
     # Post-processing and plotting
     print('Plotting results ...')
-
     masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
 
     last_res_phase = xp.array(masked_residual_phases[-1,:,:])

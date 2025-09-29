@@ -2,7 +2,7 @@ import xupy as xp
 import numpy as np
 
 from tps import ThinPlateSpline # for the simulated IFF
-from scipy.interpolate import griddata
+# from scipy.interpolate import griddata
     
 
 def compute_reconstructor(M, thr:float= 1e-12):
@@ -42,16 +42,17 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0):
     """ Simulate the influence functions by 
     imposing 'perfect' zonal commands """
     
-    local_mask = xp.asnumpy(local_mask)
-    act_coords = xp.asnumpy(act_coords)
+    # local_mask = xp.asnumpy(local_mask)
+    # act_coords = xp.asnumpy(act_coords)
 
     n_acts = max(act_coords.shape)
 
-    mask_ids = np.arange(np.size(local_mask))
-    pix_ids = mask_ids[np.invert(local_mask).flatten()]
+    mask_ids = xp.arange(xp.size(local_mask))
+    pix_ids = mask_ids[xp.invert(local_mask).flatten()]
     
     pix_coords = xp.asnumpy(getMaskPixelCoords(local_mask)).T
     act_pix_coords = xp.asnumpy(get_pixel_coords(local_mask, act_coords, pix_scale)).T
+    pix_ids = xp.asnumpy(pix_ids)
         
     IFF = np.zeros([len(pix_ids),n_acts])
     for k in range(n_acts):
@@ -93,8 +94,7 @@ def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
     """
     
     H,W = mask.shape
-    dtype = xp.float
-    pix_coords = np.zeros([2,np.shape(coords)[-1]], dtype=dtype)
+    pix_coords = xp.zeros([2,xp.shape(coords)[-1]], dtype=xp.float)
     pix_coords[0,:] = coords[1,:]*pix_scale + H/2 #(coords[1,:]*pix_scale/2 + H)/2
     pix_coords[1,:] = coords[0,:]*pix_scale + W/2 #(coords[0,:]*pix_scale/2 + W)/2
     
