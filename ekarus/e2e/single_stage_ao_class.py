@@ -65,20 +65,14 @@ class SingleStageAO(HighLevelAO):
             String prefix to save telemetry data (default is None: telemetry is not saved).
         """
         m2rad = 2 * xp.pi / lambdaInM
-        # electric_field_amp = 1 - self.cmask
 
-        # lambdaOverD = lambdaInM / self.pupilSizeInM
-        # Nphotons = self.get_photons_per_second(starMagnitude) * self.sc.dt
-        # modal_gains = self.sc.modal_gains
-
-        self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD)
-
-        # print(self.sc._wfs.lambdaInM, self.dm.max_stroke, self.pyr.modulationAngleInLambdaOverD)
+        # self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD)
+        dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype)
+        self.dm.set_position(dm_cmd, absolute=True)
+        self.dm.surface -= self.dm.surface  # make sure DM is flat
 
         # Define variables
         mask_len = int(xp.sum(1 - self.dm.mask))
-        dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype)
-        self.dm.set_position(dm_cmd, absolute=True)
         dm_cmds = xp.zeros([self.Nits, self.dm.Nacts])
 
         res_phase_rad2 = xp.zeros(self.Nits)
@@ -116,7 +110,10 @@ class SingleStageAO(HighLevelAO):
             # dm_cmd += cmd * self.sc.intGain
             # dm_cmds[i, :] = dm_cmd / m2rad  # convert to meters
 
-            dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, use_diagonal=use_diagonal, starMagnitude=starMagnitude)
+            if i % int(self.sc.dt/self.dt) == 0:
+                dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, use_diagonal=use_diagonal, starMagnitude= starMagnitude)
+            else:
+                dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 
             res_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2

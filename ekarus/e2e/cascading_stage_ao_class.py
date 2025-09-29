@@ -73,18 +73,22 @@ class CascadingAO(HighLevelAO):
         """
         m2rad = 2 * xp.pi / lambdaInM 
 
-        self.pyr1.set_modulation_angle(self.sc1.modulationAngleInLambdaOverD)
-        self.pyr2.set_modulation_angle(self.sc2.modulationAngleInLambdaOverD)
+        # self.pyr1.set_modulation_angle(self.sc1.modulationAngleInLambdaOverD)
+        # self.pyr2.set_modulation_angle(self.sc2.modulationAngleInLambdaOverD)
+
+        dm1_cmd = xp.zeros(self.dm1.Nacts, dtype=self.dtype)
+        self.dm1.set_position(dm1_cmd, absolute=True)
+        self.dm1.surface -= self.dm1.surface  # make sure DM is flat
+
+        dm2_cmd = xp.zeros(self.dm2.Nacts, dtype=self.dtype)
+        self.dm2.set_position(dm2_cmd, absolute=True)
+        self.dm2.surface -= self.dm2.surface  # make sure DM is flat
 
         # Define variables
         mask1_len = int(xp.sum(1 - self.dm1.mask))
-        dm1_cmd = xp.zeros(self.dm1.Nacts, dtype=self.dtype)
-        self.dm1.set_position(dm1_cmd, absolute=True)
         dm1_cmds = xp.zeros([self.Nits, self.dm1.Nacts])
 
         mask2_len = int(xp.sum(1 - self.dm2.mask))
-        dm2_cmd = xp.zeros(self.dm2.Nacts, dtype=self.dtype)
-        self.dm2.set_position(dm2_cmd, absolute=True)
         dm2_cmds = xp.zeros([self.Nits, self.dm2.Nacts])
 
         res2_phase_rad2 = xp.zeros(self.Nits)

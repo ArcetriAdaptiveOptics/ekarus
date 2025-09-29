@@ -123,12 +123,15 @@ class PupilShift(HighLevelAO):
             String prefix to save telemetry data (default is None: telemetry is not saved).
         """
         m2rad = 2 * xp.pi / lambdaInM
-        self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD)
+
+        # self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD) # reset modulation in case it was changed
+        dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype) # reset DM position
+        self.dm.set_position(dm_cmd, absolute=True)
+        self.dm.surface -= self.dm.surface  # make sure DM is flat
+        print(xp.sum(self.dm.surface),xp.sum(self.dm.get_position()))
 
         # Define variables
         mask_len = int(xp.sum(1 - self.dm.mask))
-        dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype)
-        self.dm.set_position(dm_cmd, absolute=True)
         dm_cmds = xp.zeros([self.Nits, self.dm.Nacts])
 
         res_phase_rad2 = xp.zeros(self.Nits)

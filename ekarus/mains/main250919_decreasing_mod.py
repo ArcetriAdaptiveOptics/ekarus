@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow #, reshape_on_mask
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
+
 # import os.path as op
 # import ekarus.e2e.utils.my_fits_package as myfits
 
@@ -20,7 +21,8 @@ def main(tn:str='example_decreasing_mod'):
 
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
-    mod0_Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2, save_prefix='mod0_')
+    ssao.pyr.set_modulation_angle(0.0)
+    mod0_Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.002, save_prefix='mod0_')
 
     print('Running the loop ...')
     try:
@@ -38,10 +40,13 @@ def main(tn:str='example_decreasing_mod'):
         sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
         input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
     except:
-        ssao.sc.load_reconstructor(Rec,m2c)
-        sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
         ssao.sc.load_reconstructor(mod0_Rec,m2c)
+        ssao.pyr.set_modulation_angle(0.0)
         mod0_sig2, _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='mod0_')
+
+        ssao.sc.load_reconstructor(Rec,m2c)
+        ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
 
     masked_input_phases, _, masked_residual_phases, detector_frames, _, dm_commands = ssao.load_telemetry_data()
     _, _, mod0_ma_residual_phases, mod0_det_frames, _, mod0_dm_commands = ssao.load_telemetry_data(save_prefix='mod0_')
@@ -95,7 +100,7 @@ def main(tn:str='example_decreasing_mod'):
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,sig2,'-o',label=f'closed loop, modulation:{ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.plot(tvec,sig2,'-o',label=f'closed loop, modulation: {ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
     plt.plot(tvec,mod0_sig2,'-o',label='closed loop, no modulation')
     plt.legend()
     plt.grid()
@@ -103,6 +108,20 @@ def main(tn:str='example_decreasing_mod'):
     plt.xlabel('Time [ms]')
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.gca().set_yscale('log')
+
+    _,S,_ = xp.linalg.svd(Rec,full_matrices=False)
+    _,mod0_S,_ = xp.linalg.svd(mod0_Rec,full_matrices=False)
+    print(xp.sum(Rec-mod0_Rec)**2)
+    if xp.on_gpu:
+        S = S.get()
+        mod0_S = mod0_S.get()
+    plt.figure()
+    plt.plot(S,'-o',label=f'modulation: {ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.plot(mod0_S,'-x',label=f'modulation: 0.0 $lambda/D$')
+    plt.legend()
+    plt.xlabel('Mode number')
+    plt.grid()
+    plt.title('Reconstructor singular values')
     
     plt.show()
 

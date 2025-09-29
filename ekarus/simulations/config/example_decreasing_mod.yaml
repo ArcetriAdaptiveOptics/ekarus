@@ -5,7 +5,7 @@ DM:
 PYR:
   oversampling: 4           # oversampling for PSF computation
   lambdaInM: 1000e-9        # [m] sensor wavelength
-  bandWidthInM: 100e-9        # [m] sensor band amplitude
+  bandWidthInM: 0e-9        # [m] sensor band amplitude
   subapPixSize: 63.5        # subaperture diameter in pix
   subapPixSep: 16           # pixel distance between subaps
 
@@ -16,7 +16,7 @@ CCD:
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER:
-  loopFrequencyInHz: 1500     
+  loopFrequencyInHz: 500     
   integratorGain: 0.5           # loop integrator gain
   delay: 2                      # loop delay in steps
   nModes2Correct: 400           # number of reconstructor modes
@@ -32,11 +32,11 @@ TELESCOPE:
 ATMO:
   outerScaleInM: 25         # [m]
   r0: [12e-2, 10e-2, 10e-2] # [m]
-  windSpeed: [4, 6, 10]     # [m/s]
+  windSpeed: [6, 8, 12]     # [m/s]
   windAngle: [-120, 45, 0]  # [deg] CCW from East
 
 LOOP:
-  nIterations: 100
+  nIterations: 200
   starMagnitude: 0.0
   simFreqHz: 1500          # simulation frequency in Hz
   recompute: False         # if False, any calibration data saved from 
