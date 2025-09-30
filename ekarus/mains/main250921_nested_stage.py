@@ -90,25 +90,9 @@ def main(tn:str='example_nested_stage', show:bool=False):
     atmo_phases, _, res_in_phases, det_in_frames, rec_in_modes, _, _, res_out_phases, det_out_frames, rec_out_modes, _ = cascao.load_telemetry_data()
 
     oversampling = 8
-    padding_len = int(cascao.cmask.shape[0]*(oversampling-1)/2)
-    psf_mask = xp.pad(cascao.cmask, padding_len, mode='constant', constant_values=1)
-    electric_field_amp = 1-psf_mask
-
-    last_res1_phase = xp.array(res_in_phases[-1,:,:])
-    residual1_phase = last_res1_phase[~cascao.cmask]
-    input_phase = reshape_on_mask(residual1_phase, psf_mask)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaRef))
-    field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-    psf_in = abs(field_on_focal_plane)**2
-
-    last_res2_phase = xp.array(res_out_phases[-1,:,:])
-    residual2_phase = last_res2_phase[~cascao.cmask]
-    input_phase = reshape_on_mask(residual2_phase, psf_mask)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/lambdaRef))
-    field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-    psf_out = abs(field_on_focal_plane)**2
-
     pixelsPerMAS = lambdaRef/cascao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
+    psf_in = cascao.get_psf_from_frame(xp.array(res_in_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
+    psf_out = cascao.get_psf_from_frame(xp.array(res_out_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting

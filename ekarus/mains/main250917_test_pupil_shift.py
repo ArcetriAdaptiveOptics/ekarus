@@ -40,38 +40,46 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2):
     except:
         sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
 
-    pyr2det = ssao.pupilSizeInPixels*ssao.pyr.oversampling/max(ssao.ccd.detector_shape)
+    pyr2det = ssao.pupilSizeInPixels/max(ssao.ccd.detector_shape) #*ssao.pyr.oversampling
     wedgeAmp = pupilPixelShift * pyr2det
     subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
 
     print('Testing pupil shifts before DM')
-    phi = xp.linspace(xp.pi/2, xp.pi, 3)
+    phi = xp.linspace(0.0, xp.pi/2, 3)
     sig_beforeDM = xp.zeros([len(phi)+2,ssao.Nits])
     sig_beforeDM[1,:] = sig2
     sig_beforeDM[0,:] = input_sig2
     for k in range(len(phi)):
+        pup_ssao = PupilShift(tn)
+        pup_ssao.initialize_turbulence()
+        pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        pup_ssao.sc.load_reconstructor(Rec,m2c)
         wedgeX = wedgeAmp * xp.cos(phi[k])
         wedgeY = wedgeAmp * xp.sin(phi[k])
-        print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f})')
+        print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f}) pixels')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
         save_str = f'wedge{mmWedgeAmp:1.0f}_ang{phi[k]*180/xp.pi:1.0f}_beforeDM_'
-        sig_beforeDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
-        ccd_frame = ssao.ccd.last_frame
+        sig_beforeDM[k+2,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
+        ccd_frame = pup_ssao.ccd.last_frame
         plt.figure()
         myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nBefore DM')
 
     print('Testing pupil shifts after DM')
     sig_afterDM = sig_beforeDM.copy()
     for k in range(len(phi)):
+        pup_ssao = PupilShift(tn)
+        pup_ssao.initialize_turbulence()
+        pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        pup_ssao.sc.load_reconstructor(Rec,m2c)
         wedgeX = wedgeAmp * xp.cos(phi[k])
         wedgeY = wedgeAmp * xp.sin(phi[k])
-        print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f})')
+        print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f}) pixels')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
         save_str = f'wedge{mmWedgeAmp:1.0f}_ang{phi[k]*180/xp.pi:1.0f}_afterDM_'
-        sig_afterDM[k+2,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
-        ccd_frame = ssao.ccd.last_frame
+        sig_afterDM[k+2,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
+        ccd_frame = pup_ssao.ccd.last_frame
         plt.figure()
         myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nAfter DM')
 
@@ -140,7 +148,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2):
     plt.plot(tvec,sig_beforeDM[1],label=f'reference, SR={sr_ss:1.2f}')
     for k,ang in enumerate(phi):
         sr_ss = np.mean(np.exp(-sig_beforeDM[k+2,100:]))
-        plt.plot(tvec,sig_beforeDM[k+2],label=f'ang={ang*180/xp.pi:1.1f}, SR={sr_ss:1.2f}')
+        plt.plot(tvec,sig_beforeDM[k+2],label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -155,7 +163,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2):
     plt.plot(tvec,sig_afterDM[1],label=f'reference, SR={sr_ss:1.2f}')
     for k,ang in enumerate(phi):
         sr_ss = np.mean(np.exp(-sig_afterDM[k+2,100:]))
-        plt.plot(tvec,sig_afterDM[k+2],label=f'ang={ang*180/xp.pi:1.1f}, SR={sr_ss:1.2f}')
+        plt.plot(tvec,sig_afterDM[k+2],label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])

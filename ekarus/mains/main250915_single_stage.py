@@ -14,13 +14,13 @@ import ekarus.e2e.utils.my_fits_package as myfits
 def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
 
     ssao = SingleStageAO(tn)
-
     ssao.initialize_turbulence()
-
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
     ssao.sc.load_reconstructor(Rec,m2c)
+
+    lambdaRef = ssao.pyr.lambdaInM
 
 
     print('Running the loop ...')
@@ -39,16 +39,20 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
         input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
     except:
-        sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
+        sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
     # ssao.SR_in = xp.exp(-input_sig2)
     # ssao.SR_out = xp.exp(-sig2)
     
     if starMagnitudes is not None:
+        new_ssao = SingleStageAO(tn)
+        new_ssao.initialize_turbulence()
+        new_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        new_ssao.sc.load_reconstructor(Rec,m2c)
         sig = xp.zeros([len(starMagnitudes),ssao.Nits])
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
             print(f'Now simulating for magnitude: {starMag:1.1f}')
-            sig[k,:],_ = ssao.run_loop(ssao.pyr.lambdaInM, starMag, save_prefix=f'magV{starMag:1.0f}_')
+            sig[k,:],_ = new_ssao.run_loop(lambdaRef, starMag, save_prefix=f'magV{starMag:1.0f}_')
         # ssao.SR = xp.exp(-sig)
 
     # Post-processing and plotting
@@ -87,19 +91,9 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
-
-    last_res_phase = xp.array(masked_residual_phases[-1,:,:])
-    residual_phase = last_res_phase[~ssao.cmask]
-
     oversampling = 8
-    padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)
-    psf_mask = xp.pad(ssao.cmask, padding_len, mode='constant', constant_values=1)
-    electric_field_amp = 1-psf_mask
-    input_phase = reshape_on_mask(residual_phase, psf_mask)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/ssao.pyr.lambdaInM))
-    field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-    psf = abs(field_on_focal_plane)**2
-    # psf = abs(ssao.pyr.field_on_focal_plane)**2
+    pixelsPerMAS = lambdaRef/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
+    psf = ssao.get_psf_from_frame(xp.array(masked_residual_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
 
     cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
@@ -109,8 +103,6 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
             sig = sig.get()
         rec_modes = rec_modes.get()
 
-    lambdaRef = ssao.pyr.lambdaInM
-
     plt.figure(figsize=(9,9))
     plt.subplot(2,2,1)
     myimshow(masked_array(masked_input_phases[-1],cmask), \
@@ -118,7 +110,6 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
         cmap='RdBu',shrink=0.8)
     plt.axis('off')
 
-    pixelsPerMAS = ssao.pyr.lambdaInM/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
     plt.subplot(2,2,2)
     showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
         title = f'Corrected PSF\nSR = {xp.exp(-sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 

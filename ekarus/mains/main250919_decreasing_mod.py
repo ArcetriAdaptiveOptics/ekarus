@@ -14,15 +14,17 @@ from ekarus.e2e.single_stage_ao_class import SingleStageAO
 def main(tn:str='example_decreasing_mod'):
 
     ssao = SingleStageAO(tn)
-
     ssao.initialize_turbulence()
-
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
-
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
-    ssao.pyr.set_modulation_angle(0.0)
+    ssao.sc.load_reconstructor(Rec,m2c)
+
+    unmod_ssao = SingleStageAO(tn)
+    unmod_ssao.initialize_turbulence()
+    unmod_ssao.pyr.set_modulation_angle(0.0)
     mod0_Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.002, save_prefix='mod0_')
+    unmod_ssao.sc.load_reconstructor(mod0_Rec,m2c)
 
     print('Running the loop ...')
     try:
@@ -40,22 +42,17 @@ def main(tn:str='example_decreasing_mod'):
         sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
         input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
     except:
-        ssao.sc.load_reconstructor(mod0_Rec,m2c)
-        ssao.pyr.set_modulation_angle(0.0)
-        mod0_sig2, _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='mod0_')
-
-        ssao.sc.load_reconstructor(Rec,m2c)
-        ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        mod0_sig2, _ = unmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='mod0_')
         sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
 
     masked_input_phases, _, masked_residual_phases, detector_frames, _, dm_commands = ssao.load_telemetry_data()
-    _, _, mod0_ma_residual_phases, mod0_det_frames, _, mod0_dm_commands = ssao.load_telemetry_data(save_prefix='mod0_')
+    _, _, mod0_ma_residual_phases, mod0_det_frames, _, mod0_dm_commands = unmod_ssao.load_telemetry_data(save_prefix='mod0_')
 
     lambdaRef = ssao.pyr.lambdaInM
-    pixelsPerMAS = ssao.pyr.lambdaInM/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
-
-    psf = ssao.get_psf_from_frame(xp.array(masked_residual_phases[-1,:,:]), lambdaRef, oversampling=8)
-    mod0_psf = ssao.get_psf_from_frame(xp.array(mod0_ma_residual_phases[-1,:,:]), lambdaRef, oversampling=8)
+    oversampling = 8
+    pixelsPerMAS = lambdaRef/ssao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
+    psf = ssao.get_psf_from_frame(xp.array(masked_residual_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
+    mod0_psf = unmod_ssao.get_psf_from_frame(xp.array(mod0_ma_residual_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
 
     cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
@@ -88,7 +85,7 @@ def main(tn:str='example_decreasing_mod'):
     plt.axis('off')
     plt.subplot(2,2,2)
     showZoomCenter(mod0_psf, pixelsPerMAS, shrink=0.8, \
-        title = f'Corrected PSF\nSR = {xp.exp(-sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
+        title = f'Corrected PSF\nSR = {xp.exp(-mod0_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
     plt.subplot(2,2,3)
     myimshow(mod0_det_frames[-1], title = 'Detector frame', shrink=0.8)
     plt.subplot(2,2,4)
@@ -125,7 +122,7 @@ def main(tn:str='example_decreasing_mod'):
     
     plt.show()
 
-    return ssao
+    return ssao, unmod_ssao
 
 if __name__ == '__main__':
-    ssao = main()
+    ssao, unmod_ssao = main()

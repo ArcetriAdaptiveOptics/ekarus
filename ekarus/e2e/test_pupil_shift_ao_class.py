@@ -49,7 +49,7 @@ class PupilShift(HighLevelAO):
   
 
     @override
-    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, 
+    def perform_loop_iteration(self, input_phase, dm_cmd, slope_computer, 
                                tilt_before_DM:tuple=(0.0,0.0), tilt_after_DM:tuple=(0.0,0.0),
                                starMagnitude:float=None):
         """
@@ -79,19 +79,22 @@ class PupilShift(HighLevelAO):
         lambdaOverD = lambda_ref/self.pupilSizeInM
         Nphotons = self.get_photons_per_second(starMagnitude) * slope_computer.dt
 
-        delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
-        input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
-        # slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+        input_phase_in_rad = reshape_on_mask(input_phase * m2rad, self.cmask)
+        padded_phase_in_rad = xp.pad(input_phase_in_rad, int((self.pyr.oversampling-1)/2*input_phase_in_rad.shape[0]), mode='constant', constant_values=0.0)
+        padded_mask = xp.pad(self.cmask, int((self.pyr.oversampling-1)/2*self.cmask.shape[0]), mode='constant', constant_values=1.0)
+        input_field = (1-padded_mask) * xp.exp(1j * padded_phase_in_rad, dtype=self.pyr.cdtype)
 
-        L = max(input_field.shape)
-        padded_field = xp.pad(input_field, int((self.pyr.oversampling-1)/2*L), mode='constant', constant_values=0.0)
-        if tilt_before_DM != 0.0:
-            tiltX,tiltY = self.pyr._get_XY_tilt_planes(padded_field.shape)
-            wedge_tilt = (tiltX*tilt_before_DM[0] + tiltY*tilt_before_DM[1])*(2*xp.pi)
-            focal_plane_field = xp.fft.fftshift(xp.fft.fft2(padded_field))
-            delayed_field = focal_plane_field * xp.exp(1j*wedge_tilt, dtype = self.pyr.cdtype)
-            padded_field = xp.fft.ifft2(xp.fft.ifftshift(delayed_field))
-        intensity = self.pyr._intensity_from_field(padded_field, lambdaOverD, tiltError=tilt_after_DM)
+        if abs(min(tilt_before_DM)) > 0.0:
+            input_field = self._tilt_field(input_field, tilt_before_DM[0], tilt_before_DM[1])
+
+        dm_phase_in_rad = reshape_on_mask(self.dm.surface * m2rad, padded_mask)
+        dm_field = (1-padded_mask) * xp.exp(1j * dm_phase_in_rad, dtype=self.pyr.cdtype)
+        residual_field = input_field * dm_field.conj()
+
+        if abs(min(tilt_after_DM)) > 0.0:
+            residual_field = self._tilt_field(residual_field, tilt_after_DM[0], tilt_after_DM[1])
+        
+        intensity = self.pyr._intensity_from_field(residual_field, lambdaOverD)
 
         detector_image = self.ccd.image_on_detector(intensity, photon_flux=Nphotons)
         slopes = slope_computer._compute_pyramid_slopes(detector_image)
@@ -102,7 +105,14 @@ class PupilShift(HighLevelAO):
         dm_cmd += cmd * slope_computer.intGain / m2rad
         modes /= m2rad  # convert to meters
 
-        return dm_cmd, modes
+        # Recover the residual phase        
+        residual_phase = xp.angle(residual_field)[xp.abs(residual_field)>1e-10] / m2rad  # in meters
+        if len(residual_phase) < len(input_phase):
+            residual_phase = xp.pad(residual_phase, (0,len(input_phase)-len(residual_phase)), mode='constant')
+        elif len(residual_phase) > len(input_phase):
+            residual_phase = residual_phase[:len(input_phase)]
+
+        return residual_phase, dm_cmd, modes
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, 
@@ -128,7 +138,7 @@ class PupilShift(HighLevelAO):
         dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype) # reset DM position
         self.dm.set_position(dm_cmd, absolute=True)
         self.dm.surface -= self.dm.surface  # make sure DM is flat
-        print(xp.sum(self.dm.surface),xp.sum(self.dm.get_position()))
+        # print(xp.sum(self.dm.surface),xp.sum(self.dm.get_position()))
 
         # Define variables
         mask_len = int(xp.sum(1 - self.dm.mask))
@@ -155,8 +165,7 @@ class PupilShift(HighLevelAO):
             if i >= self.sc.delay:
                 self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
 
-            residual_phase = input_phase - self.dm.surface
-            dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc,
+            residual_phase, dm_cmds[i,:], modes = self.perform_loop_iteration(input_phase, dm_cmd, self.sc,
                                                               tilt_before_DM, tilt_after_DM,
                                                               starMagnitude)
 
@@ -199,4 +208,14 @@ class PupilShift(HighLevelAO):
             self.save_telemetry_data(data_dict, save_prefix)
 
         return res_phase_rad2, atmo_phase_rad2
+    
+
+    
+    def _tilt_field(self, field, tiltAmpX, tiltAmpY):
+        tiltX,tiltY = self.pyr._get_XY_tilt_planes(field.shape)
+        wedge_tilt = (tiltX*tiltAmpX + tiltY*tiltAmpY)*(2*xp.pi)*self.pyr.oversampling
+        focal_plane_field = xp.fft.fftshift(xp.fft.fft2(field))
+        field = focal_plane_field * xp.exp(1j*wedge_tilt, dtype=self.pyr.cdtype)
+        field = xp.fft.ifft2(xp.fft.ifftshift(field))
+        return field
 
