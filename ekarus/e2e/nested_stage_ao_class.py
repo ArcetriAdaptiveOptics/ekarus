@@ -7,6 +7,9 @@ from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.detector import Detector
 # from ekarus.e2e.slope_computer import SlopeComputer
 
+import matplotlib.pyplot as plt
+from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow 
+
 from ekarus.e2e.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 
@@ -22,12 +25,12 @@ class NestedStageAO(HighLevelAO):
         self.telemetry_keys = [
             "atmo_phases",
             "dm1_in_phases",
-            "res1_in_phases",
+            "res_out_in_phases",
             "ccd1_in_frames",
             "rec1_in_modes",
             "dm1_in_commands",
             "dm2_out_phases",
-            "res2_out_phases",
+            "res_in_out_phases",
             "ccd2_out_frames",
             "rec2_out_modes",
             "dm2_out_commands",
@@ -91,8 +94,8 @@ class NestedStageAO(HighLevelAO):
         mask2_len = int(xp.sum(1 - self.dm2.mask))
         dm2_cmds = xp.zeros([self.Nits, self.dm2.Nacts])
 
-        res2_phase_rad2 = xp.zeros(self.Nits)
-        res1_phase_rad2 = xp.zeros(self.Nits)
+        res_in_phase_rad2 = xp.zeros(self.Nits)
+        res_out_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
         if save_prefix is not None:
@@ -134,9 +137,9 @@ class NestedStageAO(HighLevelAO):
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
-            res2_phase_rad2[i] = xp.std(residual2_phase*m2rad)**2
-            res1_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
-            atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2
+            res_in_phase_rad2[i] = xp.sum(((residual2_phase-xp.mean(residual2_phase))*m2rad)**2)/len(residual2_phase)
+            res_out_phase_rad2[i] = xp.sum(((residual_phase-xp.mean(residual_phase))*m2rad)**2)/len(residual_phase)
+            atmo_phase_rad2[i] = xp.sum(((input_phase-xp.mean(input_phase))*m2rad)**2)/len(input_phase)
 
             if save_prefix is not None:  
                 input_phases[i, :] = input_phase          
@@ -156,15 +159,15 @@ class NestedStageAO(HighLevelAO):
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
             dm1_phases = xp.stack([reshape_on_mask(dm1_phases[i, :], self.cmask)for i in range(self.Nits)])
-            res1_phases = xp.stack([reshape_on_mask(residual1_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res_out_phases = xp.stack([reshape_on_mask(residual1_phases[i, :], self.cmask)for i in range(self.Nits)])
             dm2_phases = xp.stack([reshape_on_mask(dm2_phases[i, :], self.cmask)for i in range(self.Nits)])
-            res2_phases = xp.stack([reshape_on_mask(residual2_phases[i, :], self.cmask)for i in range(self.Nits)])
+            res_in_phases = xp.stack([reshape_on_mask(residual2_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
             ma_dm1_phases = masked_array(xp.asnumpy(dm1_phases), mask=mask_cube)
-            ma_res1_phases = masked_array(xp.asnumpy(res1_phases), mask=mask_cube)
+            ma_res_out_phases = masked_array(xp.asnumpy(res_out_phases), mask=mask_cube)
             ma_dm2_phases = masked_array(xp.asnumpy(dm2_phases), mask=mask_cube)
-            ma_res2_phases = masked_array(xp.asnumpy(res2_phases), mask=mask_cube)
+            ma_res_in_phases = masked_array(xp.asnumpy(res_in_phases), mask=mask_cube)
 
             data_dict = {}
             for key, value in zip(
@@ -172,12 +175,12 @@ class NestedStageAO(HighLevelAO):
                 [
                     ma_input_phases,
                     ma_dm1_phases,
-                    ma_res1_phases,
+                    ma_res_out_phases,
                     ccd1_images,
                     rec1_modes,
                     dm1_cmds,
                     ma_dm2_phases,
-                    ma_res2_phases,
+                    ma_res_in_phases,
                     ccd2_images,
                     rec2_modes,
                     dm2_cmds,
@@ -187,7 +190,71 @@ class NestedStageAO(HighLevelAO):
 
             self.save_telemetry_data(data_dict, save_prefix)
 
-        return res2_phase_rad2, res1_phase_rad2, atmo_phase_rad2
+        return res_in_phase_rad2, res_out_phase_rad2, atmo_phase_rad2
+    
+    def plot_iteration(self, lambdaRef, frame_id:int=-1, save_prefix:str=None):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : int, optional
+            The frame/iteration index to plot, by default -1 (last frame).
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        ma_atmo_phases, _, res_out_phases, det_out_frames, rec1_modes, dm1_cmds, _, res_in_phases, det_in_frames, rec2_modes, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+
+        atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        res_out_phase_in_rad = res_out_phases[frame_id].data[~res_out_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        res_in_phase_in_rad = res_in_phases[frame_id].data[~res_in_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+
+        in_err_rad2 = np.sum((atmo_phase_in_rad-np.mean(atmo_phase_in_rad))**2)/len(atmo_phase_in_rad)
+        res_out_err_rad2 = np.sum((res_out_phase_in_rad-np.mean(res_out_phase_in_rad))**2)/len(res_out_phase_in_rad)
+        res_in_err_rad2 = np.sum((res_in_phase_in_rad-np.mean(res_in_phase_in_rad))**2)/len(res_in_phase_in_rad)
+
+        psf_out, pixelSize = self._psf_from_frame(xp.array(res_out_phases[frame_id]), lambdaRef)
+        psf_in, pixelSize = self._psf_from_frame(xp.array(res_in_phases[frame_id]), lambdaRef)
+        cmask = self.cmask.get() if xp.on_gpu else self.cmask.copy()
+
+        plt.figure()#figsize=(9,9))
+        plt.subplot(2,4,1)
+        myimshow(masked_array(ma_atmo_phases[frame_id],cmask), \
+        title=f'Atmosphere phase [m]\nSR = {xp.exp(-in_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]',\
+        cmap='RdBu',shrink=0.8)
+        plt.axis('off')
+        plt.subplot(2,4,5)
+        myimshow(masked_array(res_in_phases[frame_id],cmask), \
+        title=f'Residual phase [m] after inner loop\nSR = {xp.exp(-res_in_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]',\
+        cmap='RdBu',shrink=0.8)
+        plt.axis('off')
+        plt.subplot(2,4,3)
+        showZoomCenter(psf_out, pixelSize, shrink=0.8,
+        title = f'Corrected PSF (outer loop)\nSR = {xp.exp(-res_out_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$'
+            , ylabel=r'$\lambda/D$') 
+        plt.subplot(2,4,2)
+        myimshow(det_out_frames[frame_id], title = 'Detector frame (outer loop)', shrink=0.8)
+        plt.subplot(2,4,4)
+        self.dm1.plot_position(dm1_cmds[frame_id])
+        plt.title('DM1 command [m] (outer loop)')
+        plt.axis('off')
+        plt.subplot(2,4,7)
+        showZoomCenter(psf_in, pixelSize, shrink=0.8,
+        title = f'Corrected PSF (inner loop)\nSR = {xp.exp(-res_in_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$'
+            , ylabel=r'$\lambda/D$') 
+        plt.subplot(2,4,6)
+        myimshow(det_in_frames[frame_id], title = 'Detector frame (inner loop)', shrink=0.8)
+        plt.subplot(2,4,8)
+        self.dm2.plot_position(dm2_cmds[frame_id])
+        plt.title('DM2 command [m] (inner loop)')
+        plt.axis('off')
 
 
     # def __init__(self, tn, xp=np):
@@ -297,13 +364,13 @@ class NestedStageAO(HighLevelAO):
     #         print('Saving telemetry to .fits ...')
     #         ma_input_phases = np.stack([reshape_on_mask(input_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
     #         ma_dm1_phases = np.stack([reshape_on_mask(dm1_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
-    #         ma_res1_phases = np.stack([reshape_on_mask(after_dm1_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
+    #         ma_res_out_phases = np.stack([reshape_on_mask(after_dm1_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
     #         ma_dm2_phases = np.stack([reshape_on_mask(dm2_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
-    #         ma_res2_phases = np.stack([reshape_on_mask(after_dm2_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
+    #         ma_res_in_phases = np.stack([reshape_on_mask(after_dm2_phases[i,:], self.cmask, self._xp) for i in range(self.Nits)])
 
-    #         data_dict = {'DM1phases': ma_dm1_phases, 'Res1Phases': ma_res1_phases, \
+    #         data_dict = {'DM1phases': ma_dm1_phases, 'res_outPhases': ma_res_out_phases, \
     #                      'Detector1Frames': detector1_images, 'DM1commands': dm1_cmds, \
-    #                      'DM2phases': ma_dm2_phases, 'Res2Phases': ma_res2_phases, \
+    #                      'DM2phases': ma_dm2_phases, 'res_inPhases': ma_res_in_phases, \
     #                      'Detector2Frames': detector2_images, 'DM2commands': dm2_cmds, \
     #                      'AtmoPhases': ma_input_phases}
     #         self.save_telemetry_data(data_dict)
@@ -313,14 +380,14 @@ class NestedStageAO(HighLevelAO):
     # def load_telemetry_data(self):
     #     atmo_phases = read_fits(os.path.join(self.savepath,'AtmoPhases.fits'))
     #     dm1_phases = read_fits(os.path.join(self.savepath,'DM1phases.fits'))
-    #     res1_phases = read_fits(os.path.join(self.savepath,'Res1Phases.fits'))
-    #     det1_frames = read_fits(os.path.join(self.savepath,'Detector1Frames.fits'))
+    #     res_out_phases = read_fits(os.path.join(self.savepath,'res_outPhases.fits'))
+    #     det_out_frames = read_fits(os.path.join(self.savepath,'Detector1Frames.fits'))
     #     dm1_cmds =  read_fits(os.path.join(self.savepath,'DM1commands.fits'))
     #     dm2_phases = read_fits(os.path.join(self.savepath,'DM2phases.fits'))
-    #     res2_phases = read_fits(os.path.join(self.savepath,'Res2Phases.fits'))
-    #     det2_frames = read_fits(os.path.join(self.savepath,'Detector2Frames.fits'))
+    #     res_in_phases = read_fits(os.path.join(self.savepath,'res_inPhases.fits'))
+    #     det_in_frames = read_fits(os.path.join(self.savepath,'Detector2Frames.fits'))
     #     dm2_cmds =  read_fits(os.path.join(self.savepath,'DM2commands.fits'))
-    #     return atmo_phases, dm1_phases, res1_phases, det1_frames, dm1_cmds, dm2_phases, res2_phases, det2_frames, dm2_cmds
+    #     return atmo_phases, dm1_phases, res_out_phases, det_out_frames, dm1_cmds, dm2_phases, res_in_phases, det_in_frames, dm2_cmds
 
 
 

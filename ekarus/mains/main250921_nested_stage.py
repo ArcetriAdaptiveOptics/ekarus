@@ -87,48 +87,18 @@ def main(tn:str='example_nested_stage', show:bool=False):
         plt.figure()
         myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
-    atmo_phases, _, res_in_phases, det_in_frames, rec_in_modes, _, _, res_out_phases, det_out_frames, rec_out_modes, _ = cascao.load_telemetry_data()
-
-    oversampling = 8
-    pixelsPerMAS = lambdaRef/cascao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
-    psf_in = cascao.get_psf_from_frame(xp.array(res_in_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
-    psf_out = cascao.get_psf_from_frame(xp.array(res_out_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
+    lambdaRef = 1000e-9
+    cascao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
         dm_inner_sig2 = dm_inner_sig2.get()
         dm_outer_sig2 = dm_outer_sig2.get()
         input_sig2 = input_sig2.get()
-        rec_in_modes = rec_in_modes.get()
-        rec_out_modes = rec_out_modes.get()
+        # rec_in_modes = rec_in_modes.get()
+        # rec_out_modes = rec_out_modes.get()
 
-    shrink = 0.75
-    plt.figure()#figsize=(9,13.5))
-    plt.subplot(2,3,1)
-    myimshow(det_in_frames[-1], title = 'Detector (inner loop) frame', shrink=shrink)
-
-    plt.subplot(2,3,2)    
-    cascao.dm1.plot_position(shrink=shrink)
-    plt.title('DM1 (inner loop) command [m]')
-    plt.axis('off')
-
-    plt.subplot(2,3,3)
-    showZoomCenter(psf_in, pixelsPerMAS, shrink=shrink, \
-        title = f'PSF after DM1 (inner loop)\nSR = {xp.exp(-dm_inner_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
-
-    plt.subplot(2,3,4)
-    myimshow(det_out_frames[-1], title = 'Detector (outer loop) frame', shrink=shrink)
-
-    plt.subplot(2,3,5)    
-    cascao.dm2.plot_position(shrink=shrink)
-    plt.title('DM2 (outer loop) command [m]')
-    plt.axis('off')
-
-    plt.subplot(2,3,6)
-    showZoomCenter(psf_out, pixelsPerMAS, shrink=shrink, \
-        title = f'PSF after DM2 (outer loop)\nSR = {xp.exp(-dm_outer_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
-
-    tvec = np.arange(cascao.Nits)*cascao.dt*1e+3
+    tvec = xp.arange(cascao.Nits)*cascao.dt*1e+3
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(tvec,input_sig2,'-o',label='open loop')

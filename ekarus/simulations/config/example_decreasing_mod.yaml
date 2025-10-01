@@ -16,7 +16,7 @@ CCD:
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER:
-  loopFrequencyInHz: 500     
+  loopFrequencyInHz: 1500     
   integratorGain: 0.5           # loop integrator gain
   delay: 2                      # loop delay in steps
   nModes2Correct: 400           # number of reconstructor modes

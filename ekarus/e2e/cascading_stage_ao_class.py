@@ -140,9 +140,9 @@ class CascadingAO(HighLevelAO):
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
-            res2_phase_rad2[i] = xp.std(residual2_phase*m2rad)**2
-            res1_phase_rad2[i] = xp.std(residual1_phase*m2rad)**2
-            atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2
+            res2_phase_rad2[i] = xp.sum(((residual2_phase-xp.mean(residual2_phase))*m2rad)**2)/len(residual2_phase)
+            res1_phase_rad2[i] = xp.sum(((residual1_phase-xp.mean(residual1_phase))*m2rad)**2)/len(residual1_phase)
+            atmo_phase_rad2[i] = xp.sum(((input_phase-xp.mean(input_phase))*m2rad)**2)/len(input_phase)
 
             if save_prefix is not None:  
                 input_phases[i, :] = input_phase          
@@ -229,7 +229,12 @@ class CascadingAO(HighLevelAO):
         plt.figure()#figsize=(9,9))
         plt.subplot(2,4,1)
         myimshow(masked_array(ma_atmo_phases[frame_id],cmask), \
-        title=f'Atmosphere phase [m]\nSR = {xp.exp(-in_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',\
+        title=f'Atmosphere phase [m]\nSR = {xp.exp(-in_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]',\
+        cmap='RdBu',shrink=0.8)
+        plt.axis('off')
+        plt.subplot(2,4,5)
+        myimshow(masked_array(res1_phases[frame_id],cmask), \
+        title=f'Residual phase [m] after DM1\nSR = {xp.exp(-res1_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]',\
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,4,3)

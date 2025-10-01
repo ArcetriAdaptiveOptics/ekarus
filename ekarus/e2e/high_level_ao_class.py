@@ -363,8 +363,13 @@ class HighLevelAO():
             data_keys = self.telemetry_keys
         loaded_data = []
         for key in data_keys:
-            file_path = os.path.join(self.savepath, save_prefix+key+'.fits')
-            loaded_data.append(myfits.read_fits(file_path))
+            try:
+                file_path = os.path.join(self.savepath, save_prefix+key+'.fits')
+                loaded_data.append(myfits.read_fits(file_path))
+            except FileNotFoundError:
+                new_path = os.path.join(self.savepath, key+'.fits')
+                print(f'File {file_path} not found, trying {new_path} instead')
+                loaded_data.append(myfits.read_fits(new_path))
         return loaded_data
 
     
