@@ -4,14 +4,15 @@ masked_array = xp.masked_array
 
 import matplotlib.pyplot as plt
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask, myimshow
+from ekarus.e2e.utils.image_utils import myimshow #showZoomCenter, reshape_on_mask, 
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 import os.path as op
 
 import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
+def main(tn:str='example_single_stage', show:bool=False, gain_vec=None, 
+         optimize_gain:bool=False, starMagnitudes=None):
 
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence()
@@ -22,24 +23,26 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None):
 
     lambdaRef = ssao.pyr.lambdaInM
 
+    if optimize_gain is True:
+        if gain_vec is None:
+            gain_vec = xp.arange(1,10)/10
+        N = len(gain_vec)
+        SR_vec = xp.zeros(N)
+        for jj in range(N):
+            err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
+            SR_vec[jj] = xp.mean(xp.exp(-err2[40:]))
+        plt.figure()
+        plt.plot(gain_vec,SR_vec*100)
+        plt.grid()
+        plt.xlabel('Integrator gain')
+        plt.ylabel('SR %')
+        plt.title('Strehl ratio vs integrator gain')
+        best_gain = gain_vec[xp.argmax(SR_vec)]
+        print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')
+        ssao.sc.intGain = best_gain
 
     print('Running the loop ...')
-    try:
-        if ssao.recompute is True:
-            raise FileNotFoundError('Recompute is True')
-        masked_input_phases, _, masked_residual_phases, _, _, _ = ssao.load_telemetry_data()
-        m2rad = 2 * xp.pi / ssao.pyr.lambdaInM
-        residual_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-        input_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-        for i in range(ssao.Nits):
-            ma_res_phase = masked_residual_phases[i,:,:]
-            residual_phases[i,:] = ma_res_phase[~ssao.cmask]
-            ma_in_phase = masked_input_phases[i,:,:]
-            input_phases[i,:] = ma_in_phase[~ssao.cmask]
-        sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
-        input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
-    except:
-        sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
+    sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
     # ssao.SR_in = xp.exp(-input_sig2)
     # ssao.SR_out = xp.exp(-sig2)
     
