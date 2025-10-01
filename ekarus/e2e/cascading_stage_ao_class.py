@@ -7,6 +7,10 @@ from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.detector import Detector
 # from ekarus.e2e.slope_computer import SlopeComputer
 
+# masked_array = xp.masked_array
+import matplotlib.pyplot as plt
+from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow 
+
 from ekarus.e2e.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 
@@ -190,6 +194,66 @@ class CascadingAO(HighLevelAO):
             self.save_telemetry_data(data_dict, save_prefix)
 
         return res2_phase_rad2, res1_phase_rad2, atmo_phase_rad2
+    
+
+    def plot_iteration(self, lambdaRef, frame_id:int=-1, save_prefix:str=None):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : int, optional
+            The frame/iteration index to plot, by default -1 (last frame).
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        ma_atmo_phases, _, res1_phases, det1_frames, rec1_modes, dm1_cmds, _, res2_phases, det2_frames, rec2_modes, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+
+        atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        res1_phase_in_rad = res1_phases[frame_id].data[~res1_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        res2_phase_in_rad = res2_phases[frame_id].data[~res2_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+
+        in_err_rad2 = np.sum((atmo_phase_in_rad-np.mean(atmo_phase_in_rad))**2)/len(atmo_phase_in_rad)
+        res1_err_rad2 = np.sum((res1_phase_in_rad-np.mean(res1_phase_in_rad))**2)/len(res1_phase_in_rad)
+        res2_err_rad2 = np.sum((res2_phase_in_rad-np.mean(res2_phase_in_rad))**2)/len(res2_phase_in_rad)
+
+        psf1, pixelSize = self._psf_from_frame(xp.array(res1_phases[frame_id]), lambdaRef)
+        psf2, pixelSize = self._psf_from_frame(xp.array(res2_phases[frame_id]), lambdaRef)
+        cmask = self.cmask.get() if xp.on_gpu else self.cmask.copy()
+
+        plt.figure()#figsize=(9,9))
+        plt.subplot(2,4,1)
+        myimshow(masked_array(ma_atmo_phases[frame_id],cmask), \
+        title=f'Atmosphere phase [m]\nSR = {xp.exp(-in_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',\
+        cmap='RdBu',shrink=0.8)
+        plt.axis('off')
+        plt.subplot(2,4,3)
+        showZoomCenter(psf1, pixelSize, shrink=0.8,
+        title = f'Corrected PSF 1\nSR = {xp.exp(-res1_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$'
+            , ylabel=r'$\lambda/D$') 
+        plt.subplot(2,4,2)
+        myimshow(det1_frames[frame_id], title = 'Detector 1 frame', shrink=0.8)
+        plt.subplot(2,4,4)
+        self.dm1.plot_position(dm1_cmds[frame_id])
+        plt.title('DM1 command [m]')
+        plt.axis('off')
+        plt.subplot(2,4,7)
+        showZoomCenter(psf2, pixelSize, shrink=0.8,
+        title = f'Corrected PSF 2\nSR = {xp.exp(-res2_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$'
+            , ylabel=r'$\lambda/D$') 
+        plt.subplot(2,4,6)
+        myimshow(det2_frames[frame_id], title = 'Detector 2 frame', shrink=0.8)
+        plt.subplot(2,4,8)
+        self.dm2.plot_position(dm2_cmds[frame_id])
+        plt.title('DM2 command [m]')
+        plt.axis('off')
 
 
     # def __init__(self, tn, xp=np):

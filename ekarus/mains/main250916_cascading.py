@@ -15,7 +15,7 @@ def main(tn:str='example_cascading_stage', show:bool=False):
 
     print('Initializing devices ...')
     cascao = CascadingAO(tn)
-
+    lambdaRef = 1000e-9
     cascao.initialize_turbulence()
 
     KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
@@ -29,7 +29,6 @@ def main(tn:str='example_cascading_stage', show:bool=False):
     cascao.sc2.load_reconstructor(Rec,m2c)
 
     print('Running the loop ...')
-    lambdaRef = 1000e-9
     dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
 
     # Post-processing and plotting
@@ -87,12 +86,12 @@ def main(tn:str='example_cascading_stage', show:bool=False):
         plt.figure()
         myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
-    atmo_phases, _, res1_phases, det1_frames, rec1_modes, _, _, res2_phases, det2_frames, rec2_modes, _ = cascao.load_telemetry_data()
+    # atmo_phases, _, res1_phases, det1_frames, rec1_modes, _, _, res2_phases, det2_frames, rec2_modes, _ = cascao.load_telemetry_data()
     
-    oversampling = 8
-    pixelsPerMAS = lambdaRef/cascao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
-    psf1 = cascao.get_psf_from_frame(xp.array(res1_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
-    psf2 = cascao.get_psf_from_frame(xp.array(res2_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
+    # oversampling = 8
+    # pixelsPerMAS = lambdaRef/cascao.pupilSizeInM/oversampling*180/xp.pi*3600*1000
+    # psf1 = cascao.get_psf_from_frame(xp.array(res1_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
+    # psf2 = cascao.get_psf_from_frame(xp.array(res2_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
 
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
@@ -100,33 +99,35 @@ def main(tn:str='example_cascading_stage', show:bool=False):
         dm1_sig2 = dm1_sig2.get()
         dm2_sig2 = dm2_sig2.get()
         input_sig2 = input_sig2.get()
-        rec1_modes = rec1_modes.get()
-        rec2_modes = rec2_modes.get()
+        # rec1_modes = rec1_modes.get()
+        # rec2_modes = rec2_modes.get()
 
-    shrink = 0.75
-    plt.figure()#figsize=(9,13.5))
-    plt.subplot(2,3,1)
-    myimshow(det1_frames[-1], title = 'Detector 1 frame', shrink=shrink)
-    plt.subplot(2,3,2)    
-    cascao.dm1.plot_position(shrink=shrink)
-    plt.title('DM1 command [m]')
-    plt.axis('off')
+    # shrink = 0.75
+    # plt.figure()#figsize=(9,13.5))
+    # plt.subplot(2,3,1)
+    # myimshow(det1_frames[-1], title = 'Detector 1 frame', shrink=shrink)
+    # plt.subplot(2,3,2)    
+    # cascao.dm1.plot_position(shrink=shrink)
+    # plt.title('DM1 command [m]')
+    # plt.axis('off')
 
-    plt.subplot(2,3,3)
-    showZoomCenter(psf1, pixelsPerMAS, shrink=shrink, \
-        title = f'PSF after DM1\nSR = {xp.exp(-dm1_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
+    # plt.subplot(2,3,3)
+    # showZoomCenter(psf1, pixelsPerMAS, shrink=shrink, \
+    #     title = f'PSF after DM1\nSR = {xp.exp(-dm1_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
 
-    plt.subplot(2,3,4)
-    myimshow(det2_frames[-1], title = 'Detector 2 frame', shrink=shrink)
+    # plt.subplot(2,3,4)
+    # myimshow(det2_frames[-1], title = 'Detector 2 frame', shrink=shrink)
 
-    plt.subplot(2,3,5)    
-    cascao.dm2.plot_position(shrink=shrink)
-    plt.title('DM2 command [m]')
-    plt.axis('off')
+    # plt.subplot(2,3,5)    
+    # cascao.dm2.plot_position(shrink=shrink)
+    # plt.title('DM2 command [m]')
+    # plt.axis('off')
 
-    plt.subplot(2,3,6)
-    showZoomCenter(psf2, pixelsPerMAS, shrink=shrink, \
-        title = f'PSF after DM2\nSR= {xp.exp(-dm2_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
+    # plt.subplot(2,3,6)
+    # showZoomCenter(psf2, pixelsPerMAS, shrink=shrink, \
+    #     title = f'PSF after DM2\nSR= {xp.exp(-dm2_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
+
+    cascao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
 
     tvec = np.arange(cascao.Nits)*cascao.dt*1e+3
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
@@ -141,22 +142,22 @@ def main(tn:str='example_cascading_stage', show:bool=False):
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.gca().set_yscale('log')
 
-    plt.figure()
-    plt.plot(tvec,rec1_modes[:,:10],'-o')
-    plt.grid()
-    plt.xlim([0.0,tvec[-1]])
-    plt.xlabel('Time [ms]')
-    plt.ylabel('amplitude [m]')
-    plt.title('Reconstructor 1 modes\n(first 10)')
+    # plt.figure()
+    # plt.plot(tvec,rec1_modes[:,:10],'-o')
+    # plt.grid()
+    # plt.xlim([0.0,tvec[-1]])
+    # plt.xlabel('Time [ms]')
+    # plt.ylabel('amplitude [m]')
+    # plt.title('Reconstructor 1 modes\n(first 10)')
 
-    plt.figure()
-    plt.plot(tvec,rec2_modes[:,:10],'-o')
-    plt.grid()
-    plt.xlim([0.0,tvec[-1]])
-    plt.xlabel('Time [ms]')
-    plt.ylabel('amplitude [m]')
-    plt.title('Reconstructor 2 modes\n(first 10)')
-    plt.show()
+    # plt.figure()
+    # plt.plot(tvec,rec2_modes[:,:10],'-o')
+    # plt.grid()
+    # plt.xlim([0.0,tvec[-1]])
+    # plt.xlabel('Time [ms]')
+    # plt.ylabel('amplitude [m]')
+    # plt.title('Reconstructor 2 modes\n(first 10)')
+    # plt.show()
 
 
     plt.show()

@@ -7,6 +7,10 @@ from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 # from ekarus.e2e.devices.detector import Detector
 # from ekarus.e2e.devices.slope_computer import SlopeComputer
 
+# masked_array = xp.masked_array
+import matplotlib.pyplot as plt
+from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow 
+
 from ekarus.e2e.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 
@@ -66,7 +70,6 @@ class SingleStageAO(HighLevelAO):
         """
         m2rad = 2 * xp.pi / lambdaInM
 
-        # self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD)
         dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype)
         self.dm.set_position(dm_cmd, absolute=True)
         self.dm.surface -= self.dm.surface  # make sure DM is flat
@@ -100,23 +103,14 @@ class SingleStageAO(HighLevelAO):
             #     self.integratorGain += 0.1
 
             residual_phase = input_phase - self.dm.surface
-
-            # delta_phase_in_rad = reshape_on_mask(residual_phase * m2rad, self.cmask)
-            # input_field = electric_field_amp * xp.exp(1j * delta_phase_in_rad)
-            # slopes = self.sc.compute_slopes(input_field, lambdaOverD, Nphotons)
-            # modes = self.sc.Rec @ slopes
-            # gmodes = modes * modal_gains
-            # cmd = self.sc.m2c @ gmodes
-            # dm_cmd += cmd * self.sc.intGain
-            # dm_cmds[i, :] = dm_cmd / m2rad  # convert to meters
-
+            
             if i % int(self.sc.dt/self.dt) == 0:
                 dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, use_diagonal=use_diagonal, starMagnitude= starMagnitude)
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 
-            res_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
-            atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2
+            res_phase_rad2[i] = xp.sum(((residual_phase-xp.mean(residual_phase))*m2rad)**2)
+            atmo_phase_rad2[i] = xp.sum(((input_phase-xp.mean(input_phase))*m2rad)**2)
 
             if save_prefix is not None:            
                 residual_phases[i, :] = residual_phase
@@ -154,4 +148,50 @@ class SingleStageAO(HighLevelAO):
             self.save_telemetry_data(data_dict, save_prefix)
 
         return res_phase_rad2, atmo_phase_rad2
+    
+    
+    def plot_iteration(self, lambdaRef, frame_id:int=-1, save_prefix:str=None):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : int, optional
+            The frame/iteration index to plot, by default -1 (last frame).
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+
+        atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+
+        in_err_rad2 = np.sum((atmo_phase_in_rad-np.mean(atmo_phase_in_rad))**2)/len(atmo_phase_in_rad)
+        res_err_rad2 = np.sum((res_phase_in_rad-np.mean(res_phase_in_rad))**2)/len(res_phase_in_rad)
+
+        psf, pixelSize = self._psf_from_frame(xp.array(ma_res_phases[frame_id]), lambdaRef)
+        cmask = self.cmask.get() if xp.on_gpu else self.cmask.copy()
+
+        plt.figure(figsize=(9,9))
+        plt.subplot(2,2,1)
+        myimshow(masked_array(ma_atmo_phases[frame_id],cmask), \
+        title=f'Atmosphere phase [m]\nSR = {xp.exp(-in_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',\
+        cmap='RdBu',shrink=0.8)
+        plt.axis('off')
+        plt.subplot(2,2,2)
+        showZoomCenter(psf, pixelSize, shrink=0.8,
+        title = f'Corrected PSF\nSR = {xp.exp(-res_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$'
+            , ylabel=r'$\lambda/D$') 
+        plt.subplot(2,2,3)
+        myimshow(det_frames[frame_id], title = 'Detector frame', shrink=0.8)
+        plt.subplot(2,2,4)
+        self.dm.plot_position(dm_cmds[frame_id])
+        plt.title('Mirror command [m]')
+        plt.axis('off')
 

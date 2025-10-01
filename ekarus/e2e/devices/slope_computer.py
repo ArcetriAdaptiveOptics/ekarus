@@ -109,20 +109,22 @@ class SlopeComputer():
         slopes = xp.hstack((up_down, left_right))
 
         if use_diagonal:
-            ccd_lr = xp.fliplr(detector_image)
-            maskAlr = xp.fliplr(self._subaperture_masks[0])
-            maskClr = xp.fliplr(self._subaperture_masks[2])
-            Alr = ccd_lr[~maskAlr]
-            Clr = ccd_lr[~maskClr]
-            diag_lr = (B+Clr) - (Alr+D)
-            # slopes = xp.hstack((up_down, left_right, diag_lr))
-            ccd_ud = xp.flipud(detector_image)
-            maskCud = xp.flipud(self._subaperture_masks[2])
-            maskDud = xp.flipud(self._subaperture_masks[3])
-            Cud = ccd_ud[~maskCud]
-            Dud = ccd_ud[~maskDud]
-            diag_ud = (B+Cud) - (A+Dud)
-            slopes = xp.hstack((up_down, left_right, diag_lr, diag_ud))
+            diag = (A+D) - (B+C)
+            slopes = xp.hstack((up_down, left_right, diag))
+            # ccd_lr = xp.fliplr(detector_image)
+            # maskAlr = xp.fliplr(self._subaperture_masks[0])
+            # maskClr = xp.fliplr(self._subaperture_masks[2])
+            # Alr = ccd_lr[~maskAlr]
+            # Clr = ccd_lr[~maskClr]
+            # diag_lr = (B+Clr) - (Alr+D)
+            # # slopes = xp.hstack((up_down, left_right, diag_lr))
+            # ccd_ud = xp.flipud(detector_image)
+            # maskCud = xp.flipud(self._subaperture_masks[2])
+            # maskDud = xp.flipud(self._subaperture_masks[3])
+            # Cud = ccd_ud[~maskCud]
+            # Dud = ccd_ud[~maskDud]
+            # diag_ud = (B+Cud) - (A+Dud)
+            # slopes = xp.hstack((up_down, left_right, diag_lr, diag_ud))
 
         mean_intensity = xp.mean(xp.hstack((A,B,C,D)))
         slopes *= 1/mean_intensity

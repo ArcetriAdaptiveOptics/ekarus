@@ -53,7 +53,9 @@ class PyramidWFS:
             lambdasOverD = lambda0OverD/self.lambdaInM*self._lambdaRange
             for lambdaOverD in lambdasOverD:
                 rescaled_field = padded_field * (self.lambdaInM/lambdaOverD)
-                intensity += self._intensity_from_field(rescaled_field, lambdaOverD)/len(self._lambdaRange)
+                # intensity += self._intensity_from_field(rescaled_field, lambdaOverD)/len(self._lambdaRange)
+                # always tilt by the same amount, assuming chromaticity is corrected for:
+                intensity += self._intensity_from_field(rescaled_field, lambda0OverD)/len(self._lambdaRange) 
 
         return intensity
     

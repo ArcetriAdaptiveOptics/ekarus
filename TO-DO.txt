@@ -1,20 +1,18 @@
 IMPORTANT:
-Loop on different wavelengths check
-Pass mask to DM constructor!
-Remove xupy (cupy) dependency
-Implement (and check) pupil shift
+Slaving (KL masking)
+Segmented hexagonal masks
+U-net transfer learning
 
 
 EXTRAS:
 Zernike WFS
 Shack Hartmann WFS
-
+Remove xupy (cupy) dependency
+Implement tps and tms
 Control Filter Class ('leaky' integrator)
-
-Convert DM sim with GPU
 
 
 CODING/EASE-OF_USE:
 Documentation (!!!)
 Restore Circular Mask
-
+plot_frame and plot_results
