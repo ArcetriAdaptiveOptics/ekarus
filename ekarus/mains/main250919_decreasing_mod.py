@@ -4,8 +4,9 @@ masked_array = xp.masked_array
 
 import matplotlib.pyplot as plt
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow #, reshape_on_mask
+# from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow #, reshape_on_mask
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
+from ekarus.e2e.decreasing_modulation_ao_class import DecreasingModSingleStageAO
 
 # import os.path as op
 # import ekarus.e2e.utils.my_fits_package as myfits
@@ -28,14 +29,24 @@ def main(tn:str='example_decreasing_mod'):
     unmod_ssao.sc.load_reconstructor(mod0_Rec,m2c)
     mod0_sig2, _ = unmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='mod0_')
 
+    dmod_ssao = DecreasingModSingleStageAO(tn)
+    dmod_ssao.initialize_turbulence()
+    dmod_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+    dmod_ssao.sc.load_reconstructor(Rec,m2c)
+    dmod_sig2, _ = dmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude,
+                                      new_modAngInLambdaOverD=0.0, change_it_number=50,
+                                      save_prefix='dmod_')
+
     lambdaRef = ssao.pyr.lambdaInM
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
     unmod_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='mod0_')
+    dmod_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='dmod_')
 
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
         mod0_sig2 = mod0_sig2.get()
+        dmod_sig2 = dmod_sig2.get()
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
@@ -43,6 +54,7 @@ def main(tn:str='example_decreasing_mod'):
     plt.plot(tvec,input_sig2,'-o',label='open loop')
     plt.plot(tvec,sig2,'-o',label=f'closed loop, modulation: {ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
     plt.plot(tvec,mod0_sig2,'-o',label=f'closed loop, modulation: {unmod_ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.plot(tvec,dmod_sig2,'-o',label=f'closed loop, modulation: {ssao.sc.modulationAngleInLambdaOverD}-{dmod_ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -67,7 +79,7 @@ def main(tn:str='example_decreasing_mod'):
     
     plt.show()
 
-    return ssao, unmod_ssao
+    return ssao
 
 if __name__ == '__main__':
     ssao, unmod_ssao = main()
