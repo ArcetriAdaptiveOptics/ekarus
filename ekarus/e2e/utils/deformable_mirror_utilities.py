@@ -226,7 +226,7 @@ def getMaskPixelCoords(mask):
 
 
 def find_master_acts(mask, coords, pix_scale:float = 1.0):
-
+    """ Find the master actuator ids """
     nActs = len(coords[0,:])
     act_pix_coords = get_pixel_coords(mask, coords, pix_scale)
     mask_coords = getMaskPixelCoords(mask)
@@ -242,21 +242,20 @@ def find_master_acts(mask, coords, pix_scale:float = 1.0):
             master_ids.append(i)
     
     master_ids = xp.array(master_ids)
-    print(f'Unobscrued actuators: {len(master_ids)}/{nActs}')
+    if len(master_ids) < nActs:
+        print(f'Unobscrued actuators: {len(master_ids)}/{nActs}')
     
     return master_ids
 
 
 def get_slaving_m2c(coords, master_ids, slaving_method:str = 'wmean'):
-    """ 
-    
-    """
-
+    """ Compute the slaving matrix """
     nActs = len(coords[0,:])
     nMasters = len(master_ids)
 
-    slaved_m2c = xp.zeros([nActs,nMasters])
-    slaved_m2c[master_ids,master_ids] = 1
+    slaved_m2c = xp.zeros([nActs,nActs])
+    for master in master_ids:
+        slaved_m2c[master,master] = 1
 
     act_ids = xp.arange(nActs)
     slave_ids = act_ids[~master_ids]

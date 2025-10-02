@@ -5,14 +5,14 @@ import xupy as xp
 
 from ekarus.e2e.devices.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
-from ekarus.e2e.utils.image_utils import get_circular_mask
+# from ekarus.e2e.utils.image_utils import get_circular_mask
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.e2e.utils.root import alpaopath
 
 
 class ALPAODM(DeformableMirror):
 
-    def __init__(self, input, mask=None, **kwargs):
+    def __init__(self, input, mask, **kwargs):
         """
         ALPAO DM constructor
 
@@ -40,10 +40,15 @@ class ALPAODM(DeformableMirror):
         else:
             raise NotImplementedError(f'Initialization method for {input} not implemented, please pass a data tracking number or the number of actuators')
 
-        self.act_pos = xp.zeros(self.Nacts, dtype=self.dtype)
+        self.act_pos = xp.zeros(self.Nacts, dtype=xp.float)
         self.surface = self.IFF @ self.act_pos
         self.R, self.U = dmutils.compute_reconstructor(self.IFF)
+
         self.max_stroke = kwargs['max_stroke'] if 'max_stroke' in kwargs else None
+        master_ids = dmutils.find_master_acts(self.mask, self.act_coords, self.pixel_scale)
+        if len(master_ids) < self.Nacts:
+            self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids)
+            self.master_ids = master_ids
 
 
     def enslave_cmd(self, cmd, max_cmd: float = 0.9):
@@ -106,12 +111,9 @@ class ALPAODM(DeformableMirror):
         self.pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
         # Define mask & pixel scale
-        if mask is not None:
-            self.mask = (mask).astype(bool) 
-        else:
-            self.mask = get_circular_mask((pupilDiamInPixels,pupilDiamInPixels),pupilDiamInPixels//2)
+        self.mask = (mask).astype(bool) 
+        # self.mask = get_circular_mask((pupilDiamInPixels,pupilDiamInPixels),pupilDiamInPixels//2)
         pix_coords = dmutils.getMaskPixelCoords(self.mask)
-        self.mask = (self.mask).astype(bool)
         xx = pix_coords[0,~self.mask.flatten()] - max(pix_coords[0,:])/2
         yy = pix_coords[1,~self.mask.flatten()] - max(pix_coords[1,:])/2
         diagonals = xp.sqrt(xx**2+yy**2)*2
@@ -167,7 +169,7 @@ class ALPAODM(DeformableMirror):
             cmdmat_path = os.path.join(self.alpaopath, str(tn) + '/cmdMatrix.fits')
             self.CMat = myfits.read_fits(cmdmat_path)
         except FileNotFoundError:
-            self.CMat = xp.eye(self.Nacts, dtype=self.dtype)
+            self.CMat = xp.eye(self.Nacts, dtype=xp.float)
 
         dms = self.config[f'DM{self.Nacts}']
         pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters

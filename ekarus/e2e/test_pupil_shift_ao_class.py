@@ -174,7 +174,7 @@ class PupilShift(HighLevelAO):
                                                               tilt_before_DM, tilt_after_DM,
                                                               starMagnitude)
 
-            res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
+            res_phase_rad2[i] = self.phase_rms(residual_phase[xp.abs(residual_phase)>0.0]*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
             if save_prefix is not None:            
