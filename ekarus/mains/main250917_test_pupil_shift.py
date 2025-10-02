@@ -1,17 +1,17 @@
 import xupy as xp
 import numpy as np
-from numpy.ma import masked_array
+# from numpy.ma import masked_array
 
 import matplotlib.pyplot as plt
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask, myimshow
+from ekarus.e2e.utils.image_utils import myimshow
 from ekarus.e2e.test_pupil_shift_ao_class import PupilShift
 
 # import os.path as op
 # import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=20):
+def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=50):
 
     ssao = PupilShift(tn)
 
@@ -47,9 +47,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=20):
 
     print('Testing pupil shifts before DM')
     phi = xp.linspace(0.0, xp.pi/2, 3)
-    sig_beforeDM = xp.zeros([len(phi)+2,ssao.Nits])
-    sig_beforeDM[1,:] = sig2
-    sig_beforeDM[0,:] = input_sig2
+    sig_beforeDM = xp.zeros([len(phi),ssao.Nits])
     for k in range(len(phi)):
         pup_ssao = PupilShift(tn)
         pup_ssao.initialize_turbulence()
@@ -60,8 +58,8 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=20):
         print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f}) pixels')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
-        save_str = f'wedge{mmWedgeAmp:1.0f}_ang{phi[k]*180/xp.pi:1.0f}_beforeDM_'
-        sig_beforeDM[k+2,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
+        save_str = f'{mmWedgeAmp*1e+3:1.0f}um_ang{phi[k]*180/xp.pi:1.0f}_beforeDM_'
+        sig_beforeDM[k,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
         # pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
         if wedgeAmp>1.0:
             ccd_frame = pup_ssao.ccd.last_frame
@@ -70,7 +68,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=20):
             # raise ValueError('Stop')
 
     print('Testing pupil shifts after DM')
-    sig_afterDM = sig_beforeDM.copy()
+    sig_afterDM = xp.zeros([len(phi),ssao.Nits])
     for k in range(len(phi)):
         pup_ssao = PupilShift(tn)
         pup_ssao.initialize_turbulence()
@@ -81,8 +79,8 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=20):
         print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f}) pixels')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
-        save_str = f'wedge{mmWedgeAmp:1.0f}_ang{phi[k]*180/xp.pi:1.0f}_afterDM_'
-        sig_afterDM[k+2,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
+        save_str = f'{mmWedgeAmp*1e+3:1.0f}um_ang{phi[k]*180/xp.pi:1.0f}_afterDM_'
+        sig_afterDM[k,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
         # pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
         if wedgeAmp>1.0:
             ccd_frame = pup_ssao.ccd.last_frame
@@ -116,12 +114,12 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=20):
     # plt.gca().set_yscale('log')
 
     plt.figure()
-    plt.plot(tvec,sig_beforeDM[0],label=f'atmo')
-    sr_ss = np.mean(np.exp(-sig_beforeDM[1,it_ss:]))
-    plt.plot(tvec,sig_beforeDM[1],label=f'reference, SR={sr_ss:1.2f}')
+    plt.plot(tvec,input_sig2,label=f'atmo')
+    sr_ss = np.mean(np.exp(-sig2[it_ss:]))
+    plt.plot(tvec,sig2,label=f'reference, SR={sr_ss:1.2f}')
     for k,ang in enumerate(phi):
-        sr_ss = np.mean(np.exp(-sig_beforeDM[k+2,it_ss:]))
-        plt.plot(tvec,sig_beforeDM[k+2],label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
+        sr_ss = np.mean(np.exp(-sig_beforeDM[k,it_ss:]))
+        plt.plot(tvec,sig_beforeDM[k],label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -131,12 +129,12 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=20):
     plt.title(f'{pupilPixelShift:1.2f} subaperture tilt before DM\nSR @ {lambdaRef*1e+9:1.0f} [nm]')
 
     plt.figure()
-    plt.plot(tvec,sig_afterDM[0],label=f'atmo')
-    sr_ss = np.mean(np.exp(-sig_afterDM[1,it_ss:]))
-    plt.plot(tvec,sig_afterDM[1],label=f'reference, SR={sr_ss:1.2f}')
+    plt.plot(tvec,input_sig2,label=f'atmo')
+    sr_ss = np.mean(np.exp(-sig2[it_ss:]))
+    plt.plot(tvec,sig2,label=f'reference, SR={sr_ss:1.2f}')
     for k,ang in enumerate(phi):
-        sr_ss = np.mean(np.exp(-sig_afterDM[k+2,it_ss:]))
-        plt.plot(tvec,sig_afterDM[k+2],label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
+        sr_ss = np.mean(np.exp(-sig_afterDM[k,it_ss:]))
+        plt.plot(tvec,sig_afterDM[k],label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])

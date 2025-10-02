@@ -4,6 +4,7 @@ from numpy.ma import masked_array
 
 import matplotlib.pyplot as plt
 from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow 
+from skimage.restoration import unwrap_phase 
 
 from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 
@@ -87,14 +88,14 @@ class PupilShift(HighLevelAO):
         padded_mask = xp.pad(self.cmask, int((self.pyr.oversampling-1)/2*self.cmask.shape[0]), mode='constant', constant_values=1.0)
         input_field = (1-padded_mask) * xp.exp(1j * padded_phase_in_rad)#, dtype=self.pyr.cdtype)
 
-        if abs(min(tilt_before_DM)) > 0.0:
+        if abs(max(tilt_before_DM)) > 0.0:
             input_field = self._tilt_field(input_field, tilt_before_DM[0], tilt_before_DM[1])
 
         dm_phase_in_rad = reshape_on_mask(self.dm.surface * m2rad, padded_mask)
         dm_field = (1-padded_mask) * xp.exp(1j * dm_phase_in_rad)#, dtype=self.pyr.cdtype)
         residual_field = input_field * dm_field.conj()
 
-        if abs(min(tilt_after_DM)) > 0.0:
+        if abs(max(tilt_after_DM)) > 0.0:
             residual_field = self._tilt_field(residual_field, tilt_after_DM[0], tilt_after_DM[1])
         
         intensity = self.pyr._intensity_from_field(residual_field, lambdaOverD)
@@ -108,12 +109,13 @@ class PupilShift(HighLevelAO):
         dm_cmd += cmd * slope_computer.intGain / m2rad
         modes /= m2rad  # convert to meters
 
-        # Recover the residual phase        
-        residual_phase = xp.angle(residual_field)[xp.abs(residual_field)>1e-10] / m2rad  # in meters
-        if len(residual_phase) < len(input_phase):
-            residual_phase = xp.pad(residual_phase, (0,len(input_phase)-len(residual_phase)), mode='constant')
-        elif len(residual_phase) > len(input_phase):
-            residual_phase = residual_phase[:len(input_phase)]
+        # Recover the residual phase     
+        if xp.max(abs(xp.angle(residual_field))) >= 0.99*xp.pi:
+            residual_phase_2d = xp.array(unwrap_phase(xp.asnumpy(xp.angle(residual_field)*xp.abs(residual_field)))) # phase unwrapping
+        else:
+            residual_phase_2d = xp.angle(residual_field)*xp.abs(residual_field)
+        residual_phase = residual_phase_2d[~padded_mask]
+        residual_phase /= m2rad  # in meters
 
         return residual_phase, dm_cmd, modes
     
