@@ -114,8 +114,8 @@ class DecreasingModSingleStageAO(HighLevelAO):
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 
-            res_phase_rad2[i] = xp.sum(((residual_phase-xp.mean(residual_phase))*m2rad)**2)
-            atmo_phase_rad2[i] = xp.sum(((input_phase-xp.mean(input_phase))*m2rad)**2)
+            res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
+            atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
             if save_prefix is not None:            
                 residual_phases[i, :] = residual_phase

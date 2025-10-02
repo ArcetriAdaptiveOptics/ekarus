@@ -137,9 +137,9 @@ class NestedStageAO(HighLevelAO):
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
-            res_in_phase_rad2[i] = xp.sum(((residual2_phase-xp.mean(residual2_phase))*m2rad)**2)/len(residual2_phase)
-            res_out_phase_rad2[i] = xp.sum(((residual_phase-xp.mean(residual_phase))*m2rad)**2)/len(residual_phase)
-            atmo_phase_rad2[i] = xp.sum(((input_phase-xp.mean(input_phase))*m2rad)**2)/len(input_phase)
+            res_in_phase_rad2[i] = self.phase_rms(residual2_phase*m2rad)**2
+            res_out_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
+            atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
             if save_prefix is not None:  
                 input_phases[i, :] = input_phase          

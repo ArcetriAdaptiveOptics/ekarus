@@ -140,9 +140,9 @@ class CascadingAO(HighLevelAO):
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
-            res2_phase_rad2[i] = xp.sum(((residual2_phase-xp.mean(residual2_phase))*m2rad)**2)/len(residual2_phase)
-            res1_phase_rad2[i] = xp.sum(((residual1_phase-xp.mean(residual1_phase))*m2rad)**2)/len(residual1_phase)
-            atmo_phase_rad2[i] = xp.sum(((input_phase-xp.mean(input_phase))*m2rad)**2)/len(input_phase)
+            res2_phase_rad2[i] = self.phase_rms(residual2_phase*m2rad)**2
+            res1_phase_rad2[i] = self.phase_rms(residual2_phase*m2rad)**2
+            atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
             if save_prefix is not None:  
                 input_phases[i, :] = input_phase          

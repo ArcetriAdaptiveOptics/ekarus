@@ -400,6 +400,11 @@ class HighLevelAO():
         psf = abs(field_on_focal_plane)**2
         pixelSize = 1/oversampling
         return psf, pixelSize
+    
+    @staticmethod
+    def phase_rms(vec):
+        return xp.sqrt(xp.sum(vec**2)/len(vec))
+
             
 
 

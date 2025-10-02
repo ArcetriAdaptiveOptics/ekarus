@@ -2,10 +2,13 @@ import xupy as xp
 import numpy as np
 from numpy.ma import masked_array
 
+import matplotlib.pyplot as plt
+from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow 
+
 from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 
 from ekarus.e2e.high_level_ao_class import HighLevelAO
-from ekarus.e2e.utils.image_utils import reshape_on_mask, get_masked_array
+from ekarus.e2e.utils.image_utils import reshape_on_mask#, get_masked_array
 
 from typing import override
 
@@ -82,13 +85,13 @@ class PupilShift(HighLevelAO):
         input_phase_in_rad = reshape_on_mask(input_phase * m2rad, self.cmask)
         padded_phase_in_rad = xp.pad(input_phase_in_rad, int((self.pyr.oversampling-1)/2*input_phase_in_rad.shape[0]), mode='constant', constant_values=0.0)
         padded_mask = xp.pad(self.cmask, int((self.pyr.oversampling-1)/2*self.cmask.shape[0]), mode='constant', constant_values=1.0)
-        input_field = (1-padded_mask) * xp.exp(1j * padded_phase_in_rad, dtype=self.pyr.cdtype)
+        input_field = (1-padded_mask) * xp.exp(1j * padded_phase_in_rad)#, dtype=self.pyr.cdtype)
 
         if abs(min(tilt_before_DM)) > 0.0:
             input_field = self._tilt_field(input_field, tilt_before_DM[0], tilt_before_DM[1])
 
         dm_phase_in_rad = reshape_on_mask(self.dm.surface * m2rad, padded_mask)
-        dm_field = (1-padded_mask) * xp.exp(1j * dm_phase_in_rad, dtype=self.pyr.cdtype)
+        dm_field = (1-padded_mask) * xp.exp(1j * dm_phase_in_rad)#, dtype=self.pyr.cdtype)
         residual_field = input_field * dm_field.conj()
 
         if abs(min(tilt_after_DM)) > 0.0:
@@ -169,8 +172,8 @@ class PupilShift(HighLevelAO):
                                                               tilt_before_DM, tilt_after_DM,
                                                               starMagnitude)
 
-            res_phase_rad2[i] = xp.std(residual_phase*m2rad)**2
-            atmo_phase_rad2[i] = xp.std(input_phase*m2rad)**2
+            res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
+            atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
             if save_prefix is not None:            
                 residual_phases[i, :] = residual_phase
@@ -210,12 +213,56 @@ class PupilShift(HighLevelAO):
         return res_phase_rad2, atmo_phase_rad2
     
 
+    def plot_iteration(self, lambdaRef, frame_id:int=-1, save_prefix:str=None):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : int, optional
+            The frame/iteration index to plot, by default -1 (last frame).
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+
+        atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+
+        in_err_rad2 = np.sum((atmo_phase_in_rad-np.mean(atmo_phase_in_rad))**2)/len(atmo_phase_in_rad)
+        res_err_rad2 = np.sum((res_phase_in_rad-np.mean(res_phase_in_rad))**2)/len(res_phase_in_rad)
+
+        psf, pixelSize = self._psf_from_frame(xp.array(ma_res_phases[frame_id]), lambdaRef)
+        cmask = self.cmask.get() if xp.on_gpu else self.cmask.copy()
+
+        plt.figure(figsize=(9,9))
+        plt.subplot(2,2,1)
+        myimshow(masked_array(ma_atmo_phases[frame_id],cmask), \
+        title=f'Atmosphere phase [m]\nSR = {xp.exp(-in_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',\
+        cmap='RdBu',shrink=0.8)
+        plt.axis('off')
+        plt.subplot(2,2,2)
+        showZoomCenter(psf, pixelSize, shrink=0.8,
+        title = f'Corrected PSF\nSR = {xp.exp(-res_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        plt.subplot(2,2,3)
+        myimshow(det_frames[frame_id], title = 'Detector frame', shrink=0.8)
+        plt.subplot(2,2,4)
+        self.dm.plot_position(dm_cmds[frame_id])
+        plt.title('Mirror command [m]')
+        plt.axis('off')
+
     
     def _tilt_field(self, field, tiltAmpX, tiltAmpY):
         tiltX,tiltY = self.pyr._get_XY_tilt_planes(field.shape)
         wedge_tilt = (tiltX*tiltAmpX + tiltY*tiltAmpY)*(2*xp.pi)*self.pyr.oversampling
         focal_plane_field = xp.fft.fftshift(xp.fft.fft2(field))
-        field = focal_plane_field * xp.exp(1j*wedge_tilt, dtype=self.pyr.cdtype)
+        field = focal_plane_field * xp.exp(1j*wedge_tilt)#, dtype=self.pyr.cdtype)
         field = xp.fft.ifft2(xp.fft.ifftshift(field))
         return field
 

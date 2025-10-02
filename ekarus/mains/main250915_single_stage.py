@@ -11,8 +11,17 @@ import os.path as op
 import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_single_stage', show:bool=False, gain_vec=None, 
+def main(tn:str='example_single_stage', show:bool=False, gain_list=None, 
          optimize_gain:bool=False, starMagnitudes=None):
+    
+    if gain_list is not None:
+        optimize_gain = True
+
+    if optimize_gain is True:
+        if gain_list is not None:
+            gain_vec = xp.array(gain_list)
+        else:
+            gain_vec = xp.arange(1,10)/10
 
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence()
@@ -24,24 +33,37 @@ def main(tn:str='example_single_stage', show:bool=False, gain_vec=None,
     lambdaRef = ssao.pyr.lambdaInM
 
     if optimize_gain is True:
-        if gain_vec is None:
-            gain_vec = xp.arange(1,10)/10
         N = len(gain_vec)
         SR_vec = xp.zeros(N)
         for jj in range(N):
+            g = gain_vec[jj]
+            print(f'Testing gain: {g:1.2f}')
+            ssao = SingleStageAO(tn)
+            ssao.initialize_turbulence()
+            ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+            ssao.sc.load_reconstructor(Rec,m2c)
+            ssao.sc.intGain = g
             err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
             SR_vec[jj] = xp.mean(xp.exp(-err2[40:]))
+
+        best_gain = gain_vec[xp.argmax(SR_vec)]
+        print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
+        ssao = SingleStageAO(tn)
+        ssao.initialize_turbulence()
+        ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        ssao.sc.load_reconstructor(Rec,m2c)
+        ssao.sc.intGain = best_gain
+        if xp.on_gpu:
+            gain_vec = gain_vec.get()
+            SR_vec = SR_vec.get()
         plt.figure()
-        plt.plot(gain_vec,SR_vec*100)
+        plt.plot(gain_vec,SR_vec*100,'-o')
         plt.grid()
         plt.xlabel('Integrator gain')
         plt.ylabel('SR %')
         plt.title('Strehl ratio vs integrator gain')
-        best_gain = gain_vec[xp.argmax(SR_vec)]
-        print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')
-        ssao.sc.intGain = best_gain
 
-    print('Running the loop ...')
+    print('Running the loop ...')     
     sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
     # ssao.SR_in = xp.exp(-input_sig2)
     # ssao.SR_out = xp.exp(-sig2)
