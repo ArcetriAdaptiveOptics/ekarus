@@ -81,14 +81,50 @@ def reshape_on_mask(vec, mask):
     return image
 
 
-def get_masked_array(vec, mask):
-    vec2D = reshape_on_mask(vec, mask)
-    if hasattr(vec2D, 'get'):
-        vec2D = vec2D.get()
-    if hasattr(mask, 'get'):
-        mask = mask.get() 
-    ma_vec = np.ma.masked_array(vec2D, mask)
-    return ma_vec
+def bilinear_interp(data_2D, full_mask, xy_shift:tuple, min_shift:float=1e-8):
+
+
+    dx, dy = abs(xy_shift[0]), abs(xy_shift[1])
+    sdx, sdy = int(xp.sign(xy_shift[0])), int(xp.sign(xy_shift[1]))
+
+    dx_int = int(xp.floor(dx) * (sdx>0) + xp.ceil(dx) * (sdx<0))
+    dy_int = int(xp.floor(dy) * (sdy>0) + xp.ceil(dy) * (sdy<0))
+
+    shifted_mask = xp.roll(full_mask,(dy_int*sdy,dx_int*sdx),axis=(0,1))
+    data = data_2D[~shifted_mask]
+    shifted_data = reshape_on_mask(data, shifted_mask)
+
+    dx -= dx_int
+    dy -= dy_int
+
+    if dx > min_shift and dy > min_shift:
+        dx_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,sdx,axis=1)], shifted_mask)
+        dy_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,sdy,axis=0)], shifted_mask)
+        dxdy_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,(sdy,sdx),axis=(0,1))], shifted_mask)
+        interp_data = (shifted_data * (1-dx) + dx * dx_data) * (1-dy) + (dy_data * (1-dx) + dx * dxdy_data) * dy
+
+    elif dx > min_shift:
+        dx_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,sdx,axis=1)], shifted_mask)
+        interp_data = shifted_data * (1-dx) + dx_data * dx
+
+    elif dy > min_shift:
+        dy_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,sdy,axis=0)], shifted_mask)
+        interp_data = shifted_data * (1-dy) + dy_data * dy
+
+    else:
+        interp_data = shifted_data.copy()
+
+    return interp_data
+
+
+# def get_masked_array(vec, mask):
+#     vec2D = reshape_on_mask(vec, mask)
+#     if hasattr(vec2D, 'get'):
+#         vec2D = vec2D.get()
+#     if hasattr(mask, 'get'):
+#         mask = mask.get() 
+#     ma_vec = np.ma.masked_array(vec2D, mask)
+#     return ma_vec
 
 
 def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0, **kwargs):
@@ -119,3 +155,5 @@ def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
     cbar = plt.colorbar(shrink=shrink)
     cbar.set_label(cbar_title,loc='top')
     plt.title(title)
+
+
