@@ -35,7 +35,7 @@ def main(tn:str='example_decreasing_mod'):
     dmod_ssao.sc.load_reconstructor(Rec,m2c)
     dmod_sig2, _ = dmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude,
                                       new_modAngInLambdaOverD=0.0, change_it_number=50,
-                                      save_prefix='dmod_')
+                                      new_Rec = mod0_Rec, save_prefix='dmod_')
 
     lambdaRef = ssao.pyr.lambdaInM
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
@@ -52,9 +52,9 @@ def main(tn:str='example_decreasing_mod'):
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,sig2,'-o',label=f'closed loop, modulation: {ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
-    plt.plot(tvec,mod0_sig2,'-o',label=f'closed loop, modulation: {unmod_ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
-    plt.plot(tvec,dmod_sig2,'-o',label=f'closed loop, modulation: {ssao.sc.modulationAngleInLambdaOverD}-{dmod_ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.plot(tvec,sig2,'-o',label=f'closed loop, modulation: {ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.plot(tvec,mod0_sig2,'-o',label=f'closed loop, modulation: {unmod_ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.plot(tvec,dmod_sig2,'-o',label=f'closed loop, modulation: {ssao.pyr.modulationAngleInLambdaOverD}-{dmod_ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -69,8 +69,8 @@ def main(tn:str='example_decreasing_mod'):
         S = S.get()
         mod0_S = mod0_S.get()
     plt.figure()
-    plt.plot(S,'-o',label=f'modulation: {ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
-    plt.plot(mod0_S,'-x',label=f'closed loop, modulation: {unmod_ssao.sc.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.plot(S,'-o',label=f'modulation: {ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.plot(mod0_S,'-x',label=f'closed loop, modulation: {unmod_ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
     plt.legend()
     plt.xlabel('KL mode number')
     plt.yscale('log')

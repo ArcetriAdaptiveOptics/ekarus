@@ -53,7 +53,7 @@ class DecreasingModSingleStageAO(HighLevelAO):
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float,
-                 new_modAngInLambdaOverD:float, change_it_number:int, 
+                 new_modAngInLambdaOverD:float, change_it_number:int, new_Rec, 
                  use_diagonal:bool=False, save_prefix:str=None):
         """
         Main loop for the single stage AO system.
@@ -107,6 +107,7 @@ class DecreasingModSingleStageAO(HighLevelAO):
 
             if i == change_it_number:
                 self.pyr.set_modulation_angle(new_modAngInLambdaOverD)
+                self.sc.Rec = new_Rec
             
             if i % int(self.sc.dt/self.dt) == 0:
                 dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, use_diagonal=use_diagonal, starMagnitude= starMagnitude)
