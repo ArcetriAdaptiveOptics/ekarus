@@ -1,4 +1,8 @@
 IMPORTANT:
+Test double/single precision
+Fix TestDM.ipynb
+Clean up mains (IM eigvals)
+
 Slaving (KL masking)
 Segmented hexagonal masks
 U-net transfer learning

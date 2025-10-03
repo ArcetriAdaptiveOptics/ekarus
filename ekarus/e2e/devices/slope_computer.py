@@ -34,9 +34,6 @@ class SlopeComputer():
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
         else:
             raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
-        
-
-        self.dtype = xp.float
 
 
     def calibrate_sensor(self, tn:str, prefix_str:str, recompute:bool, **kwargs):
@@ -89,11 +86,11 @@ class SlopeComputer():
         """
         Load the reconstructor and the mode-to-command matrix
         """
-        self.Rec = Rec
-        self.m2c = m2c
-        modal_gains = xp.zeros(xp.shape(Rec)[0])
-        modal_gains[:self.nModes] = 1
-        self.modal_gains = modal_gains
+        self.Rec = Rec[:self.nModes,:]
+        self.m2c = m2c[:,:self.nModes]
+        # modal_gains = xp.zeros(xp.shape(Rec)[0])
+        # modal_gains[:self.nModes] = 1
+        # self.modal_gains = modal_gains
         
 
     def _compute_pyramid_slopes(self, detector_image, use_diagonal:bool=False):
@@ -143,7 +140,7 @@ class SlopeComputer():
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
 
         for i in range(4):
-            # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
+            # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=xp.float)
             qx,qy = self.find_subaperture_center(subaperture_image, quad_n=i+1)
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
             if centerObscPixDiam > 0.0:
