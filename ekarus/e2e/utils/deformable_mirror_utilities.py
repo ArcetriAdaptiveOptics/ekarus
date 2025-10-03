@@ -56,7 +56,7 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0):
         
     IFF = np.zeros([len(pix_ids),n_acts])
     for k in range(n_acts):
-        print(f'\rSimulating influence functions: {k+1}/{n_acts}', flush=True)
+        print(f'\rSimulating influence functions: {k+1}/{n_acts}', end ='\r', flush=True)
         act_data = np.zeros(n_acts)
         act_data[k] = 1.0
         tps = ThinPlateSpline(alpha=0.0)
@@ -287,6 +287,7 @@ def get_slaving_m2c(coords, master_ids, slaving_method:str='wmean', p:int=1, d_t
                                        Available methods are: 'zero', 'nearest', 'wmean', 'w2mean'")
 
     return slaved_m2c
+    
 
 # def slaving(coords, cmd, slaving_method:str = 'wmean', cmd_thr:float = None, xp=np):
 #     """ 

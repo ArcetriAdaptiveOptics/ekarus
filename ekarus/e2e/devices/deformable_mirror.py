@@ -70,6 +70,14 @@ class DeformableMirror():
         if self.max_stroke is not None:
             self.act_pos = xp.maximum(xp.minimum(self.act_pos, self.max_stroke), -self.max_stroke)
         self.surface += self.IFF @ cmd_amps
+
+
+    def get_surface(self):
+        """ Get the DM surface pixels """
+        if hasattr(self, 'visible_pix_ids'):
+            return self.surface[self.visible_pix_ids]
+        else:
+            return self.surface
         
 
 
@@ -93,6 +101,11 @@ class DeformableMirror():
         
         if surf2plot is None:
             surf2plot = self.surface
+
+        if xp.size(surf2plot) < xp.sum(self.mask):
+            padded_surf = xp.zeros(xp.sum(self.mask))
+            padded_surf[self.visible_pix_ids] = surf2plot
+            surf2plot = padded_surf
         
         mask_ids = xp.arange(xp.size(self.mask))
         pix_ids = mask_ids[~(self.mask).flatten()]

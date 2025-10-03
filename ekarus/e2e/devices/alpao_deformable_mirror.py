@@ -5,14 +5,14 @@ import xupy as xp
 
 from ekarus.e2e.devices.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
-from ekarus.e2e.utils.image_utils import get_circular_mask
+from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.e2e.utils.root import alpaopath
 
 
 class ALPAODM(DeformableMirror):
 
-    def __init__(self, input, mask=None, **kwargs):
+    def __init__(self, input, pupil_mask=None, **kwargs):
         """
         ALPAO DM constructor
 
@@ -21,7 +21,7 @@ class ALPAODM(DeformableMirror):
         input : int | str
             int: number of actuators of the ALPAO DM.
             str: tracking number of the DM measured iff
-        mask: int | ndarray(bool)
+        pupil_mask: int | ndarray(bool)
             int: number of pixels across the mask diameter
             ndarray(bool): the actual mask as array of booleans
         """
@@ -35,24 +35,29 @@ class ALPAODM(DeformableMirror):
 
         if isinstance(input, int):
             # pupilDiamInPixels = kwargs['Npix']
-            self._init_ALPAO_from_Nacts(input,mask)#,pupilDiamInPixels=pupilDiamInPixels)
+            self._init_ALPAO_from_Nacts(input,pupil_mask)#,pupilDiamInPixels=pupilDiamInPixels)
         elif isinstance(input, str):
-            self._init_ALPAO_from_tn_data(input,mask)
+            self._init_ALPAO_from_tn_data(input,pupil_mask)
         elif isinstance(input, xp.array):
-            self._init_ALPAO_from_act_coords(input,mask)
+            self._init_ALPAO_from_act_coords(input,pupil_mask)
         else:
             raise NotImplementedError(f'Initialization method for {input} not implemented, please pass a data tracking number or the number of actuators')
 
-        print(xp.shape(self.act_coords))
+        self.pupil_mask = xp.logical_or(self.mask, pupil_mask)
         self.act_pos = xp.zeros(self.Nacts, dtype=xp.float)
         self.surface = self.IFF @ self.act_pos
         self.R, self.U = dmutils.compute_reconstructor(self.IFF)
 
         self.max_stroke = kwargs['max_stroke'] if 'max_stroke' in kwargs else None
-        master_ids = dmutils.find_master_acts(self.mask, self.act_coords, self.pixel_scale)
-        if len(master_ids) < self.Nacts:
+
+        valid_ids = xp.arange(xp.sum(1-self.mask))
+        master_ids = dmutils.find_master_acts(self.pupil_mask, self.act_coords, self.pixel_scale)
+        if len(master_ids) < self.Nacts: # slaving
             self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, p=2, d_thr=2*self.pupil_size/self.Nacts)
             self.master_ids = master_ids
+            valid_ids = xp.arange(xp.sum(1-self.mask))
+            valid_ids_2d = reshape_on_mask(valid_ids, self.mask)
+            self.visible_pix_ids = (valid_ids_2d[~self.pupil_mask]).astype(int)
 
 
     def enslave_cmd(self, cmd, max_cmd: float = 0.9):
@@ -93,7 +98,7 @@ class ALPAODM(DeformableMirror):
         return coords
 
 
-    def _init_ALPAO_from_Nacts(self, Nacts:int, mask): #, multiprocessing:bool=False):
+    def _init_ALPAO_from_Nacts(self, Nacts:int, pupil_mask): #, multiprocessing:bool=False):
         """
         Initializes the ALPAO DM mask and actuator coordinates
 
@@ -115,15 +120,17 @@ class ALPAODM(DeformableMirror):
         self.pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
         # Define mask & pixel scale
-        if isinstance(mask, int):
-            self.mask = xp.array(get_circular_mask((mask,mask),mask//2),dtype=bool)
+        if isinstance(pupil_mask, int):
+            pupilDiamInPixels = pupil_mask
+            self.mask = xp.array(get_circular_mask((pupil_mask,pupil_mask),pupil_mask//2),dtype=bool)
         else:
-            self.mask = (mask).astype(bool) 
-        pix_coords = dmutils.getMaskPixelCoords(self.mask)
-        xx = pix_coords[0,~self.mask.flatten()] - max(pix_coords[0,:])/2
-        yy = pix_coords[1,~self.mask.flatten()] - max(pix_coords[1,:])/2
-        diagonals = xp.sqrt(xx**2+yy**2)*2
-        pupilDiamInPixels = xp.max(diagonals)
+            pupil_mask = (pupil_mask).astype(bool)
+            pix_coords = dmutils.getMaskPixelCoords(pupil_mask)
+            xx = pix_coords[0,~pupil_mask.flatten()] - max(pix_coords[0,:])/2
+            yy = pix_coords[1,~pupil_mask.flatten()] - max(pix_coords[1,:])/2
+            diagonals = xp.sqrt(xx**2+yy**2)*2
+            pupilDiamInPixels = xp.max(diagonals)
+            self.mask = xp.array(get_circular_mask(pupil_mask.shape,pupilDiamInPixels//2),dtype=bool)
         self.pixel_scale = pupilDiamInPixels/self.pupil_size
 
         dir_path = os.path.join(self.alpaopath,'DM'+str(self.Nacts)+'/')
@@ -181,11 +188,11 @@ class ALPAODM(DeformableMirror):
         dms = self.config[f'DM{self.Nacts}']
         pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
-        pupil_mask = xp.sum(abs(IM),axis=2)
-        pupil_mask = (pupil_mask).astype(bool)
-        pupil_mask = 1-pupil_mask
-        pix_coords = dmutils.getMaskPixelCoords(pupil_mask)
-        self.mask = xp.array(pupil_mask).astype(bool)
+        dm_mask = xp.sum(abs(IM),axis=2)
+        dm_mask = (dm_mask).astype(bool)
+        dm_mask = 1-dm_mask
+        pix_coords = dmutils.getMaskPixelCoords(dm_mask)
+        self.mask = xp.array(dm_mask).astype(bool)
         xx = pix_coords[0,~self.mask.flatten()] - max(pix_coords[0,:])/2
         yy = pix_coords[1,~self.mask.flatten()] - max(pix_coords[1,:])/2
         mask_diameter = xp.sqrt(xx**2+yy**2)*2
@@ -194,7 +201,7 @@ class ALPAODM(DeformableMirror):
         self.pixel_scale = mask_diameter/pupil_size
 
         # Derive IFFs
-        cube_mask = xp.tile(pupil_mask,self.Nacts)
+        cube_mask = xp.tile(dm_mask,self.Nacts)
         cube_mask = xp.reshape(cube_mask, IM.shape, order = 'F')
         masked_cube = np.ma.masked_array(xp.asnumpy(IM),xp.asnumpy(cube_mask))
         self.IM = dmutils.cube2mat(masked_cube)
