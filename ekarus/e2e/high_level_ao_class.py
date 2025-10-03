@@ -7,7 +7,7 @@ from ekarus.analytical.turbulence_layers import TurbulenceLayers
 from ekarus.e2e.utils.read_configuration import ConfigReader
 from ekarus.e2e.utils.root import resultspath, calibpath, atmopath
 
-from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
+from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask, remap_on_new_mask
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
 
 
@@ -110,14 +110,15 @@ class HighLevelAO():
                 self.atmo_pars = self._config.read_atmo_pars()
             r0s = self.atmo_pars['r0']
             L0 = self.atmo_pars['outerScaleInM']
-            # if isinstance(r0s, float):
-            #     r0 = r0s
-            # else:
             r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
                 oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
             hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
+            # if dm.slaving is not None: # slaving
+            #     old_shape = KL.shape
+            #     KL = remap_on_new_mask(KL, dm.mask, dm.pupil_mask)
+            #     print(f'SLAVING: downsized KL from {old_shape} to {KL.shape}')
             myfits.save_fits(KL_path, KL, hdr_dict)
             myfits.save_fits(m2c_path, m2c, hdr_dict)
         return KL, m2c
@@ -165,7 +166,7 @@ class HighLevelAO():
             for i in range(Nmodes):
                 print(f'\rMode {i+1}/{Nmodes}', end='\r', flush=True)
                 amp = amps[i]
-                mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
+                mode_phase = reshape_on_mask(MM[i,:]*amp, self.dm.mask) #self.cmask) #
                 input_field = xp.exp(1j*mode_phase) * electric_field_amp
                 push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
                 input_field = xp.conj(input_field)
@@ -202,6 +203,10 @@ class HighLevelAO():
         L0 = self.atmo_pars['outerScaleInM']
         windSpeeds = self.atmo_pars['windSpeed']
         windAngles = self.atmo_pars['windAngle']
+        try:
+            recompute_atmo_screens = self.atmo_pars['recompute']
+        except KeyError:
+            recompute_atmo_screens = False
         if N is None:
             if dt is not None:
                 maxTime = dt * self.Nits
@@ -221,7 +226,7 @@ class HighLevelAO():
             os.mkdir(atmo_dir)
         atmo_path = os.path.join(atmo_dir,'atmospheric_phase_layers.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
-        self.layers.generate_phase_screens(screenPixels, screenMeters)
+        self.layers.generate_phase_screens(screenPixels, screenMeters, recompute_atmo_screens)
         self.layers.rescale_phasescreens() # rescale in meters
         self.layers.update_mask(self.cmask)
 
@@ -316,8 +321,8 @@ class HighLevelAO():
         input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
         slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)
         modes = slope_computer.Rec @ slopes
-        gmodes = modes * slope_computer.modal_gains
-        cmd = slope_computer.m2c @ gmodes
+        # modes *= slope_computer.modal_gains
+        cmd = slope_computer.m2c @ modes
         
         dm_cmd += cmd * slope_computer.intGain / m2rad
         modes /= m2rad  # convert to meters

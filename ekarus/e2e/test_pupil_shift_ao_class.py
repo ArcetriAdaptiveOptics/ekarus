@@ -103,8 +103,8 @@ class PupilShift(HighLevelAO):
         detector_image = self.ccd.image_on_detector(intensity, photon_flux=Nphotons)
         slopes = slope_computer._compute_pyramid_slopes(detector_image)
         modes = slope_computer.Rec @ slopes
-        gmodes = modes * slope_computer.modal_gains
-        cmd = slope_computer.m2c @ gmodes
+        # modes = modes * slope_computer.modal_gains
+        cmd = slope_computer.m2c @ modes
         
         dm_cmd += cmd * slope_computer.intGain / m2rad
         modes /= m2rad  # convert to meters

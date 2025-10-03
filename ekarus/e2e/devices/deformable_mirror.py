@@ -102,12 +102,12 @@ class DeformableMirror():
         if surf2plot is None:
             surf2plot = self.surface
 
-        if xp.size(surf2plot) < xp.sum(self.mask):
-            padded_surf = xp.zeros(xp.sum(self.mask))
-            padded_surf[self.visible_pix_ids] = surf2plot
-            surf2plot = padded_surf
         
         mask_ids = xp.arange(xp.size(self.mask))
+
+        # if xp.size(surf2plot) < xp.sum(1-self.mask):
+        #     pix_ids = self.visible_pix_ids
+        # else:
         pix_ids = mask_ids[~(self.mask).flatten()]
             
         image = xp.zeros(xp.size(self.mask), dtype = xp.float)

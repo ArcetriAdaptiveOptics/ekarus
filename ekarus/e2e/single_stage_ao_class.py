@@ -50,7 +50,7 @@ class SingleStageAO(HighLevelAO):
 
         dm_pars = self._config.read_dm_pars()
         # self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm = ALPAODM(dm_pars["Nacts"], mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, use_diagonal:bool=False, save_prefix:str=None):
@@ -75,14 +75,15 @@ class SingleStageAO(HighLevelAO):
         self.dm.surface -= self.dm.surface  # make sure DM is flat
 
         # Define variables
-        mask_len = int(xp.sum(1 - self.dm.mask))
+        mask_len = int(xp.sum(1 - self.cmask))
+        dm_mask_len = int(xp.sum(1 - self.dm.mask))
         dm_cmds = xp.zeros([self.Nits, self.dm.Nacts])
 
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
         if save_prefix is not None:
-            dm_phases = xp.zeros([self.Nits, mask_len])
+            dm_phases = xp.zeros([self.Nits, dm_mask_len])
             residual_phases = xp.zeros([self.Nits, mask_len])
             input_phases = xp.zeros([self.Nits, mask_len])
             detector_images = xp.zeros([self.Nits, self.ccd.detector_shape[0], self.ccd.detector_shape[1]])
@@ -102,7 +103,7 @@ class SingleStageAO(HighLevelAO):
             # if i>0 and int(i%200)==0 and i < 700:
             #     self.integratorGain += 0.1
 
-            residual_phase = input_phase - self.dm.surface
+            residual_phase = input_phase - self.dm.get_surface()
             
             if i % int(self.sc.dt/self.dt) == 0:
                 dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, use_diagonal=use_diagonal, starMagnitude= starMagnitude)
@@ -122,13 +123,14 @@ class SingleStageAO(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
+            dm_mask_cube = xp.asnumpy(xp.stack([self.dm.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm_phases = xp.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
+            dm_phases = xp.stack([reshape_on_mask(dm_phases[i, :], self.dm.mask)for i in range(self.Nits)])
             res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
-            ma_dm_phases = masked_array(xp.asnumpy(dm_phases), mask=mask_cube)
+            ma_dm_phases = masked_array(xp.asnumpy(dm_phases), mask=dm_mask_cube)
             ma_res_phases = masked_array(xp.asnumpy(res_phases), mask=mask_cube)
 
             data_dict = {}

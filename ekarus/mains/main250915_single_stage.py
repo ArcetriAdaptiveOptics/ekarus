@@ -38,20 +38,20 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         for jj in range(N):
             g = gain_vec[jj]
             print(f'Testing gain: {g:1.2f}')
-            ssao = SingleStageAO(tn)
-            ssao.initialize_turbulence()
-            ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-            ssao.sc.load_reconstructor(Rec,m2c)
+            # ssao = SingleStageAO(tn)
+            # ssao.initialize_turbulence()
+            # ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+            # ssao.sc.load_reconstructor(Rec,m2c)
             ssao.sc.intGain = g
             err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
             SR_vec[jj] = xp.mean(xp.exp(-err2[40:]))
 
         best_gain = gain_vec[xp.argmax(SR_vec)]
         print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
-        ssao = SingleStageAO(tn)
-        ssao.initialize_turbulence()
-        ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-        ssao.sc.load_reconstructor(Rec,m2c)
+        # ssao = SingleStageAO(tn)
+        # ssao.initialize_turbulence()
+        # ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        # ssao.sc.load_reconstructor(Rec,m2c)
         ssao.sc.intGain = best_gain
         if xp.on_gpu:
             gain_vec = gain_vec.get()
@@ -69,15 +69,15 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     # ssao.SR_out = xp.exp(-sig2)
     
     if starMagnitudes is not None:
-        new_ssao = SingleStageAO(tn)
-        new_ssao.initialize_turbulence()
-        new_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-        new_ssao.sc.load_reconstructor(Rec,m2c)
+        # new_ssao = SingleStageAO(tn)
+        # new_ssao.initialize_turbulence()
+        # new_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        # new_ssao.sc.load_reconstructor(Rec,m2c)
         sig = xp.zeros([len(starMagnitudes),ssao.Nits])
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
             print(f'Now simulating for magnitude: {starMag:1.1f}')
-            sig[k,:],_ = new_ssao.run_loop(lambdaRef, starMag, save_prefix=f'magV{starMag:1.0f}_')
+            sig[k,:],_ = ssao.run_loop(lambdaRef, starMag, save_prefix=f'magV{starMag:1.0f}_')
         # ssao.SR = xp.exp(-sig)
 
     # Post-processing and plotting
@@ -101,13 +101,12 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
             ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
 
         IM = myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits'))
-        IM_std = xp.std(IM,axis=0)
-        if xp.on_gpu:
-            IM_std = IM_std.get()
+        # IM_std = xp.std(IM,axis=0)
+        _,Sim,_ = xp.linalg.svd(IM, full_matrices=False)
         plt.figure()
-        plt.plot(IM_std,'-o')
+        plt.plot(xp.asnumpy(Sim),'-o')
         plt.grid()
-        plt.title('Interaction matrix standard deviation')
+        plt.title('Interaction matrix eigenvalues')
 
         screen = ssao.get_phasescreen_at_time(0)
         if xp.on_gpu:
