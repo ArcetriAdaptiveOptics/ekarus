@@ -34,7 +34,7 @@ class TurbulenceLayers():
         self._define_start_coordinates_on_phasescreens(mask.shape)
 
 
-    def generate_phase_screens(self, screenSizeInPixels, screenSizeInMeters):
+    def generate_phase_screens(self, screenSizeInPixels, screenSizeInMeters, recompute:bool=False):
         """ Generate or load phase screens 
         
         Parameters
@@ -48,6 +48,8 @@ class TurbulenceLayers():
         self._phs = PhaseScreenGenerator(screenSizeInPixels, screenSizeInMeters, \
                             outerScaleInMeters=self.L0, seed=42)
         try:
+            if recompute is True:
+                raise FileNotFoundError('Recompute is True!')
             self._phs = self._phs.load_normalized_phase_screens(self.savepath)
         except FileNotFoundError:   
             N, Npix = self.nLayers, screenSizeInPixels
