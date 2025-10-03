@@ -1,5 +1,6 @@
 import xupy as xp
 import matplotlib.pyplot as plt
+import numpy as np
 
 from numpy.ma import masked_array
 
@@ -22,8 +23,6 @@ class DeformableMirror():
     def __init__(self):
         self.max_stroke = None
         self.slaving = None
-        # xp = xp
-        # xp.float = xp.float32 if xp.__name__ == 'cupy' else xp.float64
 
 
     def get_position(self):
@@ -119,6 +118,7 @@ class DeformableMirror():
             
         plt.axis('off')
         plt.title(title)
+        plt.colorbar()
         
         return img_rms
     
@@ -158,8 +158,8 @@ class DeformableMirror():
         plt.scatter(x,y, c=pos, s=act_pix_size**2, cmap='hot')
         plt.axis('equal')
         plt.grid()
-        plt.gca().set_xticks(xp.linspace(min(coords[0]),max(coords[0]),5))
-        plt.gca().set_yticks(xp.linspace(min(coords[1]),max(coords[1]),5))
+        plt.gca().set_xticks(np.linspace(min(coords[0]),max(coords[0]),5))
+        plt.gca().set_yticks(np.linspace(min(coords[1]),max(coords[1]),5))
         plt.colorbar(shrink=shrink)
     
 

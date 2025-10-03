@@ -56,7 +56,7 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0):
         
     IFF = np.zeros([len(pix_ids),n_acts])
     for k in range(n_acts):
-        print(f'\rSimulating influence functions: {k+1}/{n_acts}', end='\r', flush=True)
+        print(f'\rSimulating influence functions: {k+1}/{n_acts}', flush=True)
         act_data = np.zeros(n_acts)
         act_data[k] = 1.0
         tps = ThinPlateSpline(alpha=0.0)
@@ -190,13 +190,12 @@ def cube2mat(cube):
     from the image cube """
     
     n_acts = cube.shape[2]
-    valid_len = int(xp.sum(1-cube.mask)/n_acts)
+    valid_len = int(np.sum(1-cube.mask)/n_acts)
 
-    flat_cube = cube.data[xp.invert(cube.mask)]
-    local_IFF = xp.reshape(flat_cube, [valid_len, n_acts])
+    flat_cube = cube.data[np.invert(cube.mask)]
+    local_IFF = np.reshape(flat_cube, [valid_len, n_acts])
 
-    dtype = xp.float
-    IFF = xp.array(local_IFF, dtype=dtype)
+    IFF = xp.array(local_IFF, dtype=xp.float)
     
     return IFF
 
@@ -227,41 +226,41 @@ def getMaskPixelCoords(mask):
 
 def find_master_acts(mask, coords, pix_scale:float = 1.0):
     """ Find the master actuator ids """
+
     nActs = len(coords[0,:])
     act_pix_coords = get_pixel_coords(mask, coords, pix_scale)
     mask_coords = getMaskPixelCoords(mask)
 
-    valid_mask_coords = mask_coords[:,~mask]
+    valid_mask_coords = mask_coords[:,~mask.flatten()]
     dist = lambda xy: xp.sqrt((xy[0]-valid_mask_coords[0])**2 
                               + (xy[1]-valid_mask_coords[1])**2)
     
     master_ids = []
     for i in range(nActs):
-        min_pix_dist = xp.min(dist[act_pix_coords[:,i]])
-        if min_pix_dist < 0.6:
+        min_pix_dist = xp.min(dist(act_pix_coords[:,i]))
+        if min_pix_dist < xp.sqrt(2*0.5):# xp.sqrt(2):
             master_ids.append(i)
     
     master_ids = xp.array(master_ids)
     if len(master_ids) < nActs:
-        print(f'Unobscrued actuators: {len(master_ids)}/{nActs}')
+        print(f'Unobscured actuators: {len(master_ids)}/{nActs}')
     
     return master_ids
 
 
-def get_slaving_m2c(coords, master_ids, slaving_method:str = 'wmean'):
+def get_slaving_m2c(coords, master_ids, slaving_method:str='wmean', p:int=1, d_thr:float=xp.inf):
     """ Compute the slaving matrix """
+
     nActs = len(coords[0,:])
-    nMasters = len(master_ids)
 
     slaved_m2c = xp.zeros([nActs,nActs])
     for master in master_ids:
         slaved_m2c[master,master] = 1
 
     act_ids = xp.arange(nActs)
-    slave_ids = act_ids[~master_ids]
-    # is_slave = xp.ones(nActs, dtype=bool)
-    # is_slave[master_ids] = False
-    # slave_ids = act_ids[is_slave]
+    is_slave = xp.ones(nActs, dtype=bool)
+    is_slave[master_ids] = 0
+    slave_ids = act_ids[is_slave]
 
     master_coords = coords[:,master_ids]
     dist = lambda xy: xp.sqrt((xy[0]-master_coords[0])**2 + (xy[1]-master_coords[1])**2)
@@ -273,15 +272,10 @@ def get_slaving_m2c(coords, master_ids, slaving_method:str = 'wmean'):
 
         case 'wmean':
             for slave in slave_ids:
-                d_slave = dist(coords[:,slave])
-                d_slave /= xp.sum(d_slave) # normalize to 1
-                slaved_m2c[slave,master_ids] = 1-d_slave
-
-        case 'w2mean':
-            for slave in slave_ids:
-                d2_slave = dist(coords[:,slave])**2
-                d2_slave /= xp.sum(d2_slave) # normalize to 1
-                slaved_m2c[slave,master_ids] = 1-d2_slave
+                d_slave = dist(coords[:,slave])**p
+                masters = master_ids[d_slave <= d_thr]
+                d_slave = d_slave[d_slave <= d_thr]
+                slaved_m2c[slave,masters] = 1/d_slave/xp.sum(1/d_slave)
 
         case 'nearest':
             for slave in slave_ids:

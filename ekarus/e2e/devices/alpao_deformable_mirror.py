@@ -5,14 +5,14 @@ import xupy as xp
 
 from ekarus.e2e.devices.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
-# from ekarus.e2e.utils.image_utils import get_circular_mask
+from ekarus.e2e.utils.image_utils import get_circular_mask
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.e2e.utils.root import alpaopath
 
 
 class ALPAODM(DeformableMirror):
 
-    def __init__(self, input, mask, **kwargs):
+    def __init__(self, input, mask=None, **kwargs):
         """
         ALPAO DM constructor
 
@@ -21,9 +21,12 @@ class ALPAODM(DeformableMirror):
         input : int | str
             int: number of actuators of the ALPAO DM.
             str: tracking number of the DM measured iff
+        mask: int | ndarray(bool)
+            int: number of pixels across the mask diameter
+            ndarray(bool): the actual mask as array of booleans
         """
 
-        super().__init__(xp)
+        super().__init__()
 
         self.config = configparser.ConfigParser()
         self.alpaopath = alpaopath
@@ -40,6 +43,7 @@ class ALPAODM(DeformableMirror):
         else:
             raise NotImplementedError(f'Initialization method for {input} not implemented, please pass a data tracking number or the number of actuators')
 
+        print(xp.shape(self.act_coords))
         self.act_pos = xp.zeros(self.Nacts, dtype=xp.float)
         self.surface = self.IFF @ self.act_pos
         self.R, self.U = dmutils.compute_reconstructor(self.IFF)
@@ -47,7 +51,7 @@ class ALPAODM(DeformableMirror):
         self.max_stroke = kwargs['max_stroke'] if 'max_stroke' in kwargs else None
         master_ids = dmutils.find_master_acts(self.mask, self.act_coords, self.pixel_scale)
         if len(master_ids) < self.Nacts:
-            self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids)
+            self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, p=2, d_thr=2*self.pupil_size/self.Nacts)
             self.master_ids = master_ids
 
 
@@ -111,8 +115,10 @@ class ALPAODM(DeformableMirror):
         self.pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
         # Define mask & pixel scale
-        self.mask = (mask).astype(bool) 
-        # self.mask = get_circular_mask((pupilDiamInPixels,pupilDiamInPixels),pupilDiamInPixels//2)
+        if isinstance(mask, int):
+            self.mask = xp.array(get_circular_mask((mask,mask),mask//2),dtype=bool)
+        else:
+            self.mask = (mask).astype(bool) 
         pix_coords = dmutils.getMaskPixelCoords(self.mask)
         xx = pix_coords[0,~self.mask.flatten()] - max(pix_coords[0,:])/2
         yy = pix_coords[1,~self.mask.flatten()] - max(pix_coords[1,:])/2
@@ -136,6 +142,7 @@ class ALPAODM(DeformableMirror):
             coords[0] -= (max(coords[0])-min(coords[0]))/2
             coords[1] -= (max(coords[1])-min(coords[1]))/2
             radii = xp.sqrt(coords[0]**2+coords[1]**2)/2
+            radii *= 1.02 # increase pupil by 2% to make sure all actuators fit
             self.act_coords = xp.asarray(coords*self.pupil_size/2/(2*max(radii)))
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
@@ -150,7 +157,7 @@ class ALPAODM(DeformableMirror):
 
 
 
-    def _init_ALPAO_from_tn_data(self, tn, mask):
+    def _init_ALPAO_from_tn_data(self, tn, mask=None):
         """
         Get the ALPAO DM mask and actuator coordinates from the interaction matrix.
 
@@ -178,7 +185,7 @@ class ALPAODM(DeformableMirror):
         pupil_mask = (pupil_mask).astype(bool)
         pupil_mask = 1-pupil_mask
         pix_coords = dmutils.getMaskPixelCoords(pupil_mask)
-        self.mask = (pupil_mask).astype(bool)
+        self.mask = xp.array(pupil_mask).astype(bool)
         xx = pix_coords[0,~self.mask.flatten()] - max(pix_coords[0,:])/2
         yy = pix_coords[1,~self.mask.flatten()] - max(pix_coords[1,:])/2
         mask_diameter = xp.sqrt(xx**2+yy**2)*2
@@ -189,8 +196,8 @@ class ALPAODM(DeformableMirror):
         # Derive IFFs
         cube_mask = xp.tile(pupil_mask,self.Nacts)
         cube_mask = xp.reshape(cube_mask, IM.shape, order = 'F')
-        masked_cube = np.ma.masked_array(IM,cube_mask)
-        self.IM = dmutils.cube2mat(masked_cube,xp=xp)
+        masked_cube = np.ma.masked_array(xp.asnumpy(IM),xp.asnumpy(cube_mask))
+        self.IM = dmutils.cube2mat(masked_cube)
         self.IFF = self.IM @ xp.linalg.inv(self.CMat)
 
         self.act_coords, self._iff_act_pix_coords = dmutils.get_coords_from_IFF(self.IFF, self.mask, use_peak = True)
