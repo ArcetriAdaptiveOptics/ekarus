@@ -34,20 +34,20 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=100)
     phi = xp.linspace(0.0, xp.pi/2, 3)
     sig_beforeDM = xp.zeros([len(phi),ssao.Nits])
     for k in range(len(phi)):
-        # pup_ssao = PupilShift(tn)
-        # pup_ssao.initialize_turbulence()
-        # pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-        # pup_ssao.sc.load_reconstructor(Rec,m2c)
+        pup_ssao = PupilShift(tn)
+        pup_ssao.initialize_turbulence()
+        pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        pup_ssao.sc.load_reconstructor(Rec,m2c)
         wedgeX = wedgeAmp * xp.cos(phi[k])
         wedgeY = wedgeAmp * xp.sin(phi[k])
         print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f}) pixels')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
         save_str = f'{mmWedgeAmp*1e+3:1.0f}um_ang{phi[k]*180/xp.pi:1.0f}_beforeDM_'
-        sig_beforeDM[k,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
+        sig_beforeDM[k,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
         # pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
         if wedgeAmp>1.0:
-            ccd_frame = ssao.ccd.last_frame
+            ccd_frame = pup_ssao.ccd.last_frame
             plt.figure()
             myimshow(ccd_frame/xp.max(ccd_frame)-subap_masks,cmap='twilight',title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nBefore DM')
             # raise ValueError('Stop')
@@ -55,20 +55,20 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=100)
     print('Testing pupil shifts after DM')
     sig_afterDM = xp.zeros([len(phi),ssao.Nits])
     for k in range(len(phi)):
-        # pup_ssao = PupilShift(tn)
-        # pup_ssao.initialize_turbulence()
-        # pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-        # pup_ssao.sc.load_reconstructor(Rec,m2c)
+        pup_ssao = PupilShift(tn)
+        pup_ssao.initialize_turbulence()
+        pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        pup_ssao.sc.load_reconstructor(Rec,m2c)
         wedgeX = wedgeAmp * xp.cos(phi[k])
         wedgeY = wedgeAmp * xp.sin(phi[k])
         print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f}) pixels')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
         save_str = f'{mmWedgeAmp*1e+3:1.0f}um_ang{phi[k]*180/xp.pi:1.0f}_afterDM_'
-        sig_afterDM[k,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
+        sig_afterDM[k,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
         # pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
         if wedgeAmp>1.0:
-            ccd_frame = ssao.ccd.last_frame
+            ccd_frame = pup_ssao.ccd.last_frame
             plt.figure()
             myimshow(ccd_frame/xp.max(ccd_frame)-subap_masks,cmap='twilight',title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nAfter DM')
 

@@ -174,13 +174,13 @@ class HighLevelAO():
             for i in range(Nmodes):
                 print(f'\rMode {i+1}/{Nmodes}', end='\r', flush=True)
                 amp = amps[i]
-                # mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
-                if self.dm.slaving is not None:
-                    dm_command = self.dm.R[:,self.dm.visible_pix_ids] @ MM[i,:]*amp
-                    mirror_cmd = self.dm.slaving @ dm_command[self.dm.master_ids]
-                else:
-                    mirror_cmd = self.dm.R @ MM[i,:]*amp
-                mode_phase = reshape_on_mask(self.dm.IFF @ mirror_cmd, self.dm.mask)
+                mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
+                # if self.dm.slaving is not None:
+                #     dm_command = self.dm.R[:,self.dm.visible_pix_ids] @ MM[i,:]*amp
+                #     mirror_cmd = self.dm.slaving @ dm_command[self.dm.master_ids]
+                # else:
+                #     mirror_cmd = self.dm.R @ MM[i,:]*amp
+                # mode_phase = reshape_on_mask(self.dm.IFF @ mirror_cmd, self.dm.mask)
                 input_field = xp.exp(1j*mode_phase) * electric_field_amp
                 push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
                 input_field = xp.conj(input_field)
@@ -281,14 +281,10 @@ class HighLevelAO():
 
         # Size checks
         if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
-            raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f} \
-                              separated by {subapPixSep:1.0f} cannot fit on a \
-                            {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
+            raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f}  separated by {subapPixSep:1.0f} cannot fit on a  {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
         
         if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
-            raise ValueError(f'Pupil center in the subquadrant is \
-                            {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} \
-                            meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
+            raise ValueError(f'Pupil center in the subquadrant is {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
 
         sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
         sc = SlopeComputer(pyr, det, sc_pars)
