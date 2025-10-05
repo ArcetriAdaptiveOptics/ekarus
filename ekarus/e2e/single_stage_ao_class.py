@@ -107,7 +107,8 @@ class SingleStageAO(HighLevelAO):
             residual_phase = input_phase - self.dm.get_surface()
             
             if i % int(self.sc.dt/self.dt) == 0:
-                dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, use_diagonal=use_diagonal, starMagnitude= starMagnitude)
+                dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, slaving=self.dm.slaving,
+                                                                  use_diagonal=use_diagonal, starMagnitude=starMagnitude)
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 

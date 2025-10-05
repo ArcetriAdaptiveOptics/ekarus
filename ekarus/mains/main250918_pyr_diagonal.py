@@ -27,28 +27,7 @@ def main(tn:str='example_pyr_diag'):
     diag_ssao.sc.load_reconstructor(Rec_diag,m2c)
 
     print('Running the loop ...')
-    # try:
-    #     if ssao.recompute is True:
-    #         raise FileNotFoundError('Recompute is True')
-    #     m2rad = 2 * xp.pi / ssao.pyr.lambdaInM
-    #     masked_input_phases, _, masked_residual_phases, _, _, _ = ssao.load_telemetry_data()
-    #     _, _, diag_masked_residual_phases, _, _, _ = ssao.load_telemetry_data(save_prefix='diag_')
-
-    #     residual_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-    #     input_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-    #     diag_residual_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-    #     # diag_input_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-    #     for i in range(ssao.Nits):
-    #         diag_ma_res_phase = diag_masked_residual_phases[i,:,:]
-    #         diag_residual_phases[i,:] = diag_ma_res_phase[~ssao.cmask]
-    #         ma_res_phase = masked_residual_phases[i,:,:]
-    #         residual_phases[i,:] = ma_res_phase[~ssao.cmask]
-    #         ma_in_phase = masked_input_phases[i,:,:]
-    #         input_phases[i,:] = ma_in_phase[~ssao.cmask]
-    #     diag_sig2 = xp.std(diag_residual_phases * m2rad, axis=-1) ** 2
-    #     sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
-    #     input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
-    # except:
+    
     sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
     diag_sig2, _ = diag_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, use_diagonal=True, save_prefix='diag_')
 
@@ -81,7 +60,7 @@ def main(tn:str='example_pyr_diag'):
         # rec_modes = rec_modes.get()
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
-    tvec = tvec.get() if xp.on_gpu else tvec.copy()
+    tvec = xp.asnumpy(tvec)
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(tvec,input_sig2,'-o',label='open loop')
     plt.plot(tvec,sig2,'-o',label='closed loop')

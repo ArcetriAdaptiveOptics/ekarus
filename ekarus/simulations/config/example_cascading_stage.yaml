@@ -4,22 +4,22 @@ DM1:
 
 PYR1:
   oversampling: 4 #5
-  lambdaInM: 1000e-9            # [m] sensor wavelength
+  lambdaInM: 800e-9            # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
   subapPixSize: 39.5            # subaperture diameter in pix
-  subapPixSep: 8                # pixel distance between subaps
+  subapPixSep: 16                # pixel distance between subaps
 
 CCD1:
   detector_shape: [160,160]     # detector pixel size
-  RON: 1.0                      # readout noise in e-
-  quantum_efficiency: 0.7       # detector quantum efficiency
+  RON: 0.3                      # readout noise in e-
+  quantum_efficiency: 0.9       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER1:
   loopFrequencyInHz: 1000     
   integratorGain: 0.4         # loop integrator gain
   delay: 5                    # loop delay in steps
-  nModes2Correct: 468         # number of reconstructor modes
+  nModes2Correct: 415         # number of reconstructor modes
   ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
   modulationInLambdaOverD: 3.0  # modulation amplitude
 
@@ -29,39 +29,41 @@ DM2:
 
 PYR2:
   oversampling: 4
-  lambdaInM: 800e-9             # [m] sensor wavelength
+  lambdaInM: 600e-9             # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
   subapPixSize: 39.5            # subaperture diameter in pix
   subapPixSep: 20               # pixel distance between subaps
 
 CCD2:
   detector_shape: [160,160]       # detector pixel size
-  RON: 1.0                      # readout noise in e-
-  quantum_efficiency: 0.7       # detector quantum efficiency
+  RON: 0.3                      # readout noise in e-
+  quantum_efficiency: 0.9       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER2:
   loopFrequencyInHz: 4000     
   integratorGain: 0.3         # loop integrator gain
   delay: 2                    # loop delay in steps
-  nModes2Correct: 240         # number of reconstructor modes
+  nModes2Correct: 218         # number of reconstructor modes
   ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
   modulationInLambdaOverD: 0.0  # modulation amplitude
 
 
 TELESCOPE:
   pupilSizeInM: 1.8         # [m] telescope diameter
+  centerObscuration: 0.6    # [m] central obscuration diameter
   pupilSizeInPixels: 160    # pixels across the pupil diameter
   throughput: 0.11          # accounting for beam splitter
 
 ATMO:
   outerScaleInM: 25         # [m]
-  r0: [12e-2, 10e-2, 10e-2] # [m]
-  windSpeed: [4, 6, 10]     # [m/s]
-  windAngle: [-120, 45, 0]  # [deg] CCW from East
+  r0: [8e-2, 6e-2, 12e-2, 10e-2, 10e-2] # [m]
+  windSpeed: [6, 6, 8, 8, 10]     # [m/s]
+  windAngle: [-120, 30, 45, 65, 0]  # [deg] CCW from East
+  recompute: False
 
 LOOP:
-  nIterations: 100
+  nIterations: 500
   starMagnitude: 0.0
   simFreqHz: 4000          # simulation frequency in Hz
   recompute: False         # if False, any calibration data saved from 

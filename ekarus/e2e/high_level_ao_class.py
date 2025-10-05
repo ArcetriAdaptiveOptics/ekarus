@@ -114,7 +114,7 @@ class HighLevelAO():
             IFFs = dm.IFF.copy()
             if dm.slaving is not None: # slaving
                 IFFs = remap_on_new_mask(dm.IFF, dm.mask, dm.pupil_mask)
-                IFFs = IFFs[:,self.dm.master_ids]
+                IFFs = IFFs[:,dm.master_ids]
                 print(f'SLAVING: downsized KL from {dm.IFF.shape} to {IFFs.shape}')
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes,
@@ -302,7 +302,7 @@ class HighLevelAO():
 
 
     
-    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, use_diagonal:bool=False, starMagnitude:float=None):
+    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, use_diagonal:bool=False, starMagnitude:float=None, slaving=None):
         """
         Performs a single iteration of the AO loop.
         Parameters
@@ -338,8 +338,8 @@ class HighLevelAO():
         cmd /= m2rad # convert to meters
         modes /= m2rad  # convert to meters
 
-        if self.dm.slaving is not None:
-            cmd = self.dm.slaving @ cmd
+        if slaving is not None:
+            cmd = slaving @ cmd
         dm_cmd += cmd * slope_computer.intGain
 
         return dm_cmd, modes

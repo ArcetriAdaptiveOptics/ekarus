@@ -69,17 +69,14 @@ def main(tn:str='example_nested_stage', show:bool=False):
             cascao.dm2.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
 
         IM1 = myfits.read_fits(op.join(cascao.savecalibpath,'SC1_IM.fits'))
-        IM1_std = xp.std(IM1,axis=0)
+        _,IM1_eig,_ = xp.asnumpy(xp.linalg.svd(IM1,full_matrices=False))
         IM2 = myfits.read_fits(op.join(cascao.savecalibpath,'SC2_IM.fits'))
-        IM2_std = xp.std(IM2,axis=0)
-        if xp.on_gpu:
-            IM1_std = IM1_std.get()
-            IM2_std = IM2_std.get()
+        _,IM2_eig,_ = xp.asnumpy(xp.linalg.svd(IM2,full_matrices=False))
         plt.figure()
-        plt.plot(IM1_std,'-o')
-        plt.plot(IM2_std,'-o')
+        plt.plot(IM1_eig,'-o')
+        plt.plot(IM2_eig,'-o')
         plt.grid()
-        plt.title('Interaction matrix standard deviation')
+        plt.title('Interaction matrix singular values')
 
         screen = cascao.get_phasescreen_at_time(0.5)
         if xp.on_gpu:
@@ -98,8 +95,7 @@ def main(tn:str='example_nested_stage', show:bool=False):
         # rec_in_modes = rec_in_modes.get()
         # rec_out_modes = rec_out_modes.get()
 
-    tvec = xp.arange(cascao.Nits)*cascao.dt*1e+3
-    tvec = tvec.get() if xp.on_gpu else tvec.copy()
+    tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
     plt.plot(tvec,input_sig2,'-o',label='open loop')
     plt.plot(tvec,dm_inner_sig2,'-o',label='after DM1 (inner loop)')

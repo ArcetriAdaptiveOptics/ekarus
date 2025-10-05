@@ -176,7 +176,7 @@ class PupilShift(HighLevelAO):
 
             residual_phase, dm_cmds[i,:], modes = self.perform_loop_iteration(input_phase, dm_cmd, self.sc,
                                                               tilt_before_DM, tilt_after_DM,
-                                                              starMagnitude)
+                                                              starMagnitude, slaving=self.dm.slaving)
 
             res_phase_rad2[i] = self.phase_rms(residual_phase[xp.abs(residual_phase)>0.0]*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
@@ -242,8 +242,8 @@ class PupilShift(HighLevelAO):
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
 
-        in_err_rad2 = np.sum((atmo_phase_in_rad-np.mean(atmo_phase_in_rad))**2)/len(atmo_phase_in_rad)
-        res_err_rad2 = np.sum((res_phase_in_rad-np.mean(res_phase_in_rad))**2)/len(res_phase_in_rad)
+        in_err_rad2 = xp.asnumpy(self.phase_rms(atmo_phase_in_rad)**2)
+        res_err_rad2 = xp.asnumpy(self.phase_rms(res_phase_in_rad)**2)
 
         psf, pixelSize = self._psf_from_frame(xp.array(ma_res_phases[frame_id]), lambdaRef)
         cmask = self.cmask.get() if xp.on_gpu else self.cmask.copy()

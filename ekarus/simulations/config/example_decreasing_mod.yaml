@@ -17,7 +17,7 @@ CCD:
 
 SLOPE.COMPUTER:
   loopFrequencyInHz: 1500     
-  integratorGain: 0.8           # loop integrator gain
+  integratorGain: 0.9           # loop integrator gain
   delay: 2                      # loop delay in steps
   nModes2Correct: 415           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # TBI
@@ -36,8 +36,8 @@ ATMO:
   windAngle: [-120, 45, 0]  # [deg] CCW from East
 
 LOOP:
-  nIterations: 200
+  nIterations: 500
   starMagnitude: 1.0
   simFreqHz: 1500          # simulation frequency in Hz
-  recompute: True         # if False, any calibration data saved from 
+  recompute: False         # if False, any calibration data saved from 
                            # previous runs is loaded rather than recomputed

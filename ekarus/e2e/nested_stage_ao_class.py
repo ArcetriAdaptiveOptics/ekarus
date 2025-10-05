@@ -53,13 +53,13 @@ class NestedStageAO(HighLevelAO):
 
         dm_pars = self._config.read_dm_pars('DM.in')
         # self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm1 = ALPAODM(dm_pars["Nacts"], mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm1 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
 
         self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR.out','CCD.out','SLOPE.COMPUTER.out')
 
         dm_pars = self._config.read_dm_pars('DM.out')
         # self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm2 = ALPAODM(dm_pars["Nacts"], mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm2 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
   
         
 
@@ -88,10 +88,11 @@ class NestedStageAO(HighLevelAO):
         self.dm2.surface -= self.dm2.surface  # make sure DM is flat
 
         # Define variables
-        mask1_len = int(xp.sum(1 - self.dm1.mask))
+        mask_len = int(xp.sum(1 - self.cmask))
+        dm1_mask_len = int(xp.sum(1 - self.dm1.mask))
         dm1_cmds = xp.zeros([self.Nits, self.dm1.Nacts])
 
-        mask2_len = int(xp.sum(1 - self.dm2.mask))
+        dm2_mask_len = int(xp.sum(1 - self.dm2.mask))
         dm2_cmds = xp.zeros([self.Nits, self.dm2.Nacts])
 
         res_in_phase_rad2 = xp.zeros(self.Nits)
@@ -99,13 +100,13 @@ class NestedStageAO(HighLevelAO):
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
         if save_prefix is not None:
-            input_phases = xp.zeros([self.Nits, mask1_len])
-            dm1_phases = xp.zeros([self.Nits, mask1_len])
-            residual1_phases = xp.zeros([self.Nits, mask1_len])
+            input_phases = xp.zeros([self.Nits, mask_len])
+            dm1_phases = xp.zeros([self.Nits, dm1_mask_len])
+            residual1_phases = xp.zeros([self.Nits, mask_len])
             ccd1_images = xp.zeros([self.Nits, self.ccd1.detector_shape[0], self.ccd1.detector_shape[1]])
             rec1_modes = xp.zeros([self.Nits,self.sc1.Rec.shape[0]])
-            dm2_phases = xp.zeros([self.Nits, mask2_len])
-            residual2_phases = xp.zeros([self.Nits, mask2_len])
+            dm2_phases = xp.zeros([self.Nits, dm2_mask_len])
+            residual2_phases = xp.zeros([self.Nits, mask_len])
             ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]])
             rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]])
 
@@ -124,16 +125,16 @@ class NestedStageAO(HighLevelAO):
             if i >= self.sc1.delay:
                 self.dm1.set_position(dm1_cmds[i - self.sc1.delay, :], absolute=True)
 
-            residual2_phase = input_phase - self.dm2.surface
-            residual_phase = residual2_phase - self.dm1.surface
+            residual2_phase = input_phase - self.dm2.get_surface()
+            residual_phase = residual2_phase - self.dm1.get_surface()
 
             if i % int(self.sc1.dt/self.dt) == 0:
-                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, dm1_cmd, self.sc1, starMagnitude)
+                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, dm1_cmd, self.sc1, starMagnitude, slaving=self.dm1.slaving)
             else:
                 dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
 
             if i % int(self.sc2.dt/self.dt) == 0:
-                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, dm2_cmd, self.sc2, starMagnitude)
+                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, dm2_cmd, self.sc2, starMagnitude, slaving=self.dm2.slaving)
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
@@ -156,17 +157,19 @@ class NestedStageAO(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
+            dm1_mask_cube = xp.asnumpy(xp.stack([self.dm1.mask for _ in range(self.Nits)]))
+            dm2_mask_cube = xp.asnumpy(xp.stack([self.dm2.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm1_phases = xp.stack([reshape_on_mask(dm1_phases[i, :], self.cmask)for i in range(self.Nits)])
+            dm1_phases = xp.stack([reshape_on_mask(dm1_phases[i, :], self.dm1.mask)for i in range(self.Nits)])
             res_out_phases = xp.stack([reshape_on_mask(residual1_phases[i, :], self.cmask)for i in range(self.Nits)])
-            dm2_phases = xp.stack([reshape_on_mask(dm2_phases[i, :], self.cmask)for i in range(self.Nits)])
+            dm2_phases = xp.stack([reshape_on_mask(dm2_phases[i, :], self.dm2.mask)for i in range(self.Nits)])
             res_in_phases = xp.stack([reshape_on_mask(residual2_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
-            ma_dm1_phases = masked_array(xp.asnumpy(dm1_phases), mask=mask_cube)
+            ma_dm1_phases = masked_array(xp.asnumpy(dm1_phases), mask=dm1_mask_cube)
             ma_res_out_phases = masked_array(xp.asnumpy(res_out_phases), mask=mask_cube)
-            ma_dm2_phases = masked_array(xp.asnumpy(dm2_phases), mask=mask_cube)
+            ma_dm2_phases = masked_array(xp.asnumpy(dm2_phases), mask=dm2_mask_cube)
             ma_res_in_phases = masked_array(xp.asnumpy(res_in_phases), mask=mask_cube)
 
             data_dict = {}
@@ -214,9 +217,9 @@ class NestedStageAO(HighLevelAO):
         res_out_phase_in_rad = res_out_phases[frame_id].data[~res_out_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_in_phase_in_rad = res_in_phases[frame_id].data[~res_in_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
 
-        in_err_rad2 = np.sum((atmo_phase_in_rad-np.mean(atmo_phase_in_rad))**2)/len(atmo_phase_in_rad)
-        res_out_err_rad2 = np.sum((res_out_phase_in_rad-np.mean(res_out_phase_in_rad))**2)/len(res_out_phase_in_rad)
-        res_in_err_rad2 = np.sum((res_in_phase_in_rad-np.mean(res_in_phase_in_rad))**2)/len(res_in_phase_in_rad)
+        in_err_rad2 = xp.asnumpy(self.phase_rms(atmo_phase_in_rad)**2)
+        res_out_err_rad2 = xp.asnumpy(self.phase_rms(res_out_phase_in_rad)**2)
+        res_in_err_rad2 = xp.asnumpy(self.phase_rms(res_in_phase_in_rad)**2)
 
         psf_out, pixelSize = self._psf_from_frame(xp.array(res_out_phases[frame_id]), lambdaRef)
         psf_in, pixelSize = self._psf_from_frame(xp.array(res_in_phases[frame_id]), lambdaRef)
