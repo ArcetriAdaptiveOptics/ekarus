@@ -4,22 +4,22 @@ DM:
 
 PYR:
   oversampling: 4           # oversampling for PSF computation
-  lambdaInM: 1000e-9        # [m] sensor wavelength
-  bandWidthInM: 100e-9        # [m] sensor band amplitude
-  subapPixSize: 63.5        # subaperture diameter in pix
-  subapPixSep: 16           # pixel distance between subaps
+  lambdaInM: 750e-9        # [m] sensor wavelength
+  bandWidthInM: 0e-9        # [m] sensor band amplitude
+  subapPixSize: 23.5        # subaperture diameter in pix
+  subapPixSep: 8           # pixel distance between subaps
 
 CCD:
-  detector_shape: [256,256]    # detector pixel size
-  RON: 1.0                      # readout noise in e-
-  quantum_efficiency: 0.7       # detector quantum efficiency
+  detector_shape: [96,96]       # detector pixel size
+  RON: 0.3                      # readout noise in e-
+  quantum_efficiency: 0.9       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER:
   loopFrequencyInHz: 1500     
-  integratorGain: 0.5           # loop integrator gain
+  integratorGain: 0.85          # loop integrator gain
   delay: 2                      # loop delay in steps
-  nModes2Correct: 400           # number of reconstructor modes
+  nModes2Correct: 415           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # TBI
   modulationInLambdaOverD: 3.0
 
@@ -30,15 +30,15 @@ TELESCOPE:
   throughput: 0.11          # accounting for beam splitter
 
 ATMO:
-  outerScaleInM: 25         # [m]
-  r0: [10e-2]               # [m]
-  windSpeed: [5]            # [m/s]
-  windAngle: [0]            # [deg] CCW from East
+  outerScaleInM: 25          # [m]
+  r0: [10e-2,12e-2,14e-2]    # [m]
+  windSpeed: [8,6,6]         # [m/s]
+  windAngle: [20,30,-125]    # [deg] CCW from East
   recompute: False
 
 LOOP:
-  nIterations: 100
-  starMagnitude: 0.0
+  nIterations: 200
+  starMagnitude: 1.0
   simFreqHz: 1500          # simulation frequency in Hz
   recompute: True         # if False, any calibration data saved from 
                            # previous runs is loaded rather than recomputed

@@ -62,8 +62,8 @@ class DeformableMirror():
         if absolute:
             cmd_amps -= self.act_pos
 
-        if self.slaving is not None:
-            cmd_amps = self.slaving @ cmd_amps
+        # if self.slaving is not None:
+        #     cmd_amps = self.slaving @ cmd_amps
 
         # Update positions and shape
         self.act_pos += cmd_amps
@@ -105,10 +105,10 @@ class DeformableMirror():
         
         mask_ids = xp.arange(xp.size(self.mask))
 
-        # if xp.size(surf2plot) < xp.sum(1-self.mask):
-        #     pix_ids = self.visible_pix_ids
-        # else:
-        pix_ids = mask_ids[~(self.mask).flatten()]
+        if xp.size(surf2plot) < xp.sum(1-self.mask):
+            pix_ids = mask_ids[~(self.pupil_mask).flatten()]
+        else:
+            pix_ids = mask_ids[~(self.mask).flatten()]
             
         image = xp.zeros(xp.size(self.mask), dtype = xp.float)
         image[pix_ids] = surf2plot

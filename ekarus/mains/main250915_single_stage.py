@@ -21,18 +21,20 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         if gain_list is not None:
             gain_vec = xp.array(gain_list)
         else:
-            gain_vec = xp.arange(1,10)/10
+            gain_vec = xp.arange(1,11)/10
 
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence()
-    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
     ssao.sc.load_reconstructor(Rec,m2c)
 
     lambdaRef = ssao.pyr.lambdaInM
 
     if optimize_gain is True:
+        it_ss = ssao.Nits//2
+        print(f'Computing mean SR after {it_ss:1.0f} iterations')
         N = len(gain_vec)
         SR_vec = xp.zeros(N)
         for jj in range(N):
@@ -44,7 +46,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
             # ssao.sc.load_reconstructor(Rec,m2c)
             ssao.sc.intGain = g
             err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
-            SR_vec[jj] = xp.mean(xp.exp(-err2[40:]))
+            SR_vec[jj] = xp.mean(xp.exp(-err2[it_ss:]))
 
         best_gain = gain_vec[xp.argmax(SR_vec)]
         print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
@@ -96,9 +98,9 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
             plt.subplot(4,N,i+1+N)
             ssao.dm.plot_surface(KL[i+N,:],title=f'KL Mode {i+N}')
             plt.subplot(4,N,i+1+N*2)
-            ssao.dm.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-i-1-N}')
+            ssao.dm.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-2*N+i}')
             plt.subplot(4,N,i+1+N*3)
-            ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
+            ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-N+i}')
 
         IM = myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits'))
         # IM_std = xp.std(IM,axis=0)
@@ -115,6 +117,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
+    ssao.sig2 = sig2
 
     # masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
     # oversampling = 8

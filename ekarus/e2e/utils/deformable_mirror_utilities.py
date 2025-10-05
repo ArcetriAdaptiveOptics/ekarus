@@ -238,7 +238,7 @@ def find_master_acts(mask, coords, pix_scale:float = 1.0):
     master_ids = []
     for i in range(nActs):
         min_pix_dist = xp.min(dist(act_pix_coords[:,i]))
-        if min_pix_dist < xp.sqrt(2*0.5):# xp.sqrt(2):
+        if min_pix_dist <= 1.0:# xp.sqrt(2):
             master_ids.append(i)
     
     master_ids = xp.array(master_ids)
@@ -285,6 +285,8 @@ def get_slaving_m2c(coords, master_ids, slaving_method:str='wmean', p:int=1, d_t
         case _:
             raise NotImplementedError(f"{slaving_method} is not an available slaving method.\
                                        Available methods are: 'zero', 'nearest', 'wmean', 'w2mean'")
+        
+    slaved_m2c = slaved_m2c[:,master_ids]
 
     return slaved_m2c
     

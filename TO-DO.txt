@@ -2,8 +2,8 @@ IMPORTANT:
 Test double/single precision
 Fix TestDM.ipynb
 Clean up mains (IM eigvals)
+Implement Cn2 profile in config
 
-Slaving (KL masking)
 Segmented hexagonal masks
 U-net transfer learning
 
@@ -15,11 +15,10 @@ Shack Hartmann WFS
 Remove xupy (cupy) dependency
 Remove arte dependency
 
-Implement tps and tms
 Control Filter Class ('leaky' integrator)
 
 
 CODING/EASE-OF_USE:
 Documentation (!!!)
 Restore Circular Mask
-plot_frame and plot_results
+plot_results and show_plots in mains

@@ -53,18 +53,12 @@ class ALPAODM(DeformableMirror):
         valid_ids = xp.arange(xp.sum(1-self.mask))
         master_ids = dmutils.find_master_acts(self.pupil_mask, self.act_coords, self.pixel_scale)
         if len(master_ids) < self.Nacts: # slaving
-            self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, p=2, d_thr=2*self.pupil_size/self.Nacts)
+            self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, p=1, d_thr=2*self.pupil_size/self.Nacts)
             self.master_ids = master_ids
             valid_ids = xp.arange(xp.sum(1-self.mask))
             valid_ids_2d = reshape_on_mask(valid_ids, self.mask)
             self.visible_pix_ids = (valid_ids_2d[~self.pupil_mask]).astype(int)
 
-
-    def enslave_cmd(self, cmd, max_cmd: float = 0.9):
-        """ DM utils slaving function wrapper """
-
-        slaved_cmd = dmutils.slaving(self.act_coords, cmd, slaving_method = 'interp', cmd_thr = max_cmd)
-        return slaved_cmd
 
 
     @staticmethod
@@ -149,7 +143,7 @@ class ALPAODM(DeformableMirror):
             coords[0] -= (max(coords[0])-min(coords[0]))/2
             coords[1] -= (max(coords[1])-min(coords[1]))/2
             radii = xp.sqrt(coords[0]**2+coords[1]**2)/2
-            radii *= 1.02 # increase pupil by 2% to make sure all actuators fit
+            radii *= 1.05 # increase pupil by 2% to make sure all actuators fit
             self.act_coords = xp.asarray(coords*self.pupil_size/2/(2*max(radii)))
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 

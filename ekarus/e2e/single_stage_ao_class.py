@@ -29,6 +29,7 @@ class SingleStageAO(HighLevelAO):
             "ccd_frames",
             "reconstructor_modes",
             "dm_commands",
+            "rms2_residual"
         ]
 
         self._initialize_devices()
@@ -143,6 +144,7 @@ class SingleStageAO(HighLevelAO):
                     detector_images,
                     rec_modes,
                     dm_cmds,
+                    res_phase_rad2,
                 ],
             ):
                 data_dict[key] = value
@@ -168,13 +170,13 @@ class SingleStageAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
 
-        in_err_rad2 = np.sum((atmo_phase_in_rad-np.mean(atmo_phase_in_rad))**2)/len(atmo_phase_in_rad)
-        res_err_rad2 = np.sum((res_phase_in_rad-np.mean(res_phase_in_rad))**2)/len(res_phase_in_rad)
+        in_err_rad2 = xp.asnumpy(self.phase_rms(atmo_phase_in_rad)**2)
+        res_err_rad2 = xp.asnumpy(self.phase_rms(res_phase_in_rad)**2)
 
         psf, pixelSize = self._psf_from_frame(xp.array(ma_res_phases[frame_id]), lambdaRef)
         cmask = self.cmask.get() if xp.on_gpu else self.cmask.copy()

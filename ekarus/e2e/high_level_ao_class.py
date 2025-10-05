@@ -111,16 +111,24 @@ class HighLevelAO():
             r0s = self.atmo_pars['r0']
             L0 = self.atmo_pars['outerScaleInM']
             r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
-            KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
-                self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
-                oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
-            hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
+            IFFs = dm.IFF.copy()
+            if dm.slaving is not None: # slaving
+                IFFs = remap_on_new_mask(dm.IFF, dm.mask, dm.pupil_mask)
+                IFFs = IFFs[:,self.dm.master_ids]
+                print(f'SLAVING: downsized KL from {dm.IFF.shape} to {IFFs.shape}')
+            KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
+                self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes,
+                oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)            
+            # KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
+            #     self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
+            #     oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
             # if dm.slaving is not None: # slaving
             #     old_shape = KL.shape
             #     KL = remap_on_new_mask(KL, dm.mask, dm.pupil_mask)
             #     print(f'SLAVING: downsized KL from {old_shape} to {KL.shape}')
-            myfits.save_fits(KL_path, KL, hdr_dict)
+            hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
             myfits.save_fits(m2c_path, m2c, hdr_dict)
+            myfits.save_fits(KL_path, KL, hdr_dict)
         return KL, m2c
     
 
@@ -166,7 +174,10 @@ class HighLevelAO():
             for i in range(Nmodes):
                 print(f'\rMode {i+1}/{Nmodes}', end='\r', flush=True)
                 amp = amps[i]
-                mode_phase = reshape_on_mask(MM[i,:]*amp, self.dm.mask) #self.cmask) #
+                # mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
+                dm_command = self.dm.R[:,self.dm.visible_pix_ids] @ MM[i,:]*amp
+                slaved_cmd = self.dm.slaving @ dm_command[self.dm.master_ids]
+                mode_phase = reshape_on_mask(self.dm.IFF @ slaved_cmd, self.dm.mask)
                 input_field = xp.exp(1j*mode_phase) * electric_field_amp
                 push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
                 input_field = xp.conj(input_field)
@@ -203,6 +214,7 @@ class HighLevelAO():
         L0 = self.atmo_pars['outerScaleInM']
         windSpeeds = self.atmo_pars['windSpeed']
         windAngles = self.atmo_pars['windAngle']
+        print(f'Fried parameter is: {(1/xp.sum(r0s**(-5/3)))**(3/5)*1e+2:1.1f} [cm]')
         try:
             recompute_atmo_screens = self.atmo_pars['recompute']
         except KeyError:
@@ -323,9 +335,13 @@ class HighLevelAO():
         modes = slope_computer.Rec @ slopes
         # modes *= slope_computer.modal_gains
         cmd = slope_computer.m2c @ modes
-        
-        dm_cmd += cmd * slope_computer.intGain / m2rad
+
+        cmd /= m2rad # convert to meters
         modes /= m2rad  # convert to meters
+
+        if self.dm.slaving is not None:
+            cmd = self.dm.slaving @ cmd
+        dm_cmd += cmd * slope_computer.intGain
 
         return dm_cmd, modes
 
