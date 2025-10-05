@@ -175,9 +175,12 @@ class HighLevelAO():
                 print(f'\rMode {i+1}/{Nmodes}', end='\r', flush=True)
                 amp = amps[i]
                 # mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
-                dm_command = self.dm.R[:,self.dm.visible_pix_ids] @ MM[i,:]*amp
-                slaved_cmd = self.dm.slaving @ dm_command[self.dm.master_ids]
-                mode_phase = reshape_on_mask(self.dm.IFF @ slaved_cmd, self.dm.mask)
+                if self.dm.slaving is not None:
+                    dm_command = self.dm.R[:,self.dm.visible_pix_ids] @ MM[i,:]*amp
+                    mirror_cmd = self.dm.slaving @ dm_command[self.dm.master_ids]
+                else:
+                    mirror_cmd = self.dm.R @ MM[i,:]*amp
+                mode_phase = reshape_on_mask(self.dm.IFF @ mirror_cmd, self.dm.mask)
                 input_field = xp.exp(1j*mode_phase) * electric_field_amp
                 push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
                 input_field = xp.conj(input_field)

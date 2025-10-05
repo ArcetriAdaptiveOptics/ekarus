@@ -31,9 +31,9 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     ssao.sc.load_reconstructor(Rec,m2c)
 
     lambdaRef = ssao.pyr.lambdaInM
+    it_ss = ssao.Nits//2
 
     if optimize_gain is True:
-        it_ss = ssao.Nits//2
         print(f'Computing mean SR after {it_ss:1.0f} iterations')
         N = len(gain_vec)
         SR_vec = xp.zeros(N)
@@ -164,9 +164,10 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
 
     if starMagnitudes is not None:
         plt.figure()
+        SR_stars = np.zeros(len(starMagnitudes))
         for k,mag in enumerate(starMagnitudes):
-            sr_ss = np.mean(np.exp(-sig[k,100:]))
-            plt.plot(tvec,sig[k],label=f'magV={mag:1.1f}, SR={sr_ss:1.2f}')
+            SR_stars[k] = np.mean(np.exp(-sig[k,it_ss:]))
+            plt.plot(tvec,sig[k],'-.',label=f'magV={mag:1.1f}, SR={SR_stars[k]:1.2f}')
         plt.legend()
         plt.grid()
         plt.xlim([0.0,tvec[-1]])
@@ -174,6 +175,16 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         plt.ylabel(r'$\sigma^2 [rad^2]$')
         plt.gca().set_yscale('log')
         plt.title(f'Strehl @ {lambdaRef*1e+9:1.0f} [nm] vs star magnitude')
+
+        plt.figure()
+        plt.plot(np.array(starMagnitudes),SR_stars*100,'-o')
+        # plt.errorbar(np.array(starMagnitudes),SR_stars*100,yerr=0.12,fmt='-o',capsize=4.0)
+        plt.grid()
+        plt.xlabel('magV')
+        plt.ylabel('SR %')
+        plt.title('Strehl ratio vs star magnitude')
+        plt.xticks(np.array(starMagnitudes))
+
 
     # plt.figure()
     # plt.plot(tvec,rec_modes[:,:10],'-o')

@@ -5,13 +5,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ekarus.e2e.utils.image_utils import myimshow
-from ekarus.e2e.test_pupil_shift_ao_class import PupilShift
+from ekarus.e2e.pupil_shift_ao_class import PupilShift
 
 # import os.path as op
 # import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=50):
+def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=100):
 
     ssao = PupilShift(tn)
 
@@ -23,22 +23,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=50):
     ssao.sc.load_reconstructor(Rec,m2c)
 
     print('Running the loop ...')
-    try:
-        if ssao.recompute is True:
-            raise FileNotFoundError('Recompute is True')
-        masked_input_phases, _, masked_residual_phases, _, _, _ = ssao.load_telemetry_data()
-        m2rad = 2 * xp.pi / ssao.pyr.lambdaInM
-        residual_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-        input_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-        for i in range(ssao.Nits):
-            ma_res_phase = masked_residual_phases[i,:,:]
-            residual_phases[i,:] = ma_res_phase[~ssao.cmask]
-            ma_in_phase = masked_input_phases[i,:,:]
-            input_phases[i,:] = ma_in_phase[~ssao.cmask]
-        sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
-        input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
-    except:
-        sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
+    sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
 
 
     pyr2det = ssao.pupilSizeInPixels/max(ssao.ccd.detector_shape) #*ssao.pyr.oversampling
@@ -49,49 +34,49 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=50):
     phi = xp.linspace(0.0, xp.pi/2, 3)
     sig_beforeDM = xp.zeros([len(phi),ssao.Nits])
     for k in range(len(phi)):
-        pup_ssao = PupilShift(tn)
-        pup_ssao.initialize_turbulence()
-        pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-        pup_ssao.sc.load_reconstructor(Rec,m2c)
+        # pup_ssao = PupilShift(tn)
+        # pup_ssao.initialize_turbulence()
+        # pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        # pup_ssao.sc.load_reconstructor(Rec,m2c)
         wedgeX = wedgeAmp * xp.cos(phi[k])
         wedgeY = wedgeAmp * xp.sin(phi[k])
         print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f}) pixels')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
         save_str = f'{mmWedgeAmp*1e+3:1.0f}um_ang{phi[k]*180/xp.pi:1.0f}_beforeDM_'
-        sig_beforeDM[k,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
+        sig_beforeDM[k,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_before_DM=wedgeShift, save_prefix=save_str)
         # pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
         if wedgeAmp>1.0:
-            ccd_frame = pup_ssao.ccd.last_frame
+            ccd_frame = ssao.ccd.last_frame
             plt.figure()
-            myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nBefore DM')
+            myimshow(ccd_frame/xp.max(ccd_frame)-subap_masks,cmap='twilight',title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nBefore DM')
             # raise ValueError('Stop')
 
     print('Testing pupil shifts after DM')
     sig_afterDM = xp.zeros([len(phi),ssao.Nits])
     for k in range(len(phi)):
-        pup_ssao = PupilShift(tn)
-        pup_ssao.initialize_turbulence()
-        pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-        pup_ssao.sc.load_reconstructor(Rec,m2c)
+        # pup_ssao = PupilShift(tn)
+        # pup_ssao.initialize_turbulence()
+        # pup_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        # pup_ssao.sc.load_reconstructor(Rec,m2c)
         wedgeX = wedgeAmp * xp.cos(phi[k])
         wedgeY = wedgeAmp * xp.sin(phi[k])
         print(f'Now applying a shift of ({wedgeX:1.2f},{wedgeY:1.2f}) pixels')
         wedgeShift = (wedgeX, wedgeY)
         mmWedgeAmp = pupilPixelShift/ssao.dm.pixel_scale*pyr2det*1e+3
         save_str = f'{mmWedgeAmp*1e+3:1.0f}um_ang{phi[k]*180/xp.pi:1.0f}_afterDM_'
-        sig_afterDM[k,:], _ = pup_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
+        sig_afterDM[k,:], _ = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, tilt_after_DM=wedgeShift, save_prefix=save_str)
         # pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
         if wedgeAmp>1.0:
-            ccd_frame = pup_ssao.ccd.last_frame
+            ccd_frame = ssao.ccd.last_frame
             plt.figure()
-            myimshow(ccd_frame/xp.max(ccd_frame)-2*subap_masks,title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nAfter DM')
+            myimshow(ccd_frame/xp.max(ccd_frame)-subap_masks,cmap='twilight',title=f'Angle: {phi[k]*180/xp.pi:1.0f}\nAfter DM')
 
     # Post-processing and plotting
     print('Plotting results ...')
     lambdaRef = ssao.pyr.lambdaInM
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
+    ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
 
     # cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
@@ -102,16 +87,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=50):
         # rec_modes = rec_modes.get()
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
-    tvec = tvec.get() if xp.on_gpu else tvec.copy()
-    # plt.figure()#figsize=(1.7*Nits/10,3))
-    # plt.plot(tvec,input_sig2,'-o',label='open loop')
-    # plt.plot(tvec,sig2,'-o',label='closed loop')
-    # plt.legend()
-    # plt.grid()
-    # plt.xlim([0.0,tvec[-1]])
-    # plt.xlabel('Time [ms]')
-    # plt.ylabel(r'$\sigma^2 [rad^2]$')
-    # plt.gca().set_yscale('log')
+    tvec = xp.asnumpy(tvec)
 
     plt.figure()
     plt.plot(tvec,input_sig2,label=f'atmo')
@@ -119,14 +95,14 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=50):
     plt.plot(tvec,sig2,label=f'reference, SR={sr_ss:1.2f}')
     for k,ang in enumerate(phi):
         sr_ss = np.mean(np.exp(-sig_beforeDM[k,it_ss:]))
-        plt.plot(tvec,sig_beforeDM[k],label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
+        plt.plot(tvec,sig_beforeDM[k],'-.',label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
     plt.xlabel('Time [ms]')
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.gca().set_yscale('log')
-    plt.title(f'{pupilPixelShift:1.2f} subaperture tilt before DM\nSR @ {lambdaRef*1e+9:1.0f} [nm]')
+    plt.title(f'{wedgeAmp:1.2f} subaperture tilt before DM\nSR @ {lambdaRef*1e+9:1.0f} [nm]')
 
     plt.figure()
     plt.plot(tvec,input_sig2,label=f'atmo')
@@ -134,14 +110,14 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=50):
     plt.plot(tvec,sig2,label=f'reference, SR={sr_ss:1.2f}')
     for k,ang in enumerate(phi):
         sr_ss = np.mean(np.exp(-sig_afterDM[k,it_ss:]))
-        plt.plot(tvec,sig_afterDM[k],label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
+        plt.plot(tvec,sig_afterDM[k],'-.',label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
     plt.xlabel('Time [ms]')
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.gca().set_yscale('log')
-    plt.title(f'{pupilPixelShift:1.2f} subaperture tilt after DM\nSR @ {lambdaRef*1e+9:1.0f} [nm]')
+    plt.title(f'{wedgeAmp:1.2f} subaperture tilt after DM\nSR @ {lambdaRef*1e+9:1.0f} [nm]')
 
     # plt.figure()
     # plt.plot(tvec,rec_modes[:,:10],'-o')

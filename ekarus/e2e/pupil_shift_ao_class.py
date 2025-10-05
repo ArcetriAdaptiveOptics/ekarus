@@ -1,15 +1,13 @@
 import xupy as xp
 import numpy as np
 from numpy.ma import masked_array
-
-import matplotlib.pyplot as plt
-from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow 
 from skimage.restoration import unwrap_phase 
 
-from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
+import matplotlib.pyplot as plt
+from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow, reshape_on_mask
 
+from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
 from ekarus.e2e.high_level_ao_class import HighLevelAO
-from ekarus.e2e.utils.image_utils import reshape_on_mask#, get_masked_array
 
 from typing import override
 
@@ -28,6 +26,7 @@ class PupilShift(HighLevelAO):
             "ccd_frames",
             "reconstructor_modes",
             "dm_commands",
+            "rms2_residual"
         ]
 
         self._initialize_devices()
@@ -49,7 +48,7 @@ class PupilShift(HighLevelAO):
 
         dm_pars = self._config.read_dm_pars()
         # self.dm = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm = ALPAODM(dm_pars["Nacts"], mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
   
 
     @override
@@ -86,13 +85,14 @@ class PupilShift(HighLevelAO):
         input_phase_in_rad = reshape_on_mask(input_phase * m2rad, self.cmask)
         padded_phase_in_rad = xp.pad(input_phase_in_rad, int((self.pyr.oversampling-1)/2*input_phase_in_rad.shape[0]), mode='constant', constant_values=0.0)
         padded_mask = xp.pad(self.cmask, int((self.pyr.oversampling-1)/2*self.cmask.shape[0]), mode='constant', constant_values=1.0)
+        padded_dm_mask = xp.pad(self.dm.mask, int((self.pyr.oversampling-1)/2*self.dm.mask.shape[0]), mode='constant', constant_values=1.0)
         input_field = (1-padded_mask) * xp.exp(1j * padded_phase_in_rad)#, dtype=self.pyr.cdtype)
 
         if abs(max(tilt_before_DM)) > 0.0:
             input_field = self._tilt_field(input_field, tilt_before_DM[0], tilt_before_DM[1])
 
-        dm_phase_in_rad = reshape_on_mask(self.dm.surface * m2rad, padded_mask)
-        dm_field = (1-padded_mask) * xp.exp(1j * dm_phase_in_rad)#, dtype=self.pyr.cdtype)
+        dm_phase_in_rad = reshape_on_mask(self.dm.surface * m2rad, padded_dm_mask)
+        dm_field = (1-padded_dm_mask) * xp.exp(1j * dm_phase_in_rad)#, dtype=self.pyr.cdtype)
         residual_field = input_field * dm_field.conj()
 
         if abs(max(tilt_after_DM)) > 0.0:
@@ -105,6 +105,9 @@ class PupilShift(HighLevelAO):
         modes = slope_computer.Rec @ slopes
         # modes = modes * slope_computer.modal_gains
         cmd = slope_computer.m2c @ modes
+
+        if self.dm.slaving is not None:
+            cmd = self.dm.slaving @ cmd
         
         dm_cmd += cmd * slope_computer.intGain / m2rad
         modes /= m2rad  # convert to meters
@@ -146,14 +149,15 @@ class PupilShift(HighLevelAO):
         # print(xp.sum(self.dm.surface),xp.sum(self.dm.get_position()))
 
         # Define variables
-        mask_len = int(xp.sum(1 - self.dm.mask))
+        dm_mask_len = int(xp.sum(1 - self.dm.mask))
+        mask_len = int(xp.sum(1 - self.cmask))
         dm_cmds = xp.zeros([self.Nits, self.dm.Nacts])
 
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
         if save_prefix is not None:
-            dm_phases = xp.zeros([self.Nits, mask_len])
+            dm_phases = xp.zeros([self.Nits, dm_mask_len])
             residual_phases = xp.zeros([self.Nits, mask_len])
             input_phases = xp.zeros([self.Nits, mask_len])
             detector_images = xp.zeros([self.Nits, self.ccd.detector_shape[0], self.ccd.detector_shape[1]])
@@ -187,13 +191,14 @@ class PupilShift(HighLevelAO):
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
+            dm_mask_cube = xp.asnumpy(xp.stack([self.dm.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm_phases = xp.stack([reshape_on_mask(dm_phases[i, :], self.cmask)for i in range(self.Nits)])
+            dm_phases = xp.stack([reshape_on_mask(dm_phases[i, :], self.dm.mask)for i in range(self.Nits)])
             res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
-            ma_dm_phases = masked_array(xp.asnumpy(dm_phases), mask=mask_cube)
+            ma_dm_phases = masked_array(xp.asnumpy(dm_phases), mask=dm_mask_cube)
             ma_res_phases = masked_array(xp.asnumpy(res_phases), mask=mask_cube)
 
             data_dict = {}
@@ -206,6 +211,7 @@ class PupilShift(HighLevelAO):
                     detector_images,
                     rec_modes,
                     dm_cmds,
+                    res_phase_rad2,
                 ],
             ):
                 data_dict[key] = value
@@ -231,7 +237,7 @@ class PupilShift(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
