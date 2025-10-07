@@ -11,11 +11,15 @@ import numpy as np
 from numpy.ma import masked_array
 
 
-def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False):
+def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False, optimize_gain:bool=False):
 
     print('Initializing devices ...')
     cascao = CascadingAO(tn)
     cascao.initialize_turbulence()
+
+    gain_vec = xp.array([0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1])
+    N = len(gain_vec)
+    SR_mat = xp.zeros([N,N])
 
     KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
@@ -26,6 +30,41 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False):
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
     Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=0.2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(Rec,m2c)
+
+    if optimize_gain:
+        best_gain1 = gain_vec[0]
+        best_gain2 = gain_vec[0]
+        best_SR = 0.0
+
+        ss_it = cascao.Nits//2
+
+        print('Finding the best gain')
+        for i in range(N):
+            for j in range(N):
+                cascao.sc1.intGain = gain_vec[i]
+                cascao.sc2.intGain = gain_vec[j]
+                print(f'First loop gain: {cascao.sc1.intGain:1.1f}, second loop gain: {cascao.sc2.intGain:1.1f}')
+                sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
+                SR_mat[i,j] = xp.mean(xp.exp(-sig2[ss_it:]))
+                if SR_mat[i,j] > best_SR:
+                    best_SR = SR_mat[i,j]
+                    best_gain1 = gain_vec[i]
+                    best_gain2 = gain_vec[j]
+
+        plt.figure()
+        plt.matshow(xp.asnumpy(SR_mat))
+        plt.colorbar()
+        # plt.gca().set_xticks(xp.asnumpy(gain_vec))
+        # plt.gca().set_yticks(xp.asnumpy(gain_vec))
+        plt.ylabel('First loop gain id')
+        plt.xlabel('Second loop gain id')
+
+        cascao.tested_gains = gain_vec
+        cascao.SR_mat = SR_mat
+
+        cascao.sc1.intGain = best_gain1
+        cascao.sc2.intGain = best_gain2
+        print(f'Selecting first loop gain = {cascao.sc1.intGain}, second loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
     print('Running the loop ...')
     dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
@@ -106,24 +145,6 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False):
     plt.xlabel('Time [ms]')
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.gca().set_yscale('log')
-
-    # plt.figure()
-    # plt.plot(tvec,rec1_modes[:,:10],'-o')
-    # plt.grid()
-    # plt.xlim([0.0,tvec[-1]])
-    # plt.xlabel('Time [ms]')
-    # plt.ylabel('amplitude [m]')
-    # plt.title('Reconstructor 1 modes\n(first 10)')
-
-    # plt.figure()
-    # plt.plot(tvec,rec2_modes[:,:10],'-o')
-    # plt.grid()
-    # plt.xlim([0.0,tvec[-1]])
-    # plt.xlabel('Time [ms]')
-    # plt.ylabel('amplitude [m]')
-    # plt.title('Reconstructor 2 modes\n(first 10)')
-    # plt.show()
-
 
     plt.show()
 

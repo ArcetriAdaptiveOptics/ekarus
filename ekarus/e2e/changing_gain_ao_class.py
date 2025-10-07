@@ -53,7 +53,7 @@ class ChangingGainSSAO(HighLevelAO):
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float,
-                 changeGain_it_numbers:list, new_gains:list, 
+                 changeGain_it_numbers:list=None, new_gains:list=None, 
                  new_modAngInLambdaOverD:float=None, changeMod_it_number:int=None, new_Rec=None,
                  use_diagonal:bool=False, save_prefix:str=None):
         """
@@ -70,11 +70,14 @@ class ChangingGainSSAO(HighLevelAO):
         save_telemetry_prefix : str, optional
             String prefix to save telemetry data (default is None: telemetry is not saved).
         """
-        if len(changeGain_it_numbers) != len(new_gains):
-            print(f'Incompatible length between gains {new_gains} and iteration steps {changeGain_it_numbers}')
-
-        changeGain_it_numbers = xp.array(changeGain_it_numbers)
-        new_gains = xp.array(new_gains)
+        if changeGain_it_numbers is not None:
+            if len(changeGain_it_numbers) != len(new_gains):
+                print(f'Incompatible length between gains {new_gains} and iteration steps {changeGain_it_numbers}')
+            changeGain_it_numbers = xp.array(changeGain_it_numbers)
+            new_gains = xp.array(new_gains)
+            ctr = int(0)
+        else:
+            changeGain_it_numbers = xp.array(np.inf)
 
         m2rad = 2 * xp.pi / lambdaInM
 
@@ -89,8 +92,6 @@ class ChangingGainSSAO(HighLevelAO):
 
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
-
-        ctr = int(0)
 
         if save_prefix is not None:
             dm_phases = xp.zeros([self.Nits, dm_mask_len])
@@ -110,9 +111,6 @@ class ChangingGainSSAO(HighLevelAO):
             if i >= self.sc.delay:
                 self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
                 
-            # if i>0 and int(i%200)==0 and i < 700:
-            #     self.integratorGain += 0.1
-
             residual_phase = input_phase - self.dm.get_surface()
 
             if i == changeGain_it_numbers[ctr]:
@@ -217,4 +215,50 @@ class ChangingGainSSAO(HighLevelAO):
         self.dm.plot_position(dm_cmds[frame_id])
         plt.title('Mirror command [m]')
         plt.axis('off')
+
+    def plot_rec_modes(self, save_prefix:str=''):
+        """
+        Plots the reconstruced modes.
+        
+        Parameters
+        ----------
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default ''.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        _, _, _, _, rec_modes, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
+
+        zern_modes = rec_modes[:,:5]
+        max_mode = xp.max(xp.abs(rec_modes[:,5:]),axis=1)
+        m2rad = 2*xp.pi/self.pyr.lambdaInM
+        n_its = 60
+        plt.figure()
+        plt.plot(xp.asnumpy(xp.abs(zern_modes)*m2rad),'-o')
+        plt.plot(xp.asnumpy(max_mode*m2rad),'-o')
+        # plt.yscale('log')
+        plt.xlabel('# iteration')
+        plt.ylabel(f'[rad] @ {self.pyr.lambdaInM*1e+9:1.0f}nm')
+        plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY','Max'))
+        plt.xlim([0, n_its])
+        plt.grid()
+        plt.title('Reconstructed modes amplitude')
+
+        it_vec = xp.arange(self.Nits)
+        plt.figure()
+        plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(zern_modes[-n_its:,:]),'-o')
+        plt.xlabel('# iteration')
+        plt.ylabel('[m]')
+        plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY'))
+        plt.grid()
+        plt.title(f'Reconstructed Zernike modes amplitude\nLast {n_its} iterations')
+
+        last_modes = rec_modes[:,-5:]
+        plt.figure()
+        plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(last_modes[-n_its:,:]),'-o')
+        plt.xlabel('# iteration')
+        plt.ylabel('[m]')
+        plt.grid()
+        plt.title(f'Last 5 modes amplitude\nLast {n_its} iterations')
 

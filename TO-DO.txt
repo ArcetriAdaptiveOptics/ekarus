@@ -1,24 +1,30 @@
 IMPORTANT:
-Test double/single precision
+
 Fix TestDM.ipynb
-Clean up mains (IM eigvals)
 Implement Cn2 profile in config
 
 Segmented hexagonal masks
 U-net transfer learning
 
 
+
 EXTRAS:
+
 Zernike WFS
 Shack Hartmann WFS
 
 Remove xupy (cupy) dependency
 Remove arte dependency
 
+Test double/single precision
 Control Filter Class ('leaky' integrator)
+
+Pyramid optical gain (vs modulation) main
+Slaving jupyter notebook (reconstructor error)
+
 
 
 CODING/EASE-OF_USE:
+
 Documentation (!!!)
 Restore Circular Mask
-plot_results and show_plots in mains

@@ -175,8 +175,7 @@ class PupilShift(HighLevelAO):
                 self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
 
             residual_phase, dm_cmds[i,:], modes = self.perform_loop_iteration(input_phase, dm_cmd, self.sc,
-                                                              tilt_before_DM, tilt_after_DM,
-                                                              starMagnitude, slaving=self.dm.slaving)
+                                                              tilt_before_DM, tilt_after_DM, starMagnitude)
 
             res_phase_rad2[i] = self.phase_rms(residual_phase[xp.abs(residual_phase)>0.0]*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2

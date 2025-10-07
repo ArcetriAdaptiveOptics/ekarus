@@ -34,7 +34,7 @@ def main(tn:str='example_decreasing_mod'):
     dmod_ssao.pyr.set_modulation_angle(0.0)
     dmod_ssao.sc.load_reconstructor(mod0_Rec,m2c)
     dmod_sig2, _ = dmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude,
-                                      new_gain=ssao.sc.intGain+0.2, change_it_number=200, save_prefix='dmod_')
+                                      new_Rec=mod0_Rec, changeMod_it_number=200, save_prefix='dmod_')
 
     lambdaRef = ssao.pyr.lambdaInM
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
@@ -46,6 +46,10 @@ def main(tn:str='example_decreasing_mod'):
         sig2 = sig2.get()
         mod0_sig2 = mod0_sig2.get()
         dmod_sig2 = dmod_sig2.get()
+
+    ssao.plot_rec_modes(save_prefix='')
+    unmod_ssao.plot_rec_modes(save_prefix='mod0_')
+    dmod_ssao.plot_rec_modes(save_prefix='dmod_')
 
     tvec = xp.asnumpy(xp.arange(ssao.Nits)*ssao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))

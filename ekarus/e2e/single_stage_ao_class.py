@@ -200,6 +200,7 @@ class SingleStageAO(HighLevelAO):
         plt.title('Mirror command [m]')
         plt.axis('off')
 
+
     def plot_rec_modes(self, save_prefix:str=''):
         """
         Plots the reconstruced modes.
@@ -229,18 +230,20 @@ class SingleStageAO(HighLevelAO):
         plt.grid()
         plt.title('Reconstructed modes amplitude')
 
-        max_mode_ids = xp.argmax(xp.abs(rec_modes[:,5:]),axis=1)
-        max_mode = xp.zeros(self.Nits)
-        for j,id in enumerate(max_mode_ids):
-            max_mode[j] = rec_modes[j,5+id]
         it_vec = xp.arange(self.Nits)
         plt.figure()
-        for i in range(5):
-            plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(zern_modes[-n_its:,i]),'-o')
-        plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(max_mode[-n_its:]),'-o')
+        plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(zern_modes[-n_its:,:]),'-o')
         plt.xlabel('# iteration')
         plt.ylabel('[m]')
-        plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY','Max'))
+        plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY'))
         plt.grid()
-        plt.title('Reconstructed modes amplitude\nLast 60 iterations')
+        plt.title(f'Reconstructed Zernike modes amplitude\nLast {n_its} iterations')
+
+        last_modes = rec_modes[:,-5:]
+        plt.figure()
+        plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(last_modes[-n_its:,:]),'-o')
+        plt.xlabel('# iteration')
+        plt.ylabel('[m]')
+        plt.grid()
+        plt.title(f'Last 5 modes amplitude\nLast {n_its} iterations')
 

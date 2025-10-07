@@ -16,12 +16,12 @@ CCD2:
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER2:
-  loopFrequencyInHz: 3000     
-  integratorGain: 0.7         # loop integrator gain
-  delay: 2                    # loop delay in steps
+  loopFrequencyInHz: 1500     
+  integratorGain: 1.0         # loop integrator gain
+  delay: 4                    # loop delay in steps
   nModes2Correct: 415         # number of reconstructor modes
   ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
-  modulationInLambdaOverD: 1.0  # modulation amplitude
+  modulationInLambdaOverD: 3.0  # modulation amplitude
 
 DM1: 
   Nacts: 241
@@ -29,7 +29,7 @@ DM1:
 
 PYR1:
   oversampling: 4
-  lambdaInM: 1000e-9             # [m] sensor wavelength
+  lambdaInM: 750e-9             # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
   subapPixSize: 29.5            # subaperture diameter in pix
   subapPixSep: 10               # pixel distance between subaps
@@ -41,12 +41,12 @@ CCD1:
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER1:
-  loopFrequencyInHz: 1500     
-  integratorGain: 0.8         # loop integrator gain
-  delay: 4                    # loop delay in steps
+  loopFrequencyInHz: 3000     
+  integratorGain: 0.5         # loop integrator gain
+  delay: 2                    # loop delay in steps
   nModes2Correct: 219         # number of reconstructor modes
   ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
-  modulationInLambdaOverD: 3.0  # modulation amplitude
+  modulationInLambdaOverD: 0.0  # modulation amplitude
 
 
 TELESCOPE:
@@ -63,7 +63,7 @@ ATMO:
   recompute: False
 
 LOOP:
-  nIterations: 500
+  nIterations: 400
   starMagnitude: 1.0
   simFreqHz: 3000          # simulation frequency in Hz
   recompute: False         # if False, any calibration data saved from 

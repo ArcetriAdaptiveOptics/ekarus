@@ -65,7 +65,6 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         plt.ylabel('SR %')
         plt.title('Strehl ratio vs integrator gain')
 
-    print('Running the loop ...')     
     sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
     # ssao.SR_in = xp.exp(-input_sig2)
     # ssao.SR_out = xp.exp(-sig2)
