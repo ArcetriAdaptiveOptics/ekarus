@@ -129,12 +129,12 @@ class NestedStageAO(HighLevelAO):
             residual_phase = residual2_phase - self.dm1.get_surface()
 
             if i % int(self.sc1.dt/self.dt) == 0:
-                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, dm1_cmd, self.sc1, starMagnitude, slaving=self.dm1.slaving)
+                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, dm1_cmd, self.sc1, starMagnitude=starMagnitude, slaving=self.dm1.slaving)
             else:
                 dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
 
             if i % int(self.sc2.dt/self.dt) == 0:
-                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, dm2_cmd, self.sc2, starMagnitude, slaving=self.dm2.slaving)
+                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, dm2_cmd, self.sc2, starMagnitude=starMagnitude, slaving=self.dm2.slaving)
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
@@ -211,7 +211,7 @@ class NestedStageAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, res_out_phases, det_out_frames, rec1_modes, dm1_cmds, _, res_in_phases, det_in_frames, rec2_modes, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, res_out_phases, det_out_frames, _, dm1_cmds, _, res_in_phases, det_in_frames, _, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_out_phase_in_rad = res_out_phases[frame_id].data[~res_out_phases[frame_id].mask]*(2*xp.pi/lambdaRef)

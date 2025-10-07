@@ -331,6 +331,7 @@ class HighLevelAO():
         delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
         input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
         slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)
+        
         modes = slope_computer.Rec @ slopes
         # modes *= slope_computer.modal_gains
         cmd = slope_computer.m2c @ modes

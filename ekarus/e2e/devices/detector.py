@@ -29,9 +29,9 @@ class Detector:
 
     def image_on_detector(self, image, rebin_fact:int = 0, photon_flux = None):
 
-        ccd_size =self.detector_shape
+        ccd_size = self.detector_shape
         if rebin_fact > 0:
-            rebin = 4*rebin_fact
+            rebin = 2*rebin_fact
             ccd_size = (self.detector_shape[0]//rebin, self.detector_shape[1]//rebin)
         ccd_intensity = toccd(image, ccd_size)
 

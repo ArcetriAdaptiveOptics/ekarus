@@ -126,7 +126,8 @@ class CascadingAO(HighLevelAO):
             residual1_phase = input_phase - self.dm1.get_surface()
 
             if i % int(self.sc1.dt/self.dt) == 0:
-                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual1_phase, dm1_cmd, self.sc1, starMagnitude, slaving=self.dm1.slaving)
+                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual1_phase, dm1_cmd, self.sc1, 
+                                                                    starMagnitude=starMagnitude, slaving=self.dm1.slaving)
             else:
                 dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
 
@@ -137,12 +138,13 @@ class CascadingAO(HighLevelAO):
             residual2_phase = residual1_phase - self.dm2.get_surface()
 
             if i % int(self.sc2.dt/self.dt) == 0:
-                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual2_phase, dm2_cmd, self.sc2, starMagnitude, slaving=self.dm2.slaving)
+                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual2_phase, dm2_cmd, self.sc2, 
+                                                                    starMagnitude=starMagnitude, slaving=self.dm2.slaving)
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
             res2_phase_rad2[i] = self.phase_rms(residual2_phase*m2rad)**2
-            res1_phase_rad2[i] = self.phase_rms(residual2_phase*m2rad)**2
+            res1_phase_rad2[i] = self.phase_rms(residual1_phase*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
             if save_prefix is not None:  

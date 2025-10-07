@@ -11,11 +11,10 @@ import numpy as np
 from numpy.ma import masked_array
 
 
-def main(tn:str='example_cascading_stage', show:bool=False):
+def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False):
 
     print('Initializing devices ...')
     cascao = CascadingAO(tn)
-    lambdaRef = 1000e-9
     cascao.initialize_turbulence()
 
     KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
@@ -83,6 +82,8 @@ def main(tn:str='example_cascading_stage', show:bool=False):
         plt.figure()
         myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
+    cascao.dm1_sig2 = dm1_sig2
+    cascao.dm2_sig2 = dm2_sig2
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
