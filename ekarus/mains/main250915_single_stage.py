@@ -119,36 +119,11 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
     ssao.sig2 = sig2
 
-    # masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
-    # oversampling = 8
-    # pixelsPerMAS = lambdaRef/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
-    # psf = ssao.get_psf_from_frame(xp.array(masked_residual_phases[-1,:,:]), lambdaRef, oversampling=oversampling)
-
-    # cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
         if starMagnitudes is not None:
             sig = sig.get()
-
-    # plt.figure(figsize=(9,9))
-    # plt.subplot(2,2,1)
-    # myimshow(masked_array(masked_input_phases[-1],cmask), \
-    #     title=f'Atmosphere phase [m]\nSR = {xp.exp(-input_sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',\
-    #     cmap='RdBu',shrink=0.8)
-    # plt.axis('off')
-
-    # plt.subplot(2,2,2)
-    # showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
-    #     title = f'Corrected PSF\nSR = {xp.exp(-sig2[-1]):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',cmap='inferno') 
-
-    # plt.subplot(2,2,3)
-    # myimshow(detector_frames[-1], title = 'Detector frame', shrink=0.8)
-
-    # plt.subplot(2,2,4)
-    # ssao.dm.plot_position(dm_commands[-1])
-    # plt.title('Mirror command [m]')
-    # plt.axis('off')
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
@@ -185,14 +160,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         plt.title('Strehl ratio vs star magnitude')
         plt.xticks(np.array(starMagnitudes))
 
-
-    # plt.figure()
-    # plt.plot(tvec,rec_modes[:,:10],'-o')
-    # plt.grid()
-    # plt.xlim([0.0,tvec[-1]])
-    # plt.xlabel('Time [ms]')
-    # plt.ylabel('amplitude [m]')
-    # plt.title('Reconstructor modes\n(first 10)')
+    ssao.plot_rec_modes(save_prefix='')
     
     plt.show()
 

@@ -155,7 +155,7 @@ class SingleStageAO(HighLevelAO):
         return res_phase_rad2, atmo_phase_rad2
     
     
-    def plot_iteration(self, lambdaRef, frame_id:int=-1, save_prefix:str=None):
+    def plot_iteration(self, lambdaRef, frame_id:int=-1, save_prefix:str=''):
         """
         Plots the telemetry data for a specific iteration/frame.
         
@@ -199,4 +199,48 @@ class SingleStageAO(HighLevelAO):
         self.dm.plot_position(dm_cmds[frame_id])
         plt.title('Mirror command [m]')
         plt.axis('off')
+
+    def plot_rec_modes(self, save_prefix:str=''):
+        """
+        Plots the reconstruced modes.
+        
+        Parameters
+        ----------
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default ''.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        _, _, _, _, rec_modes, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
+
+        zern_modes = rec_modes[:,:5]
+        max_mode = xp.max(xp.abs(rec_modes[:,5:]),axis=1)
+        m2rad = 2*xp.pi/self.pyr.lambdaInM
+        n_its = 60
+        plt.figure()
+        plt.plot(xp.asnumpy(xp.abs(zern_modes)*m2rad),'-o')
+        plt.plot(xp.asnumpy(max_mode*m2rad),'-o')
+        # plt.yscale('log')
+        plt.xlabel('# iteration')
+        plt.ylabel(f'[rad] @ {self.pyr.lambdaInM*1e+9:1.0f}nm')
+        plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY','Max'))
+        plt.xlim([0, n_its])
+        plt.grid()
+        plt.title('Reconstructed modes amplitude')
+
+        max_mode_ids = xp.argmax(xp.abs(rec_modes[:,5:]),axis=1)
+        max_mode = xp.zeros(self.Nits)
+        for j,id in enumerate(max_mode_ids):
+            max_mode[j] = rec_modes[j,5+id]
+        it_vec = xp.arange(self.Nits)
+        plt.figure()
+        for i in range(5):
+            plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(zern_modes[-n_its:,i]),'-o')
+        plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(max_mode[-n_its:]),'-o')
+        plt.xlabel('# iteration')
+        plt.ylabel('[m]')
+        plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY','Max'))
+        plt.grid()
+        plt.title('Reconstructed modes amplitude\nLast 60 iterations')
 
