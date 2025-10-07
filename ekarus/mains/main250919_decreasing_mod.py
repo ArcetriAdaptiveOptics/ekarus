@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow #, reshape_on_mask
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
-from ekarus.e2e.decreasing_modulation_ao_class import DecreasingModSingleStageAO
+from ekarus.e2e.changing_gain_ao_class import ChangingGainSSAO
 
 # import os.path as op
 # import ekarus.e2e.utils.my_fits_package as myfits
@@ -29,13 +29,12 @@ def main(tn:str='example_decreasing_mod'):
     unmod_ssao.sc.load_reconstructor(mod0_Rec,m2c)
     mod0_sig2, _ = unmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='mod0_')
 
-    dmod_ssao = DecreasingModSingleStageAO(tn)
+    dmod_ssao = ChangingGainSSAO(tn)
     dmod_ssao.initialize_turbulence()
-    dmod_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    dmod_ssao.sc.load_reconstructor(Rec,m2c)
+    dmod_ssao.pyr.set_modulation_angle(0.0)
+    dmod_ssao.sc.load_reconstructor(mod0_Rec,m2c)
     dmod_sig2, _ = dmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude,
-                                      new_modAngInLambdaOverD=0.0, change_it_number=100,
-                                      new_Rec = mod0_Rec, save_prefix='dmod_')
+                                      new_gain=ssao.sc.intGain+0.2, change_it_number=200, save_prefix='dmod_')
 
     lambdaRef = ssao.pyr.lambdaInM
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
@@ -53,7 +52,17 @@ def main(tn:str='example_decreasing_mod'):
     plt.plot(tvec,input_sig2,'-o',label='open loop')
     plt.plot(tvec,sig2,'-o',label=f'closed loop, modulation: {ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
     plt.plot(tvec,mod0_sig2,'-o',label=f'closed loop, modulation: {unmod_ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
-    plt.plot(tvec,dmod_sig2,'-o',label=f'closed loop, modulation: {ssao.pyr.modulationAngleInLambdaOverD}-{dmod_ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
+    plt.legend()
+    plt.grid()
+    plt.xlim([0.0,tvec[-1]])
+    plt.xlabel('Time [ms]')
+    plt.ylabel(r'$\sigma^2 [rad^2]$')
+    plt.gca().set_yscale('log')
+
+    plt.figure()
+    plt.plot(tvec,input_sig2,'-o',label='open loop')
+    plt.plot(tvec,mod0_sig2,'-o',label=f'closed loop')
+    plt.plot(tvec,dmod_sig2,'-o',label=f'closed loop, changing gain')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])

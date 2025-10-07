@@ -15,7 +15,7 @@ from ekarus.e2e.high_level_ao_class import HighLevelAO
 from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
 
 
-class DecreasingModSingleStageAO(HighLevelAO):
+class ChangingGainSSAO(HighLevelAO):
 
     def __init__(self, tn: str):
         """The constructor"""
@@ -53,7 +53,8 @@ class DecreasingModSingleStageAO(HighLevelAO):
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float,
-                 new_modAngInLambdaOverD:float, change_it_number:int, new_Rec, 
+                 changeGain_it_numbers:list, new_gains:list, 
+                 new_modAngInLambdaOverD:float=None, changeMod_it_number:int=None, new_Rec=None,
                  use_diagonal:bool=False, save_prefix:str=None):
         """
         Main loop for the single stage AO system.
@@ -69,6 +70,12 @@ class DecreasingModSingleStageAO(HighLevelAO):
         save_telemetry_prefix : str, optional
             String prefix to save telemetry data (default is None: telemetry is not saved).
         """
+        if len(changeGain_it_numbers) != len(new_gains):
+            print(f'Incompatible length between gains {new_gains} and iteration steps {changeGain_it_numbers}')
+
+        changeGain_it_numbers = xp.array(changeGain_it_numbers)
+        new_gains = xp.array(new_gains)
+
         m2rad = 2 * xp.pi / lambdaInM
 
         dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype)
@@ -82,6 +89,8 @@ class DecreasingModSingleStageAO(HighLevelAO):
 
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
+
+        ctr = int(0)
 
         if save_prefix is not None:
             dm_phases = xp.zeros([self.Nits, dm_mask_len])
@@ -106,7 +115,13 @@ class DecreasingModSingleStageAO(HighLevelAO):
 
             residual_phase = input_phase - self.dm.get_surface()
 
-            if i == change_it_number:
+            if i == changeGain_it_numbers[ctr]:
+                print(f'Changing gain from {self.sc.intGain} to {new_gains[ctr]}')
+                self.sc.intGain = new_gains[ctr]
+                ctr += 1
+
+            if i == changeMod_it_number:
+                print(f'Changing modulation to {new_modAngInLambdaOverD:1.1f}')
                 self.pyr.set_modulation_angle(new_modAngInLambdaOverD)
                 self.sc.Rec = new_Rec
             
