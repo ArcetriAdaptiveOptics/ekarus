@@ -11,22 +11,30 @@ import numpy as np
 from numpy.ma import masked_array
 
 
-def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float = 800e-9,
+def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=800e-9,
          optimize_gain:bool=False, gain1_list:list=None, gain2_list:list=None):
 
     print('Initializing devices ...')
     cascao = NestedStageAO(tn)
 
+    amp1 = 0.2
+    amp2 = 0.2
+    if cascao.sc1.modulationAngleInLambdaOverD < 1.0:
+        amp1 = 0.02
+    if cascao.sc2.modulationAngleInLambdaOverD < 1.0:
+        amp2 = 0.02
+
     cascao.initialize_turbulence()
     KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL, cascao.pyr1.lambdaInM, amps=0.2, save_prefix='SC1_')
+    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(Rec,m2c)
 
     KL, m2c = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=0.2, save_prefix='SC2_')
+    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(Rec,m2c)
+
 
     if gain1_list is not None or gain2_list is not None:
         optimize_gain = True
@@ -65,13 +73,13 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float = 800e-
                 sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
                 SR = xp.mean(xp.exp(-sig2[-ss_it:]))
                 SR_mat[i,j] = SR.copy()
-                print(f'Inner loop gain = {cascao.sc1.intGain:1.1f}, outer loop gain = {cascao.sc2.intGain:1.1f}, final SR = {SR*100:1.2f}%')
+                print(f'First loop gain = {cascao.sc1.intGain:1.1f}, second loop gain = {cascao.sc2.intGain:1.1f}, final SR = {SR*100:1.2f}%')
                 if SR_mat[i,j] > best_SR:
                     best_SR = SR_mat[i,j]
                     best_gain1 = gain1_vec[i]
                     best_gain2 = gain2_vec[j]
 
-        plt.figure()
+        # plt.figure()
         plt.matshow(xp.asnumpy(SR_mat))
         plt.colorbar()
         # plt.gca().set_xticks(xp.asnumpy(gain_vec))
@@ -90,6 +98,7 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float = 800e-
 
     print('Running the loop ...')
     dm_outer_sig2, dm_inner_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
+    cascao.sig2 = dm_outer_sig2
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -143,7 +152,6 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float = 800e-
         plt.figure()
         myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
-    lambdaRef = 1000e-9
     cascao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()

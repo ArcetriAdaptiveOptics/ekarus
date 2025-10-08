@@ -18,14 +18,21 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
     cascao = CascadingAO(tn)
     cascao.initialize_turbulence()
 
+    amp1 = 0.2
+    amp2 = 0.2
+    if cascao.sc1.modulationAngleInLambdaOverD < 1.0:
+        amp1 = 0.02
+    if cascao.sc2.modulationAngleInLambdaOverD < 1.0:
+        amp2 = 0.02
+
     KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL, cascao.pyr1.lambdaInM, amps=0.2, save_prefix='SC1_')
+    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(Rec,m2c)
 
     KL, m2c = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=0.2, save_prefix='SC2_')
+    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(Rec,m2c)
 
     if gain1_list is not None or gain2_list is not None:

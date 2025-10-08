@@ -25,7 +25,6 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=100)
     print('Running the loop ...')
     sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
 
-
     pyr2det = ssao.pupilSizeInPixels/max(ssao.ccd.detector_shape) #*ssao.pyr.oversampling
     wedgeAmp = pupilPixelShift * pyr2det
     subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
@@ -91,10 +90,10 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=100)
 
     plt.figure()
     plt.plot(tvec,input_sig2,label=f'atmo')
-    sr_ss = np.mean(np.exp(-sig2[it_ss:]))
+    sr_ss = np.mean(np.exp(-sig2[-it_ss:]))
     plt.plot(tvec,sig2,label=f'reference, SR={sr_ss:1.2f}')
     for k,ang in enumerate(phi):
-        sr_ss = np.mean(np.exp(-sig_beforeDM[k,it_ss:]))
+        sr_ss = np.mean(np.exp(-sig_beforeDM[k,-it_ss:]))
         plt.plot(tvec,sig_beforeDM[k],'-.',label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
     plt.legend()
     plt.grid()
@@ -106,10 +105,10 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=100)
 
     plt.figure()
     plt.plot(tvec,input_sig2,label=f'atmo')
-    sr_ss = np.mean(np.exp(-sig2[it_ss:]))
+    sr_ss = np.mean(np.exp(-sig2[-it_ss:]))
     plt.plot(tvec,sig2,label=f'reference, SR={sr_ss:1.2f}')
     for k,ang in enumerate(phi):
-        sr_ss = np.mean(np.exp(-sig_afterDM[k,it_ss:]))
+        sr_ss = np.mean(np.exp(-sig_afterDM[k,-it_ss:]))
         plt.plot(tvec,sig_afterDM[k],'-.',label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
     plt.legend()
     plt.grid()
