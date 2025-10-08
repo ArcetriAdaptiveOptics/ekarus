@@ -31,7 +31,7 @@ def main(tn:str='example_pupil_shift', pupilPixelShift:float=0.2, it_ss:int=100)
     subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
 
     print('Testing pupil shifts before DM')
-    phi = xp.linspace(0.0, xp.pi/2, 5)
+    phi = xp.linspace(0.0, xp.pi/2, 3)
     sig_beforeDM = xp.zeros([len(phi),ssao.Nits])
     for k in range(len(phi)):
         pup_ssao = PupilShift(tn)

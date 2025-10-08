@@ -34,7 +34,8 @@ def main(tn:str='example_decreasing_mod'):
     dmod_ssao.pyr.set_modulation_angle(0.0)
     dmod_ssao.sc.load_reconstructor(mod0_Rec,m2c)
     dmod_sig2, _ = dmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude,
-                                      new_Rec=mod0_Rec, changeMod_it_number=200, save_prefix='dmod_')
+                                      new_gains=[1.0], changeGain_it_numbers=[100], save_prefix='dmod_')
+                                    #   new_Rec=mod0_Rec, changeMod_it_number=200, save_prefix='dmod_')
 
     lambdaRef = ssao.pyr.lambdaInM
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')

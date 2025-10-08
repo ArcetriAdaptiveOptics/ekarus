@@ -31,7 +31,7 @@ TELESCOPE:
 
 ATMO:
   outerScaleInM: 25         # [m]
-  r0: [10e-2,12e-2,15e-2]   # [m]
+  r0: [10e-2,12e-2,14e-2]   # [m]
   windSpeed: [6,8,10]       # [m/s]
   windAngle: [0,45,-60]     # [deg] CCW from East
 

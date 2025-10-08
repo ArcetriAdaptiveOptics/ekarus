@@ -29,6 +29,7 @@ class ChangingGainSSAO(HighLevelAO):
             "ccd_frames",
             "reconstructor_modes",
             "dm_commands",
+            "rms2_residual"
         ]
 
         self._initialize_devices()
@@ -71,13 +72,15 @@ class ChangingGainSSAO(HighLevelAO):
             String prefix to save telemetry data (default is None: telemetry is not saved).
         """
         if changeGain_it_numbers is not None:
+            changeGain_it_numbers = xp.array(changeGain_it_numbers)
+            new_gains = xp.array(new_gains)
             if len(changeGain_it_numbers) != len(new_gains):
                 print(f'Incompatible length between gains {new_gains} and iteration steps {changeGain_it_numbers}')
             changeGain_it_numbers = xp.array(changeGain_it_numbers)
-            new_gains = xp.array(new_gains)
             ctr = int(0)
+            changeGain_it_number = changeGain_it_numbers[ctr]
         else:
-            changeGain_it_numbers = xp.array(np.inf)
+            changeGain_it_number = xp.array(np.inf)
 
         m2rad = 2 * xp.pi / lambdaInM
 
@@ -113,10 +116,14 @@ class ChangingGainSSAO(HighLevelAO):
                 
             residual_phase = input_phase - self.dm.get_surface()
 
-            if i == changeGain_it_numbers[ctr]:
+            if i == changeGain_it_number:
                 print(f'Changing gain from {self.sc.intGain} to {new_gains[ctr]}')
                 self.sc.intGain = new_gains[ctr]
                 ctr += 1
+                if ctr < len(changeGain_it_numbers):
+                    changeGain_it_number = changeGain_it_numbers[ctr]
+                else:
+                    changeGain_it_number = np.inf
 
             if i == changeMod_it_number:
                 print(f'Changing modulation to {new_modAngInLambdaOverD:1.1f}')
@@ -162,6 +169,7 @@ class ChangingGainSSAO(HighLevelAO):
                     detector_images,
                     rec_modes,
                     dm_cmds,
+                    res_phase_rad2,
                 ],
             ):
                 data_dict[key] = value
@@ -187,7 +195,7 @@ class ChangingGainSSAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)

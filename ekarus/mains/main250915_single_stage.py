@@ -31,22 +31,23 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     ssao.sc.load_reconstructor(Rec,m2c)
 
     lambdaRef = ssao.pyr.lambdaInM
-    it_ss = ssao.Nits//2
+    it_ss = 100
 
     if optimize_gain is True:
-        print(f'Computing mean SR after {it_ss:1.0f} iterations')
+        print('Finding best gains:')
         N = len(gain_vec)
         SR_vec = xp.zeros(N)
         for jj in range(N):
             g = gain_vec[jj]
-            print(f'Testing gain: {g:1.2f}')
             # ssao = SingleStageAO(tn)
             # ssao.initialize_turbulence()
             # ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
             # ssao.sc.load_reconstructor(Rec,m2c)
             ssao.sc.intGain = g
             err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
-            SR_vec[jj] = xp.mean(xp.exp(-err2[it_ss:]))
+            SR = xp.mean(xp.exp(-err2[-it_ss:]))
+            SR_vec[jj] = SR.copy()
+            print(f'Tested gain = {g:1.2f}, final SR = {SR*100:1.2f}%' )
 
         best_gain = gain_vec[xp.argmax(SR_vec)]
         print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
@@ -140,7 +141,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         plt.figure()
         SR_stars = np.zeros(len(starMagnitudes))
         for k,mag in enumerate(starMagnitudes):
-            SR_stars[k] = np.mean(np.exp(-sig[k,it_ss:]))
+            SR_stars[k] = np.mean(np.exp(-sig[k,-it_ss:]))
             plt.plot(tvec,sig[k],'-.',label=f'magV={mag:1.1f}, SR={SR_stars[k]:1.2f}')
         plt.legend()
         plt.grid()

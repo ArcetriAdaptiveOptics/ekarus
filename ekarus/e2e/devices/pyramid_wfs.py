@@ -34,8 +34,8 @@ class PyramidWFS:
 
         self.modulationAngleInLambdaOverD = None
 
-        # self.dtype = xp.float
-        # self.cdtype = xp.cfloat
+        self.dtype = xp.float
+        self.cdtype = xp.cfloat
 
 
     def get_intensity(self, input_field, lambda0OverD):
@@ -59,12 +59,12 @@ class PyramidWFS:
 
         return intensity
     
-    def _intensity_from_field(self, padded_field, lambdaOverD):#, tiltError:tuple):
+    def _intensity_from_field(self, padded_field, lambdaOverD):
         if self.modulationAngleInLambdaOverD*(2*xp.pi)*self.oversampling < 0.1:
-            output_field = self.propagate(padded_field, lambdaOverD)#, tiltError)
+            output_field = self.propagate(padded_field, lambdaOverD)
             intensity = xp.abs(output_field)**2
         else:
-            intensity = self.modulate(padded_field, lambdaOverD)#, tiltError)
+            intensity = self.modulate(padded_field, lambdaOverD)
         return intensity
     
 
@@ -96,7 +96,7 @@ class PyramidWFS:
         #     self.field_on_focal_plane = self.field_on_focal_plane * xp.exp(1j*wedge_tilt, dtype = self.cdtype)
 
         phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
-        self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay)#, dtype=self.cdtype)
+        self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype=self.cdtype)
 
         output_field = xp.fft.ifft2(xp.fft.ifftshift(self._ef_focal_plane_delayed))
 
@@ -121,11 +121,11 @@ class PyramidWFS:
         alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*xp.pi)
         phi_vec = (2*xp.pi)*xp.arange(self._modNsteps)/self._modNsteps
 
-        intensity = xp.zeros(input_field.shape)#,dtype = self.dtype)
+        intensity = xp.zeros(input_field.shape,dtype = self.dtype)
 
         for phi in phi_vec:
             tilt = tiltX * xp.cos(phi) + tiltY * xp.sin(phi)
-            tilted_input = input_field * xp.exp(1j*tilt*alpha_pix)#, dtype=self.cdtype)
+            tilted_input = input_field * xp.exp(1j*tilt*alpha_pix, dtype=self.cdtype)
 
             output = self.propagate(tilted_input, lambdaOverD)
             intensity += (abs(output**2))/self._modNsteps
@@ -145,7 +145,7 @@ class PyramidWFS:
         X,Y = image_grid(shape, recenter=True)
         D = max(shape)
         phi = self.apex_angle*(1 - 1/D*(abs(X)+abs(Y)))
-        phi = xp.asarray(phi)#,dtype=self.dtype)
+        phi = xp.asarray(phi,dtype=self.dtype)
 
         return phi
     

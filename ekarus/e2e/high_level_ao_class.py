@@ -115,7 +115,7 @@ class HighLevelAO():
             if dm.slaving is not None: # slaving
                 IFFs = remap_on_new_mask(dm.IFF, dm.mask, dm.pupil_mask)
                 IFFs = IFFs[:,dm.master_ids]
-                print(f'SLAVING: downsized KL from {dm.IFF.shape} to {IFFs.shape}')
+                print(f'SLAVING: downsized IFFs from {dm.IFF.shape} to {IFFs.shape}')
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes,
                 oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)            
@@ -191,7 +191,7 @@ class HighLevelAO():
                     slopes = xp.vstack((slopes,(push_slope-pull_slope)/2))
             IM = slopes.T
             U,S,Vt = xp.linalg.svd(IM, full_matrices=False)
-            Rec = (Vt.T*1/S) @ U.T
+            Rec = xp.array((Vt.T*1/S) @ U.T,dtype=self.dtype)
             myfits.save_fits(IM_path, IM)
             myfits.save_fits(Rec_path, Rec)
         return Rec, IM

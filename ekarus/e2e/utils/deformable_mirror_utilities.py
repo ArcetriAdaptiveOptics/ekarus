@@ -170,8 +170,7 @@ def estimate_stiffness_from_IFF(IFF, CMat, act_pix_coords, cmdAmps=None):
         The stiffness matrix of the DM.
     """
     n_acts = IFF.shape[1]
-    dtype = xp.float
-    PMat = xp.zeros([n_acts,n_acts], dtype=dtype)
+    PMat = xp.zeros([n_acts,n_acts], dtype=xp.float)
 
     for k in range(n_acts):
         act_data = IFF[:, k]
@@ -253,7 +252,7 @@ def get_slaving_m2c(coords, master_ids, slaving_method:str='wmean', p:int=1, d_t
 
     nActs = len(coords[0,:])
 
-    slaved_m2c = xp.zeros([nActs,nActs])
+    slaved_m2c = xp.zeros([nActs,nActs],dtype=xp.float)
     for master in master_ids:
         slaved_m2c[master,master] = 1
 
