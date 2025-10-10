@@ -143,7 +143,7 @@ class ALPAODM(DeformableMirror):
             coords[0] -= (max(coords[0])-min(coords[0]))/2
             coords[1] -= (max(coords[1])-min(coords[1]))/2
             radii = xp.sqrt(coords[0]**2+coords[1]**2)/2
-            radii *= 1.05 # increase pupil by 2% to make sure all actuators fit
+            # radii *= 1.05 # increase pupil by 2% to make sure all actuators fit
             self.act_coords = xp.asarray(coords*self.pupil_size/2/(2*max(radii)))
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
