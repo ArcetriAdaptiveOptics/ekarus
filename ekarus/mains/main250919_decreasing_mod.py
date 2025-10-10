@@ -32,15 +32,25 @@ def main(tn:str='example_decreasing_mod'):
     dmod_ssao = ChangingGainSSAO(tn)
     dmod_ssao.initialize_turbulence()
     dmod_ssao.pyr.set_modulation_angle(0.0)
+    KL, m2c = dmod_ssao.define_KL_modes(dmod_ssao.dm, zern_modes=5)
+    mod0_Rec, mod0_IM = dmod_ssao.compute_reconstructor(dmod_ssao.sc, KL, dmod_ssao.pyr.lambdaInM, amps=0.002, save_prefix='mod0_')
     dmod_ssao.sc.load_reconstructor(mod0_Rec,m2c)
-    dmod_sig2, _ = dmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude,
+    dmod_sig2, input_sig2 = dmod_ssao.run_loop(dmod_ssao.pyr.lambdaInM, dmod_ssao.starMagnitude,
                                       new_gains=[1.0], changeGain_it_numbers=[100], save_prefix='dmod_')
                                     #   new_Rec=mod0_Rec, changeMod_it_number=200, save_prefix='dmod_')
 
-    lambdaRef = ssao.pyr.lambdaInM
-    ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    unmod_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='mod0_')
+    lambdaRef = dmod_ssao.pyr.lambdaInM
+    # ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
+    # unmod_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='mod0_')
     dmod_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='dmod_')
+
+
+    # ssao.plot_rec_modes(save_prefix='')
+    # unmod_ssao.plot_rec_modes(save_prefix='mod0_')
+    dmod_ssao.plot_rec_modes(save_prefix='dmod_')
+
+    ssao.sig2 = sig2
+    ssao.dmod_sig2 = dmod_sig2
 
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
@@ -48,26 +58,23 @@ def main(tn:str='example_decreasing_mod'):
         mod0_sig2 = mod0_sig2.get()
         dmod_sig2 = dmod_sig2.get()
 
-    ssao.plot_rec_modes(save_prefix='')
-    unmod_ssao.plot_rec_modes(save_prefix='mod0_')
-    dmod_ssao.plot_rec_modes(save_prefix='dmod_')
-
-    tvec = xp.asnumpy(xp.arange(ssao.Nits)*ssao.dt*1e+3)
-    plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,sig2,'-o',label=f'closed loop, modulation: {ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
-    plt.plot(tvec,mod0_sig2,'-o',label=f'closed loop, modulation: {unmod_ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
-    plt.legend()
-    plt.grid()
-    plt.xlim([0.0,tvec[-1]])
-    plt.xlabel('Time [ms]')
-    plt.ylabel(r'$\sigma^2 [rad^2]$')
-    plt.gca().set_yscale('log')
+    tvec = xp.asnumpy(xp.arange(dmod_ssao.Nits)*dmod_ssao.dt*1e+3)
+    # plt.figure()#figsize=(1.7*Nits/10,3))
+    # plt.plot(tvec,input_sig2,'-o',label='open loop')
+    # plt.plot(tvec,sig2,'-o',label=f'closed loop, modulation: {ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
+    # plt.plot(tvec,mod0_sig2,'-o',label=f'closed loop, modulation: {unmod_ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
+    # plt.legend()
+    # plt.grid()
+    # plt.xlim([0.0,tvec[-1]])
+    # plt.xlabel('Time [ms]')
+    # plt.ylabel(r'$\sigma^2 [rad^2]$')
+    # plt.gca().set_yscale('log')
 
     plt.figure()
     plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,mod0_sig2,'-o',label=f'closed loop')
-    plt.plot(tvec,dmod_sig2,'-o',label=f'closed loop, changing gain')
+    plt.plot(tvec,sig2,'-o',label=r'closed loop, modulation = 3 $\lambda/D$')
+    plt.plot(tvec,mod0_sig2,'-o',label=r'closed loop, modulation = 0 $\lambda/D$')
+    plt.plot(tvec,dmod_sig2,'-o',label=r'closed loop, modulation = 0 $\lambda/D$, changing gain')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -103,7 +110,7 @@ def main(tn:str='example_decreasing_mod'):
     
     plt.show()
 
-    return ssao
+    return ssao, dmod_ssao
 
 if __name__ == '__main__':
-    ssao, unmod_ssao = main()
+    ssao, dmod_ssao = main()

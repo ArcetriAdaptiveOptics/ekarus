@@ -45,15 +45,15 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=800e-9,
             gain1_vec = xp.array(gain1_list)
         else:
             gain1_vec = xp.array([0.4,0.5,0.6,0.7,0.8,0.9])
-            if cascao.sc1.modulationAngleInLambdaOverD == 0.0:
-                gain1_vec = xp.array([0.8,0.9,1.0,1.1,1.2,1.3])
+            # if cascao.sc1.modulationAngleInLambdaOverD == 0.0:
+            #     gain1_vec = xp.array([0.8,0.9,1.0,1.1,1.2,1.3])
 
         if gain2_list is not None:
             gain2_vec = xp.array(gain2_list)
         else:
             gain2_vec = xp.array([0.4,0.5,0.6,0.7,0.8,0.9])
-            if cascao.sc2.modulationAngleInLambdaOverD == 0.0:
-                gain2_vec = xp.array([0.8,0.9,1.0,1.1,1.2,1.3])
+            # if cascao.sc2.modulationAngleInLambdaOverD == 0.0:
+            #     gain2_vec = xp.array([0.8,0.9,1.0,1.1,1.2,1.3])
 
         Ni = len(gain1_vec)
         Nj = len(gain2_vec)
@@ -73,11 +73,11 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=800e-9,
                 sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
                 SR = xp.mean(xp.exp(-sig2[-ss_it:]))
                 SR_mat[i,j] = SR.copy()
-                print(f'First loop gain = {cascao.sc1.intGain:1.1f}, second loop gain = {cascao.sc2.intGain:1.1f}, final SR = {SR*100:1.2f}%')
+                print(f'Inner loop gain = {cascao.sc1.intGain:1.1f}, outer loop gain = {cascao.sc2.intGain:1.1f}, final SR = {SR*100:1.2f}%')
                 if SR_mat[i,j] > best_SR:
-                    best_SR = SR_mat[i,j]
-                    best_gain1 = gain1_vec[i]
-                    best_gain2 = gain2_vec[j]
+                    best_SR = SR.copy()
+                    best_gain1 = gain1_vec[i].copy()
+                    best_gain2 = gain2_vec[j].copy()
 
         # plt.figure()
         plt.matshow(xp.asnumpy(SR_mat))

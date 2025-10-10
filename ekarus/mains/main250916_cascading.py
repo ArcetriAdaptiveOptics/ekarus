@@ -7,7 +7,7 @@ from ekarus.e2e.cascading_stage_ao_class import CascadingAO
 import ekarus.e2e.utils.my_fits_package as myfits   
 
 import xupy as xp
-# import numpy as np
+import numpy as np
 from numpy.ma import masked_array
 
 
@@ -21,9 +21,9 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
     amp1 = 0.2
     amp2 = 0.2
     if cascao.sc1.modulationAngleInLambdaOverD < 1.0:
-        amp1 = 0.02
+        amp1 = 0.05
     if cascao.sc2.modulationAngleInLambdaOverD < 1.0:
-        amp2 = 0.02
+        amp2 = 0.05
 
     KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
@@ -78,13 +78,13 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
                     best_gain1 = gain1_vec[i]
                     best_gain2 = gain2_vec[j]
 
-        # plt.figure()
-        plt.matshow(xp.asnumpy(SR_mat))
+        plt.figure()
+        plt.imshow(xp.asnumpy(SR_mat))#,cmap='twilight')
         plt.colorbar()
-        # plt.gca().set_xticks(xp.asnumpy(gain_vec))
-        # plt.gca().set_yticks(xp.asnumpy(gain_vec))
-        plt.ylabel('First loop gain id')
-        plt.xlabel('Second loop gain id')
+        plt.xticks(np.arange(Ni),labels=[str(g1) for g1 in gain1_vec])
+        plt.yticks(np.arange(Nj),labels=[str(g2) for g2 in gain2_vec])
+        plt.ylabel('First loop gain')
+        plt.xlabel('Second loop gain')
 
         cascao.tested_gains1 = gain1_vec        
         cascao.tested_gains2 = gain2_vec

@@ -1,50 +1,50 @@
-DM.out: 
+DM.in: 
   Nacts: 468
   mmax_stroke_in_m: 5e-6  
 
-PYR.out:
+PYR.in:
   oversampling: 4 #5
   lambdaInM: 750e-9             # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
   subapPixSize: 35.5            # subaperture diameter in pix
   subapPixSep: 8                # pixel distance between subaps
 
-CCD.out:
+CCD.in:
   detector_shape: [144,144]     # detector pixel size
   RON: 0.3                      # readout noise in e-
   quantum_efficiency: 0.9       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
-SLOPE.COMPUTER.out:
+SLOPE.COMPUTER.in:
   loopFrequencyInHz: 1500     
-  integratorGain: 0.2           # loop integrator gain
+  integratorGain: 0.7           # loop integrator gain
   delay: 4                      # loop delay in steps
-  nModes2Correct: 468           # number of reconstructor modes
+  nModes2Correct: 415           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
   modulationInLambdaOverD: 3.0  # modulation amplitude
 
-DM.in: 
+DM.out: 
   Nacts: 241
   max_stroke_in_m: 125e-7   
 
-PYR.in:
+PYR.out:
   oversampling: 4
   lambdaInM: 750e-9             # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
   subapPixSize: 29.5            # subaperture diameter in pix
   subapPixSep: 10               # pixel distance between subaps
 
-CCD.in:
+CCD.out:
   detector_shape: [120,120]       # detector pixel size
   RON: 0.3                      # readout noise in e-
   quantum_efficiency: 0.9       # detector quantum efficiency
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
-SLOPE.COMPUTER.in:
+SLOPE.COMPUTER.out:
   loopFrequencyInHz: 3000     
-  integratorGain: 0.9           # loop integrator gain
+  integratorGain: 0.4           # loop integrator gain
   delay: 2                      # loop delay in steps
-  nModes2Correct: 219           # number of reconstructor modes
+  nModes2Correct: 210           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
   modulationInLambdaOverD: 0.0  # modulation amplitude
 
