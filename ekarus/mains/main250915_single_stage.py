@@ -31,7 +31,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     ssao.sc.load_reconstructor(Rec,m2c)
 
     lambdaRef = ssao.pyr.lambdaInM
-    it_ss = 100
+    it_ss = 200
 
     if optimize_gain is True:
         print('Finding best gains:')
@@ -80,7 +80,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
             starMag = starMagnitudes[k]
             print(f'Now simulating for magnitude: {starMag:1.1f}')
             sig[k,:],_ = ssao.run_loop(lambdaRef, starMag, save_prefix=f'magV{starMag:1.0f}_')
-        # ssao.SR = xp.exp(-sig)
+        ssao.SR = xp.mean(xp.exp(-sig[:,-it_ss:]),axis=1)
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -117,6 +117,8 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
+    if show:
+        ssao.plot_rec_modes(save_prefix='')
     ssao.sig2 = sig2
 
     if xp.on_gpu: # Convert to numpy for plotting
@@ -159,8 +161,6 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         plt.ylabel('SR %')
         plt.title('Strehl ratio vs star magnitude')
         plt.xticks(np.array(starMagnitudes))
-
-    ssao.plot_rec_modes(save_prefix='')
     
     plt.show()
 

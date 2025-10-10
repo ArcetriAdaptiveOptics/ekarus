@@ -89,12 +89,6 @@ class PyramidWFS:
         """
         self.field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(input_field))
 
-        # if tiltError is not None:
-        #     tiltX,tiltY = self._get_XY_tilt_planes(input_field.shape)
-        #     wedgeX, wedgeY = tiltError
-        #     wedge_tilt = (tiltX*wedgeX + tiltY*wedgeY)*(2*xp.pi)*self.oversampling
-        #     self.field_on_focal_plane = self.field_on_focal_plane * xp.exp(1j*wedge_tilt, dtype = self.cdtype)
-
         phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
         self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype=self.cdtype)
 
