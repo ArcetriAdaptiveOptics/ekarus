@@ -35,6 +35,8 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
     Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(Rec,m2c)
 
+    cascao.get_photons_per_subap(starMagnitude=cascao.starMagnitude)
+
     if gain1_list is not None or gain2_list is not None:
         optimize_gain = True
 

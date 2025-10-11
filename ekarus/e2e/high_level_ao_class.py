@@ -164,7 +164,7 @@ class HighLevelAO():
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
-            Nmodes = xp.shape(MM)[0]
+            Nmodes = min(slope_computer.nModes,xp.shape(MM)[0])
             slopes = None
             electric_field_amp = 1-self.cmask
             lambdaOverD = lambdaInM/self.pupilSizeInM
@@ -172,9 +172,10 @@ class HighLevelAO():
             if isinstance(amps, float):
                 amps *= xp.ones(Nmodes)
             for i in range(Nmodes):
-                print(f'\rMode {i+1}/{Nmodes}', end='\r', flush=True)
+                print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)
                 amp = amps[i]
                 mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
+                # mode_phase = reshape_on_mask(MM[i,:]*amp, self.dm.mask)
                 # if self.dm.slaving is not None:
                 #     dm_command = self.dm.R[:,self.dm.visible_pix_ids] @ MM[i,:]*amp
                 #     mirror_cmd = self.dm.slaving @ dm_command[self.dm.master_ids]
@@ -183,8 +184,7 @@ class HighLevelAO():
                 # mode_phase = reshape_on_mask(self.dm.IFF @ mirror_cmd, self.dm.mask)
                 input_field = xp.exp(1j*mode_phase) * electric_field_amp
                 push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
-                input_field = xp.conj(input_field)
-                pull_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
+                pull_slope = slope_computer.compute_slopes(xp.conj(input_field), lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
                 if slopes is None:
                     slopes = (push_slope-pull_slope)/2
                 else:

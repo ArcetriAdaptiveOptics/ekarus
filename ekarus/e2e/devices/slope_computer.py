@@ -88,9 +88,6 @@ class SlopeComputer():
         """
         self.Rec = Rec[:self.nModes,:]
         self.m2c = m2c[:,:self.nModes]
-        # modal_gains = xp.zeros(xp.shape(Rec)[0])
-        # modal_gains[:self.nModes] = 1
-        # self.modal_gains = modal_gains
         
 
     def _compute_pyramid_slopes(self, detector_image, use_diagonal:bool=False):

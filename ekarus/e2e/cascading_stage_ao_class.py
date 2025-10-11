@@ -62,6 +62,22 @@ class CascadingAO(HighLevelAO):
         # self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
         self.dm2 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
 
+
+    def get_photons_per_subap(self, starMagnitude):
+        collected_photons = self.get_photons_per_second(starMagnitude=starMagnitude)
+
+        Nsubaps1 = xp.sum(1-self.sc1._subaperture_masks)
+        ph1 = collected_photons * self.ccd1.quantum_efficiency * self.ccd1.beam_split_ratio
+        ph_per_subap1 = ph1 / Nsubaps1 * self.sc1.dt
+
+        Nsubaps2 = xp.sum(1-self.sc2._subaperture_masks)
+        ph2 = collected_photons * self.ccd2.quantum_efficiency * self.ccd2.beam_split_ratio
+        ph_per_subap2 = ph2 / Nsubaps2 * self.sc2.dt
+
+        print(f'First stage: {ph_per_subap1:1.1f}e-/frame/subap, Second stage: {ph_per_subap2:1.1f}e-/frame/subap')
+
+        return ph_per_subap1, ph_per_subap2
+
         
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):

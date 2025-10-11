@@ -39,5 +39,5 @@ LOOP:
   nIterations: 400
   starMagnitude: 1.0
   simFreqHz: 1500          # simulation frequency in Hz
-  recompute: False         # if False, any calibration data saved from 
+  recompute: True         # if False, any calibration data saved from 
                            # previous runs is loaded rather than recomputed

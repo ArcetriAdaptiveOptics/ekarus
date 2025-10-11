@@ -130,8 +130,8 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
     tvec = tvec.get() if xp.on_gpu else tvec.copy()
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,sig2,'-o',label='closed loop')
+    plt.plot(tvec,input_sig2,'-.',label='open loop')
+    plt.plot(tvec,sig2,'-.',label='closed loop')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])

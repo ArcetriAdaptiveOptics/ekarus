@@ -80,19 +80,20 @@ def main(tn:str='example_pupil_shift', pupilShiftsInPixel:list=[0.2], shiftAngle
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
 
+
+    SR_ref = xp.mean(xp.exp(-sig2[-ss_it:]))
+    SR_beforeDM = xp.mean(xp.exp(-sig2_beforeDM[:,:,-ss_it:]),axis=-1)
+    SR_afterDM = xp.mean(xp.exp(-sig2_afterDM[:,:,-ss_it:]),axis=-1)
+
     # Convert to numpy for plotting
     input_sig2 = xp.asnumpy(input_sig2)
     sig2 = xp.asnumpy(sig2)
-    sig_beforeDM = xp.asnumpy(sig_beforeDM)
-    sig_afterDM = xp.asnumpy(sig_afterDM)
+    sig2_beforeDM = xp.asnumpy(sig2_beforeDM)
+    sig2_afterDM = xp.asnumpy(sig2_afterDM)
     # rec_modes = rec_modes.get()
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
     tvec = xp.asnumpy(tvec)
-
-    SR_ref = xp.mean(xp.exp(-sig2[-ss_it:]))
-    SR_beforeDM = xp.mean(xp.exp(-sig2_beforeDM),axis=-1)
-    SR_afterDM = xp.mean(xp.exp(-sig2_afterDM),axis=-1)
 
     for j,shiftAmp in enumerate(pupilShiftsInPixel):
         plt.figure()
@@ -100,7 +101,7 @@ def main(tn:str='example_pupil_shift', pupilShiftsInPixel:list=[0.2], shiftAngle
         plt.plot(tvec,sig2,label=f'reference, SR={SR_ref.get():1.2f}')
         for i,ang in enumerate(shiftAngles):
             sr_ss = SR_beforeDM[i,j].get()
-            plt.plot(tvec,sig_beforeDM[i,j,:],'-.',label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
+            plt.plot(tvec,sig2_beforeDM[i,j,:],'-.',label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
         plt.legend()
         plt.grid()
         plt.xlim([0.0,tvec[-1]])
@@ -115,7 +116,7 @@ def main(tn:str='example_pupil_shift', pupilShiftsInPixel:list=[0.2], shiftAngle
         plt.plot(tvec,sig2,label=f'reference, SR={SR_ref.get():1.2f}')
         for i,ang in enumerate(shiftAngles):
             sr_ss = SR_afterDM[i,j].get()
-            plt.plot(tvec,sig_afterDM[i,j,:],'-.',label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
+            plt.plot(tvec,sig2_afterDM[i,j,:],'-.',label=f'ang={ang*180/xp.pi:1.0f}, SR={sr_ss:1.2f}')
         plt.legend()
         plt.grid()
         plt.xlim([0.0,tvec[-1]])

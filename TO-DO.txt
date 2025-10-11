@@ -22,9 +22,4 @@ Control Filter Class ('leaky' integrator)
 Pyramid optical gain (vs modulation) main
 Slaving jupyter notebook (reconstructor error)
 
-
-
-CODING/EASE-OF_USE:
-
-Documentation (!!!)
-Restore Circular Mask
+GPU-accelerated tps

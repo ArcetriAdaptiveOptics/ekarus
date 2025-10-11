@@ -175,6 +175,7 @@ class SingleStageAO(HighLevelAO):
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        self.get_contrast(residual_phase_in_rad=res_phase_in_rad)
 
         in_err_rad2 = xp.asnumpy(self.phase_rms(atmo_phase_in_rad)**2)
         res_err_rad2 = xp.asnumpy(self.phase_rms(res_phase_in_rad)**2)
@@ -246,4 +247,29 @@ class SingleStageAO(HighLevelAO):
         plt.ylabel('[m]')
         plt.grid()
         plt.title(f'Last 5 modes amplitude\nLast {n_its} iterations')
+
+
+    def get_contrast(self, residual_phase_in_rad, oversampling:int=12):
+
+        from arte.utils.radial_profile import computeRadialProfile
+        res_phase = xp.asarray(residual_phase_in_rad)
+        padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
+        psf_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
+        phase_2d = reshape_on_mask(res_phase, psf_mask)
+        phase_var = (phase_2d-xp.mean(res_phase))**2
+        perfect_coro_field = (1-psf_mask) * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
+        field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
+        psf = abs(field_on_focal_plane)**2
+        perfect_psf = abs(xp.fft.fftshift(xp.fft.fft2((1-psf_mask))))**2
+        psd,dist = computeRadialProfile(xp.asnumpy(psf/xp.max(perfect_psf)),psf.shape[0]/2,psf.shape[1]/2)
+        pix_dist = dist/oversampling
+
+        plt.figure()
+        plt.plot(pix_dist,psd,'--')
+        plt.grid()
+        plt.yscale('log')
+        plt.xlabel(r'$\lambda/D$')
+        plt.xlim([0,30])
+
+        return xp.array(psd), xp.array(pix_dist)
 
