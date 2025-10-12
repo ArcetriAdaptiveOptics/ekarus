@@ -1,25 +1,18 @@
 IMPORTANT:
 
+Pyramid optical gain compensation
 Fix TestDM.ipynb
 Implement Cn2 profile in config
 
-Segmented hexagonal masks
-U-net transfer learning
-
+Slaving update
+GPU-accelerated tps
 
 
 EXTRAS:
 
-Zernike WFS
-Shack Hartmann WFS
-
 Remove xupy (cupy) dependency
 Remove arte dependency
 
-Test double/single precision
 Control Filter Class ('leaky' integrator)
-
-Pyramid optical gain (vs modulation) main
-Slaving jupyter notebook (reconstructor error)
-
-GPU-accelerated tps
+Segmented hexagonal masks (HCIpy?)
+U-net transfer learning

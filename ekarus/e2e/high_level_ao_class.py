@@ -9,7 +9,7 @@ from ekarus.e2e.utils.root import resultspath, calibpath, atmopath
 
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask, remap_on_new_mask
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
-
+from arte.utils.radial_profile import computeRadialProfile
 
 class HighLevelAO():
 
@@ -392,6 +392,21 @@ class HighLevelAO():
                 print(f'File {file_path} not found, trying {new_path} instead')
                 loaded_data.append(myfits.read_fits(new_path))
         return loaded_data
+    
+    
+    def get_contrast(self, residual_phase_in_rad, oversampling:int=12):
+        res_phase = xp.asarray(residual_phase_in_rad)
+        padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
+        pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
+        phase_2d = reshape_on_mask(res_phase, pup_mask)
+        phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
+        perfect_coro_field = (1-pup_mask) * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
+        field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
+        psf = abs(field_on_focal_plane)**2
+        perfect_psf = abs(xp.fft.fftshift(xp.fft.fft2((1-pup_mask))))**2
+        psd,dist = computeRadialProfile(xp.asnumpy(psf/xp.max(perfect_psf)),psf.shape[0]/2,psf.shape[1]/2)
+        pix_dist = dist/oversampling
+        return xp.array(psf), xp.array(psd), xp.array(pix_dist)
 
     
     def _psf_from_frame(self, frame, lambdaInM, oversampling:int=8):

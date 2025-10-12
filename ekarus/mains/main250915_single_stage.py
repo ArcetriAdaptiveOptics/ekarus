@@ -29,6 +29,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
     ssao.sc.load_reconstructor(Rec,m2c)
+    ssao.KL = KL
 
     lambdaRef = ssao.pyr.lambdaInM
     it_ss = 200
@@ -117,6 +118,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
+    ssao.plot_contrast(lambdaRef, frame_id=-1, save_prefix='')
     if show:
         ssao.plot_rec_modes(save_prefix='')
     ssao.sig2 = sig2

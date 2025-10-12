@@ -16,8 +16,8 @@ CCD:
   beam_splitter_ratio: 0.5      # fraction of light to WFS
 
 SLOPE.COMPUTER:
-  loopFrequencyInHz: 3000     
-  integratorGain: 0.5           # loop integrator gain
+  loopFrequencyInHz: 1500     
+  integratorGain: 0.9           # loop integrator gain
   delay: 2                      # loop delay in steps
   nModes2Correct: 415           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # TBI
@@ -39,6 +39,6 @@ ATMO:
 LOOP:
   nIterations: 300
   starMagnitude: 1.0
-  simFreqHz: 3000          # simulation frequency in Hz
+  simFreqHz: 1500          # simulation frequency in Hz
   recompute: False         # if False, any calibration data saved from 
                            # previous runs is loaded rather than recomputed

@@ -171,11 +171,10 @@ class SingleStageAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, ma_res_phases, det_frames, _, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, ma_res_phases, det_frames, rec_modes, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-        self.get_contrast(residual_phase_in_rad=res_phase_in_rad)
 
         in_err_rad2 = xp.asnumpy(self.phase_rms(atmo_phase_in_rad)**2)
         res_err_rad2 = xp.asnumpy(self.phase_rms(res_phase_in_rad)**2)
@@ -200,6 +199,20 @@ class SingleStageAO(HighLevelAO):
         self.dm.plot_position(dm_cmds[frame_id])
         plt.title('Mirror command [m]')
         plt.axis('off')
+
+        res_phase = xp.asarray(ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask])
+        true_modes = (xp.linalg.pinv(self.KL)).T @ res_phase
+
+        plt.figure()
+        plt.plot(xp.asnumpy(xp.abs(true_modes))*1e+9,label='true')
+        plt.plot(xp.asnumpy(xp.abs(rec_modes[frame_id]))*1e+9,label='reconstructed')
+        plt.legend()
+        plt.xlabel('KL mode index')
+        plt.ylabel('KL mode amp [nm]')
+        plt.title('True vs reconstructed KL modes')
+        plt.grid()
+        plt.xscale('log')
+        plt.yscale('log')
 
 
     def plot_rec_modes(self, save_prefix:str=''):
@@ -247,29 +260,39 @@ class SingleStageAO(HighLevelAO):
         plt.ylabel('[m]')
         plt.grid()
         plt.title(f'Last 5 modes amplitude\nLast {n_its} iterations')
+        
 
+    def plot_contrast(self, lambdaRef, frame_id:int=-1, save_prefix:str='', oversampling:int=12):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : int, optional
+            The frame/iteration index to plot, by default -1 (last frame).
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
 
-    def get_contrast(self, residual_phase_in_rad, oversampling:int=12):
+        _, _, ma_res_phases, _, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
-        from arte.utils.radial_profile import computeRadialProfile
-        res_phase = xp.asarray(residual_phase_in_rad)
-        padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
-        psf_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
-        phase_2d = reshape_on_mask(res_phase, psf_mask)
-        phase_var = (phase_2d-xp.mean(res_phase))**2
-        perfect_coro_field = (1-psf_mask) * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
-        field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
-        psf = abs(field_on_focal_plane)**2
-        perfect_psf = abs(xp.fft.fftshift(xp.fft.fft2((1-psf_mask))))**2
-        psd,dist = computeRadialProfile(xp.asnumpy(psf/xp.max(perfect_psf)),psf.shape[0]/2,psf.shape[1]/2)
-        pix_dist = dist/oversampling
+        res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        psf,psd,pix_dist=self.get_contrast(residual_phase_in_rad=res_phase_in_rad, oversampling=oversampling)
 
         plt.figure()
-        plt.plot(pix_dist,psd,'--')
+        showZoomCenter(xp.asnumpy(psf), 1/oversampling, shrink=0.8,
+        title = f'Coronographic PSF', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+
+        plt.figure()
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd),'--')
         plt.grid()
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
 
-        return xp.array(psd), xp.array(pix_dist)
+        return psd, pix_dist
 

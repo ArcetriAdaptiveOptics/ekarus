@@ -281,6 +281,65 @@ class CascadingAO(HighLevelAO):
         plt.title('DM2 command [m]')
         plt.axis('off')
 
+        res1_phase = xp.asarray(res1_phases[frame_id].data[~res1_phases[frame_id].mask])
+        KL1_modes = (xp.linalg.pinv(self.KL1)).T @ res1_phase
+        res2_phase = xp.asarray(res2_phases[frame_id].data[~res2_phases[frame_id].mask])
+        KL2_modes = (xp.linalg.pinv(self.KL2)).T @ res2_phase
+
+        plt.figure()
+        plt.plot(xp.asnumpy(xp.abs(KL1_modes))*1e+9,label='first stage')
+        plt.plot(xp.asnumpy(xp.abs(KL2_modes))*1e+9,label='second stage')
+        plt.legend()
+        plt.xlabel('mode index')
+        plt.ylabel('mode RMS amp [nm]')
+        plt.title('KL modes')
+        plt.grid()
+        plt.xscale('log')
+        plt.yscale('log')
+
+
+    def plot_contrast(self, lambdaRef, frame_id:int=-1, save_prefix:str='',oversampling:int=12):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : int, optional
+            The frame/iteration index to plot, by default -1 (last frame).
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        _, _, res1_phases, _, _, _, _, res2_phases, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
+
+        res1_phase_in_rad = res1_phases[frame_id].data[~res1_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        psf1,psd1,pix_dist=self.get_contrast(residual_phase_in_rad=res1_phase_in_rad,oversampling=oversampling)
+        res2_phase_in_rad = res2_phases[frame_id].data[~res2_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        psf2,psd2,pix_dist=self.get_contrast(residual_phase_in_rad=res2_phase_in_rad,oversampling=oversampling)
+
+
+        plt.figure(figsize=(8,4))
+        plt.subplot(1,2,1)
+        showZoomCenter(xp.asnumpy(psf1), 1/oversampling, shrink=0.7,
+        title = f'Coronographic PSF after DM1', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        plt.subplot(1,2,2)
+        showZoomCenter(xp.asnumpy(psf2), 1/oversampling, shrink=0.7,
+        title = f'Coronographic PSF after DM2', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+
+        plt.figure()
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd1),label='First stage')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd2),label='Second stage')
+        plt.legend()
+        plt.grid()
+        plt.yscale('log')
+        plt.xlabel(r'$\lambda/D$')
+        plt.xlim([0,30])
+
+        return psd1, psd2, pix_dist
 
     # def __init__(self, tn, xp=np):
 
