@@ -11,7 +11,7 @@ import numpy as np
 from numpy.ma import masked_array
 
 
-def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=800e-9,
+def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
          optimize_gain:bool=False, gain1_list:list=None, gain2_list:list=None):
 
     print('Initializing devices ...')
@@ -25,16 +25,20 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=800e-9,
         amp2 = 0.02
 
     cascao.initialize_turbulence()
-    KL, m2c = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
+    KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
-    cascao.sc1.load_reconstructor(Rec,m2c)
+    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
+    cascao.sc1.load_reconstructor(Rec,m2c1)
 
-    KL, m2c = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
+    KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
-    cascao.sc2.load_reconstructor(Rec,m2c)
+    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
+    cascao.sc2.load_reconstructor(Rec,m2c2)
 
+    cascao.KL1 = KL1
+    cascao.KL2 = KL2
+
+    cascao.get_photons_per_subap(cascao.starMagnitude)
 
     if gain1_list is not None or gain2_list is not None:
         optimize_gain = True
@@ -153,6 +157,7 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=800e-9,
         myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     cascao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
+    cascao.psd1, cascao.psd2,cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_id=-1, save_prefix='')
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
@@ -164,9 +169,9 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=800e-9,
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,dm_inner_sig2,'-o',label='after DM1 (inner loop)')
-    plt.plot(tvec,dm_outer_sig2,'-o',label='after DM2 (outer loop)')
+    plt.plot(tvec,input_sig2,'-.',label='open loop')
+    plt.plot(tvec,dm_inner_sig2,'-.',label='after DM1 (inner loop)')
+    plt.plot(tvec,dm_outer_sig2,'-.',label='after DM2 (outer loop)')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])

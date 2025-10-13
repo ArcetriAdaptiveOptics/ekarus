@@ -11,7 +11,7 @@ import numpy as np
 from numpy.ma import masked_array
 
 
-def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False, 
+def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False, 
          optimize_gain:bool=False, gain1_list:list=None, gain2_list:list=None):
 
     print('Initializing devices ...')
@@ -27,13 +27,13 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
 
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
-    cascao.sc1.load_reconstructor(Rec,m2c1)
+    Rec1, _ = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
+    cascao.sc1.load_reconstructor(Rec1,m2c1)
 
     KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
-    cascao.sc2.load_reconstructor(Rec,m2c2)
+    Rec2, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
+    cascao.sc2.load_reconstructor(Rec2,m2c2)
 
     cascao.KL1 = KL1
     cascao.KL2 = KL2
@@ -55,7 +55,7 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
         if gain2_list is not None:
             gain2_vec = xp.array(gain2_list)
         else:
-            gain2_vec = xp.array([0.4,0.5,0.6,0.7,0.8,0.9])
+            gain2_vec = xp.array([0.4,0.5,0.6,0.7,0.8,0.9,1.0])
             if cascao.sc2.modulationAngleInLambdaOverD == 0.0:
                 gain2_vec = xp.array([0.8,0.9,1.0,1.1,1.2,1.3])
 
@@ -66,12 +66,17 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
         best_gain1 = gain1_vec[0]
         best_gain2 = gain2_vec[0]
         best_SR = 0.0
-
         ss_it = 100
 
         print('Finding the best gain')
         for i in range(Ni):
             for j in range(Nj):
+                cascao = CascadingAO(tn)
+                cascao.initialize_turbulence()
+                cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+                cascao.sc1.load_reconstructor(Rec1,m2c1)
+                cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
+                cascao.sc2.load_reconstructor(Rec2,m2c2)
                 cascao.sc1.intGain = gain1_vec[i]
                 cascao.sc2.intGain = gain2_vec[j]
                 sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
@@ -84,17 +89,23 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
                     best_gain2 = gain2_vec[j]
 
         plt.figure()
-        plt.imshow(xp.asnumpy(SR_mat),cmap='twilight')
+        plt.imshow(xp.asnumpy(SR_mat),cmap='jet')
         plt.colorbar()
         plt.yticks(np.arange(Ni),labels=[str(g1) for g1 in gain1_vec])
         plt.xticks(np.arange(Nj),labels=[str(g2) for g2 in gain2_vec])
         plt.ylabel('First loop gain')
         plt.xlabel('Second loop gain')
-        plt.zelabl('SR %')
+        plt.zlabel('SR %')
         for i in range(Ni):
             for j in range(Nj):
                 plt.text(j,i, f'{SR_mat[i,j]*100:1.2f}', ha='center', va='center', color='w')
 
+        cascao = CascadingAO(tn)
+        cascao.initialize_turbulence()
+        cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+        cascao.sc1.load_reconstructor(Rec1,m2c1)
+        cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
+        cascao.sc2.load_reconstructor(Rec2,m2c2)
         cascao.tested_gains1 = gain1_vec        
         cascao.tested_gains2 = gain2_vec
         cascao.SR_mat = SR_mat
@@ -174,9 +185,9 @@ def main(tn:str='example_cascading_stage', lambdaRef=800e-9, show:bool=False,
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,dm1_sig2,'-o',label='after DM1')
-    plt.plot(tvec,dm2_sig2,'-o',label='after DM2')
+    plt.plot(tvec,input_sig2,'-.',label='open loop')
+    plt.plot(tvec,dm1_sig2,'-.',label='after DM1')
+    plt.plot(tvec,dm2_sig2,'-.',label='after DM2')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])

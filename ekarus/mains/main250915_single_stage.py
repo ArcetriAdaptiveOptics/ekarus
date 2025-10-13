@@ -122,6 +122,8 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     if show:
         ssao.plot_rec_modes(save_prefix='')
     ssao.sig2 = sig2
+    if starMagnitudes is not None:
+        ssao.sig = sig
 
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()

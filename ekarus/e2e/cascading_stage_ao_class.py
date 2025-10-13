@@ -338,6 +338,7 @@ class CascadingAO(HighLevelAO):
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
+        plt.title('Contrast')
 
         return psd1, psd2, pix_dist
 

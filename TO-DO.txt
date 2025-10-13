@@ -1,5 +1,6 @@
 IMPORTANT:
 
+main subaperture finder
 Pyramid optical gain compensation
 Fix TestDM.ipynb
 Implement Cn2 profile in config
@@ -8,11 +9,18 @@ Slaving update
 GPU-accelerated tps
 
 
+
+FUTURE UPDATES:
+
+Triangular pyramid
+Control Filter Class ('leaky' integrator)
+Segmented hexagonal masks (HCIpy?)
+U-net transfer learning
+
+
+
 EXTRAS:
 
 Remove xupy (cupy) dependency
 Remove arte dependency
 
-Control Filter Class ('leaky' integrator)
-Segmented hexagonal masks (HCIpy?)
-U-net transfer learning
