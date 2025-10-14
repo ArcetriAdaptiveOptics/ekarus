@@ -35,9 +35,6 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
     Rec2, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(Rec2,m2c2)
 
-    cascao.KL1 = KL1
-    cascao.KL2 = KL2
-
     cascao.get_photons_per_subap(starMagnitude=cascao.starMagnitude)
 
     if gain1_list is not None or gain2_list is not None:
@@ -82,7 +79,7 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
                 sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
                 SR = xp.mean(xp.exp(-sig2[-ss_it:]))
                 SR_mat[i,j] = SR.copy()
-                print(f'First loop gain = {cascao.sc1.intGain:1.1f}, second loop gain = {cascao.sc2.intGain:1.1f}, final SR = {SR*100:1.2f}%')
+                print(f'First loop gain = {cascao.sc1.intGain:1.2f}, second loop gain = {cascao.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
                 if SR_mat[i,j] > best_SR:
                     best_SR = SR_mat[i,j]
                     best_gain1 = gain1_vec[i]
@@ -95,7 +92,7 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
         plt.xticks(np.arange(Nj),labels=[str(g2) for g2 in gain2_vec])
         plt.ylabel('First loop gain')
         plt.xlabel('Second loop gain')
-        plt.zlabel('SR %')
+        # plt.zlabel('SR %')
         for i in range(Ni):
             for j in range(Nj):
                 plt.text(j,i, f'{SR_mat[i,j]*100:1.2f}', ha='center', va='center', color='w')
@@ -114,6 +111,9 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
         cascao.sc2.intGain = best_gain2
         print(f'Selecting first loop gain = {cascao.sc1.intGain}, second loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
+
+    cascao.KL1 = KL1
+    cascao.KL2 = KL2
     print('Running the loop ...')
     dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
 
