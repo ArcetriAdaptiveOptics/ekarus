@@ -27,16 +27,13 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
     cascao.initialize_turbulence()
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
-    cascao.sc1.load_reconstructor(Rec,m2c1)
+    Rec1, _ = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
+    cascao.sc1.load_reconstructor(Rec1,m2c1)
 
     KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-    Rec, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
-    cascao.sc2.load_reconstructor(Rec,m2c2)
-
-    cascao.KL1 = KL1
-    cascao.KL2 = KL2
+    Rec2, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
+    cascao.sc2.load_reconstructor(Rec2,m2c2)
 
     cascao.get_photons_per_subap(cascao.starMagnitude)
 
@@ -72,24 +69,38 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
         print('Finding the best gain')
         for i in range(Ni):
             for j in range(Nj):
+                cascao = NestedStageAO(tn)
+                cascao.initialize_turbulence()
+                cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+                cascao.sc1.load_reconstructor(Rec1,m2c1)
+                cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
+                cascao.sc2.load_reconstructor(Rec2,m2c2)
                 cascao.sc1.intGain = gain1_vec[i]
                 cascao.sc2.intGain = gain2_vec[j]
                 sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
                 SR = xp.mean(xp.exp(-sig2[-ss_it:]))
                 SR_mat[i,j] = SR.copy()
-                print(f'Inner loop gain = {cascao.sc1.intGain:1.1f}, outer loop gain = {cascao.sc2.intGain:1.1f}, final SR = {SR*100:1.2f}%')
+                print(f'Inner loop gain = {cascao.sc1.intGain:1.2f}, outer loop gain = {cascao.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
                 if SR_mat[i,j] > best_SR:
                     best_SR = SR.copy()
                     best_gain1 = gain1_vec[i].copy()
                     best_gain2 = gain2_vec[j].copy()
 
-        # plt.figure()
-        plt.matshow(xp.asnumpy(SR_mat))
+
+        cascao.KL1 = KL1
+        cascao.KL2 = KL2
+
+        plt.figure()
+        plt.imshow(xp.asnumpy(SR_mat),cmap='jet')
         plt.colorbar()
-        # plt.gca().set_xticks(xp.asnumpy(gain_vec))
-        # plt.gca().set_yticks(xp.asnumpy(gain_vec))
-        plt.ylabel('First loop gain id')
-        plt.xlabel('Second loop gain id')
+        plt.yticks(np.arange(Ni),labels=[str(g1) for g1 in gain1_vec])
+        plt.xticks(np.arange(Nj),labels=[str(g2) for g2 in gain2_vec])
+        plt.ylabel('First loop gain')
+        plt.xlabel('Second loop gain')
+        # plt.zlabel('SR %')
+        for i in range(Ni):
+            for j in range(Nj):
+                plt.text(j,i, f'{SR_mat[i,j]*100:1.2f}', ha='center', va='center', color='w')
 
         cascao.tested_gains1 = gain1_vec        
         cascao.tested_gains2 = gain2_vec

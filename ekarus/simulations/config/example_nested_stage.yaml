@@ -17,7 +17,7 @@ CCD.out:
 
 SLOPE.COMPUTER.out:
   loopFrequencyInHz: 1000     
-  integratorGain: 0.9           # loop integrator gain
+  integratorGain: 1.0           # loop integrator gain
   delay: 20                      # loop delay in steps
   nModes2Correct: 415           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # if 0, no TT offloading

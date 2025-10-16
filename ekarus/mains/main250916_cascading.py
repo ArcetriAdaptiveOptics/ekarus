@@ -181,7 +181,7 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
         # rec2_modes = rec2_modes.get()
 
     cascao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    cascao.psd1, cascao.psd2,cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_id=-1, save_prefix='')
+    cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_id=-1, save_prefix='')
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
