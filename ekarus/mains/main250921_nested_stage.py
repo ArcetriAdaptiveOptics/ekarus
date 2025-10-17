@@ -86,7 +86,12 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
                     best_gain1 = gain1_vec[i].copy()
                     best_gain2 = gain2_vec[j].copy()
 
-
+        cascao = NestedStageAO(tn)
+        cascao.initialize_turbulence()
+        cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+        cascao.sc1.load_reconstructor(Rec1,m2c1)
+        cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
+        cascao.sc2.load_reconstructor(Rec2,m2c2)
         cascao.KL1 = KL1
         cascao.KL2 = KL2
 
@@ -95,8 +100,8 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
         plt.colorbar()
         plt.yticks(np.arange(Ni),labels=[str(g1) for g1 in gain1_vec])
         plt.xticks(np.arange(Nj),labels=[str(g2) for g2 in gain2_vec])
-        plt.ylabel('First loop gain')
-        plt.xlabel('Second loop gain')
+        plt.ylabel('Inner loop gain')
+        plt.xlabel('Outer loop gain')
         # plt.zlabel('SR %')
         for i in range(Ni):
             for j in range(Nj):
@@ -108,7 +113,7 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
 
         cascao.sc1.intGain = best_gain1
         cascao.sc2.intGain = best_gain2
-        print(f'Selecting first loop gain = {cascao.sc1.intGain}, second loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
+        print(f'Selecting inner loop gain = {cascao.sc1.intGain}, outer loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
 
     print('Running the loop ...')

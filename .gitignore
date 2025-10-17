@@ -2,6 +2,7 @@
 *.fits
 *.ini
 *.yaml
+ekarus/simulations/config/*
 !ekarus/simulations/config/example_single_stage.yaml
 !ekarus/simulations/config/example_dual_stage.yaml
 !ekarus/e2e/alpao_dms_data/configuration.ini
