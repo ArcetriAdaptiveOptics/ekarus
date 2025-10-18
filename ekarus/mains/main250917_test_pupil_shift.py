@@ -11,7 +11,7 @@ from ekarus.e2e.pupil_shift_ao_class import PupilShift
 # import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_pupil_shift', pupilShiftsInPixel:list=[0.2], shiftAnglesInDegrees:list=[0.0], it_ss:int=100):
+def main(tn:str='example_pupil_shift', pupilShiftsInPixel:list=[0.2], shiftAnglesInDegrees:list=[0.0], ss_it:int=200):
 
     pupilShiftsInPixel = xp.array(pupilShiftsInPixel)
     shiftAngles = xp.array(shiftAnglesInDegrees)*xp.pi/180
@@ -29,8 +29,6 @@ def main(tn:str='example_pupil_shift', pupilShiftsInPixel:list=[0.2], shiftAngle
     # pyr2det = ssao.pupilSizeInPixels/max(ssao.ccd.detector_shape) #*ssao.pyr.oversampling
     # wedgeAmp = pupilPixelShift * pyr2det
     subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
-
-    ss_it = 100
 
     print('Testing pupil shifts before DM')
     sig2_beforeDM = xp.zeros([len(shiftAngles),len(pupilShiftsInPixel),ssao.Nits])

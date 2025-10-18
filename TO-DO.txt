@@ -3,7 +3,6 @@ IMPORTANT:
 main subaperture finder
 Pyramid optical gain compensation
 Fix TestDM.ipynb
-Implement Cn2 profile in config
 
 Slaving update
 GPU-accelerated tps

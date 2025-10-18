@@ -20,13 +20,13 @@ class SlopeComputer():
             self.intGain,
             self.delay,
             self.nModes,
-            self.ttOffloadFreqHz,
+            # self.ttOffloadFreqHz,
         ) = (
             1 / sc_pars["loopFrequencyInHz"],
             sc_pars["integratorGain"],
             sc_pars["delay"],
             sc_pars["nModes2Correct"],
-            sc_pars["ttOffloadFrequencyInHz"],
+            # sc_pars["ttOffloadFrequencyInHz"],
         )
 
         if hasattr(wfs,'apex_angle'):
@@ -120,7 +120,7 @@ class SlopeComputer():
             # diag_ud = (B+Cud) - (A+Dud)
             # slopes = xp.hstack((up_down, left_right, diag_lr, diag_ud))
 
-        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))
+        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))#/4
         slopes *= 1/mean_intensity
 
         return slopes
