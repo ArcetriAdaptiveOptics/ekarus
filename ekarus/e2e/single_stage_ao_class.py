@@ -283,9 +283,9 @@ class SingleStageAO(HighLevelAO):
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         psf,psd,pix_dist=self.get_contrast(residual_phase_in_rad=res_phase_in_rad, oversampling=oversampling)
 
-        plt.figure()
-        showZoomCenter(xp.asnumpy(psf), 1/oversampling, shrink=0.8,
-        title = f'Coronographic PSF', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        # plt.figure()
+        # showZoomCenter(xp.asnumpy(psf), 1/oversampling, shrink=0.8,
+        # title = f'Coronographic PSF', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
 
         plt.figure()
         plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd),'--')
@@ -295,44 +295,3 @@ class SingleStageAO(HighLevelAO):
         plt.xlim([0,30])
 
         return psd, pix_dist
-    
-
-    def estimate_optical_gain(self, n_its:int, save_prefix:str=''):
-        """
-        Estimate the pyramid optical gain from the last n_its iterations.
-        
-        Parameters
-        ----------
-        n_its: int
-            The number of loop iterations to use (starting from end)
-        save_prefix : str, optional
-            The prefix used when saving telemetry data, by default ''.
-        """
-        if save_prefix is None:
-            save_prefix = self.save_prefix
-
-        _, _, ma_res_phases, _, rec_modes, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
-
-        rec_modes = rec_modes[-n_its:,:]
-        true_modes = xp.zeros_like(rec_modes)
-
-        KLinv = (xp.linalg.pinv(self.KL)).T
-
-        for frame_id in range(n_its):
-            res_phase = xp.asarray(ma_res_phases[-n_its+frame_id].data[~ma_res_phases[-n_its+frame_id].mask])
-            true_modes[frame_id,:] = KLinv @ res_phase
-
-        ratio = xp.abs(rec_modes/true_modes)
-
-        opt_gains = xp.mean(ratio,axis=0)
-        opt_std = xp.std(ratio,axis=0)
-
-        plt.figure()
-        plt.plot(xp.asnumpy(opt_gains),'-.')
-        plt.grid()
-
-        plt.figure()
-        plt.plot(xp.asnumpy(opt_std),'o')
-        plt.grid()
-        
-        plt.show()

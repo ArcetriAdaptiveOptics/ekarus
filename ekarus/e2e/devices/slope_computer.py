@@ -88,7 +88,12 @@ class SlopeComputer():
         """
         self.Rec = Rec[:self.nModes,:]
         self.m2c = m2c[:,:self.nModes]
-        
+
+    def load_optical_gains(self, opt_gains):
+        """
+        Load the optical gains
+        """
+        self.optGains = opt_gains[:self.nModes]
 
     def _compute_pyramid_slopes(self, detector_image, use_diagonal:bool=False):
 

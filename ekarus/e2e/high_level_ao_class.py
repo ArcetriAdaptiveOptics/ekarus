@@ -164,31 +164,7 @@ class HighLevelAO():
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
-            Nmodes = min(slope_computer.nModes,xp.shape(MM)[0])
-            slopes = None
-            electric_field_amp = 1-self.cmask
-            lambdaOverD = lambdaInM/self.pupilSizeInM
-            Nphotons = None # perfect calibration: no noise
-            if isinstance(amps, float):
-                amps *= xp.ones(Nmodes)
-            for i in range(Nmodes):
-                print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)
-                amp = amps[i]
-                mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
-                # mode_phase = reshape_on_mask(MM[i,:]*amp, self.dm.mask)
-                # if self.dm.slaving is not None:
-                #     dm_command = self.dm.R[:,self.dm.visible_pix_ids] @ MM[i,:]*amp
-                #     mirror_cmd = self.dm.slaving @ dm_command[self.dm.master_ids]
-                # else:
-                #     mirror_cmd = self.dm.R @ MM[i,:]*amp
-                # mode_phase = reshape_on_mask(self.dm.IFF @ mirror_cmd, self.dm.mask)
-                input_field = xp.exp(1j*mode_phase) * electric_field_amp
-                push_slope = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
-                pull_slope = slope_computer.compute_slopes(xp.conj(input_field), lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp #self.get_slopes(input_field, Nphotons)/amp
-                if slopes is None:
-                    slopes = (push_slope-pull_slope)/2
-                else:
-                    slopes = xp.vstack((slopes,(push_slope-pull_slope)/2))
+            slopes = self._get_slopes(slope_computer, MM, lambdaInM, amps, use_diagonal=False)
             IM = slopes.T
             U,S,Vt = xp.linalg.svd(IM, full_matrices=False)
             Rec = xp.array((Vt.T*1/S) @ U.T,dtype=self.dtype)
@@ -333,7 +309,8 @@ class HighLevelAO():
         slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)
         
         modes = slope_computer.Rec @ slopes
-        # modes *= slope_computer.modal_gains
+        if hasattr(slope_computer, 'optGains'):
+            modes /= slope_computer.optGains
         cmd = slope_computer.m2c @ modes
 
         cmd /= m2rad # convert to meters
@@ -395,6 +372,10 @@ class HighLevelAO():
     
     
     def get_contrast(self, residual_phase_in_rad, oversampling:int=12):
+        """
+        Computes the PSF and contrast from the residual phase
+        using the formula for a perfect idealized coronograph.
+        """
         res_phase = xp.asarray(residual_phase_in_rad)
         padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
         pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
@@ -407,6 +388,105 @@ class HighLevelAO():
         psd,dist = computeRadialProfile(xp.asnumpy(psf/xp.max(perfect_psf)),psf.shape[0]/2,psf.shape[1]/2)
         pix_dist = dist/oversampling
         return xp.array(psf), xp.array(psd), xp.array(pix_dist)
+    
+
+    def calibrate_optical_gains(self, timeInSeconds, slope_computer, MM, amps:float=0.02, use_diagonal:bool=False, save_prefix:str=''):
+        """
+        Calibrates the optical gains for each mode using a phase screen at a given time.
+        
+        Parameters
+        ----------
+        timeInSeconds : float
+            The time at which to retrieve the phase screen.
+        slope_computer : SlopeComputer
+            The slope computer object.
+        MM : array
+            The mirror modes to calibrate/correct (e.g. KL Modes).
+        lambdaInM : float | array
+            The wavelength(s) at which calibration is performed.
+        amps : float or array
+            The amplitudes for each mode.
+        use_diagonal : bool, optional
+            Whether to use diagonal slopes, by default False.
+        phase_offset : array, optional
+            Phase offset to be added to each mode, by default None.
+        
+        Returns 
+        -------
+        opt_gains : array
+            The computed optical gains.
+        """
+        ogc_path = os.path.join(self.savecalibpath,str(save_prefix)+'OG.fits')
+        try:
+            if self.recompute is True:
+                raise FileNotFoundError('Recompute is True')
+            opt_gains = myfits.read_fits(ogc_path)
+        except FileNotFoundError:
+            atmo_phase = self.get_phasescreen_at_time(timeInSeconds)
+            atmo_phase -= xp.mean(atmo_phase[~self.cmask])
+            phi = atmo_phase[~self.cmask]
+            modes = xp.linalg.pinv(MM).T @ phi
+            rec_phi = MM.T @ modes
+            rec_phase = reshape_on_mask(rec_phi, self.cmask)
+            phi_fit = rec_phase[~self.cmask]
+            phi_fit *= 2*xp.pi/self.pyr.lambdaInM
+            slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_fit, use_diagonal=use_diagonal)
+            Nmodes = xp.shape(MM)[0]
+            opt_gains = xp.zeros(Nmodes)
+            for i in range(Nmodes):
+                rec_mode = slope_computer.Rec @ slopes[i,:]
+                opt_gains[i] = rec_mode[i]
+            myfits.save_fits(ogc_path, opt_gains)
+        return opt_gains
+    
+
+    def _get_slopes(self, slope_computer, MM, lambdaInM, amps, use_diagonal:bool=False, phase_offset=None):
+        """ 
+        Computes the slopes for the given mode matrix MM using push-pull method.
+
+        Parameters
+        ----------
+        slope_computer : SlopeComputer
+            The slope computer object.
+        MM : array
+            The mirror modes to calibrate/correct (e.g. KL Modes).
+        lambdaInM : float | array
+            The wavelength(s) at which calibration is performed.
+        amps : float or array
+            The amplitudes for each mode.
+        use_diagonal : bool, optional
+            Whether to use diagonal slopes, by default False.
+        phase_offset : array, optional
+            Phase offset to be added to each mode, by default None.
+        
+        Returns 
+        -------
+        slopes : array
+            The computed slopes for each mode.
+        """
+        Nmodes = min(slope_computer.nModes,xp.shape(MM)[0])
+        slopes = None
+        electric_field_amp = 1-self.cmask
+        lambdaOverD = lambdaInM/self.pupilSizeInM
+        Nphotons = None # perfect calibration: no noise
+        offset = reshape_on_mask(xp.zeros(int(xp.sum(1-self.cmask))), self.cmask)
+        if phase_offset is not None:
+            offset = reshape_on_mask(phase_offset, self.cmask)
+        if isinstance(amps, float):
+            amps *= xp.ones(Nmodes)
+        for i in range(Nmodes):
+            print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)
+            amp = amps[i]
+            mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
+            push_field = xp.exp(1j*mode_phase + 1j*offset) * electric_field_amp
+            pull_field = xp.exp(-1j*mode_phase + 1j*offset) * electric_field_amp
+            push_slope = slope_computer.compute_slopes(push_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp
+            pull_slope = slope_computer.compute_slopes(pull_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp
+            if slopes is None:
+                slopes = (push_slope-pull_slope)/2
+            else:
+                slopes = xp.vstack((slopes,(push_slope-pull_slope)/2))
+        return slopes
 
     
     def _psf_from_frame(self, frame, lambdaInM, oversampling:int=8):

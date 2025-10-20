@@ -284,11 +284,11 @@ class CascadingAO(HighLevelAO):
         res1_phase = xp.asarray(res1_phases[frame_id].data[~res1_phases[frame_id].mask])
         KL1_modes = (xp.linalg.pinv(self.KL1)).T @ res1_phase
         res2_phase = xp.asarray(res2_phases[frame_id].data[~res2_phases[frame_id].mask])
-        KL2_modes = (xp.linalg.pinv(self.KL2)).T @ res2_phase
+        KL2_modes = (xp.linalg.pinv(self.KL1)).T @ res2_phase
 
         plt.figure()
-        plt.plot(xp.asnumpy(xp.abs(KL1_modes))*1e+9,label='first stage')
-        plt.plot(xp.asnumpy(xp.abs(KL2_modes))*1e+9,label='second stage')
+        plt.plot(xp.asnumpy(xp.abs(KL1_modes))*1e+9,label='after 1st stage')
+        plt.plot(xp.asnumpy(xp.abs(KL2_modes))*1e+9,label='after 2nd stage')
         plt.legend()
         plt.xlabel('mode index')
         plt.ylabel('mode RMS amp [nm]')
@@ -322,13 +322,13 @@ class CascadingAO(HighLevelAO):
         psf2,psd2,pix_dist=self.get_contrast(residual_phase_in_rad=res2_phase_in_rad,oversampling=oversampling)
 
 
-        plt.figure(figsize=(8,4))
-        plt.subplot(1,2,1)
-        showZoomCenter(xp.asnumpy(psf1), 1/oversampling, shrink=0.7,
-        title = f'Coronographic PSF after DM1', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
-        plt.subplot(1,2,2)
-        showZoomCenter(xp.asnumpy(psf2), 1/oversampling, shrink=0.7,
-        title = f'Coronographic PSF after DM2', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        # plt.figure(figsize=(8,4))
+        # plt.subplot(1,2,1)
+        # showZoomCenter(xp.asnumpy(psf1), 1/oversampling, shrink=0.7,
+        # title = f'Coronographic PSF after DM1', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        # plt.subplot(1,2,2)
+        # showZoomCenter(xp.asnumpy(psf2), 1/oversampling, shrink=0.7,
+        # title = f'Coronographic PSF after DM2', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
 
         plt.figure()
         plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd1),label='First stage')
