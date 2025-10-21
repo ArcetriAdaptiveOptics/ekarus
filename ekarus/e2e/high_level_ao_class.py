@@ -349,7 +349,6 @@ class HighLevelAO():
         self.save_prefix = save_prefix
         for key in data_dict:
             file_path = os.path.join(self.savepath,save_prefix+str(key)+'.fits')
-            # print(type(data_dict[key]), xp.shape(data_dict[key].data), xp.shape(data_dict[key][0].mask))
             myfits.save_fits(file_path, data_dict[key])
     
             
@@ -382,12 +381,14 @@ class HighLevelAO():
         phase_2d = reshape_on_mask(res_phase, pup_mask)
         phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
         perfect_coro_field = (1-pup_mask) * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
-        field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
-        psf = abs(field_on_focal_plane)**2
-        perfect_psf = abs(xp.fft.fftshift(xp.fft.fft2((1-pup_mask))))**2
-        psd,dist = computeRadialProfile(xp.asnumpy(psf/xp.max(perfect_psf)),psf.shape[0]/2,psf.shape[1]/2)
+        coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
+        coro_psf = abs(coro_focal_plane_ef)**2
+        input_field = (1-pup_mask) * xp.exp(1j*phase_2d)
+        focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(input_field))
+        psf = abs(focal_plane_ef)**2
+        rad_profile,dist = computeRadialProfile(xp.asnumpy(coro_psf/xp.max(psf)),coro_psf.shape[0]/2,coro_psf.shape[1]/2)
         pix_dist = dist/oversampling
-        return xp.array(psf), xp.array(psd), xp.array(pix_dist)
+        return xp.array(coro_psf), xp.array(rad_profile), xp.array(pix_dist)
     
 
     def calibrate_optical_gains(self, timeInSeconds, slope_computer, MM, amps:float=0.02, use_diagonal:bool=False, save_prefix:str=''):
@@ -431,7 +432,7 @@ class HighLevelAO():
             phi_fit = rec_phase[~self.cmask]
             phi_fit *= 2*xp.pi/self.pyr.lambdaInM
             slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_fit, use_diagonal=use_diagonal)
-            Nmodes = xp.shape(MM)[0]
+            Nmodes = slope_computer.nModes
             opt_gains = xp.zeros(Nmodes)
             for i in range(Nmodes):
                 rec_mode = slope_computer.Rec @ slopes[i,:]

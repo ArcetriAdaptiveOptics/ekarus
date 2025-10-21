@@ -297,15 +297,13 @@ class CascadingAO(HighLevelAO):
         plt.xscale('log')
         plt.yscale('log')
 
-
-    def plot_contrast(self, lambdaRef, frame_id:int=-1, save_prefix:str='',oversampling:int=12):
+    
+    def show_psf(self, frame_id:int=-1, save_prefix:str=None, oversampling:int=12):
         """
         Plots the telemetry data for a specific iteration/frame.
         
         Parameters
         ----------
-        lambdaRef : float
-            The reference wavelength in meters.
         frame_id : int, optional
             The frame/iteration index to plot, by default -1 (last frame).
         save_prefix : str, optional
@@ -316,12 +314,73 @@ class CascadingAO(HighLevelAO):
 
         _, _, res1_phases, _, _, _, _, res2_phases, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
-        res1_phase_in_rad = res1_phases[frame_id].data[~res1_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-        psf1,psd1,pix_dist=self.get_contrast(residual_phase_in_rad=res1_phase_in_rad,oversampling=oversampling)
-        res2_phase_in_rad = res2_phases[frame_id].data[~res2_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-        psf2,psd2,pix_dist=self.get_contrast(residual_phase_in_rad=res2_phase_in_rad,oversampling=oversampling)
+        lambdaRef1 = self.pyr1.lambdaInM
+        lambdaRef2 = self.pyr2.lambdaInM
+
+        psf1, pixelSize1 = self._psf_from_frame(xp.array(res1_phases[frame_id]), lambdaRef1, oversampling=oversampling)
+        psf2, pixelSize2 = self._psf_from_frame(xp.array(res2_phases[frame_id]), lambdaRef2, oversampling=oversampling)
+
+        pixToArcsec1 = (lambdaRef1 / self.pupilSizeInM) * (180 * 3600 / xp.pi) * pixelSize1
+        pixToArcsec2 = (lambdaRef2 / self.pupilSizeInM) * (180 * 3600 / xp.pi) * pixelSize2
+
+        plt.figure()#figsize=(9,9))
+        sz = psf1.shape
+        plt.imshow(xp.asnumpy(xp.log(psf1)), extent=[-sz[0]/2*pixToArcsec1, sz[0]/2*pixToArcsec1,
+                                -sz[1]/2*pixToArcsec1, sz[1]/2*pixToArcsec1], vmin = 6, origin='lower')
+        plt.title(f'First stage PSF @ {lambdaRef1*1e+9:1.0f} nm')
+        plt.xlabel('[arcsec]')
+        plt.ylabel('[arcsec]')
+
+        plt.figure()
+        sz = psf2.shape
+        plt.imshow(xp.asnumpy(xp.log(psf2)), extent=[-sz[0]/2*pixToArcsec2, sz[0]/2*pixToArcsec2,
+                                -sz[1]/2*pixToArcsec2, sz[1]/2*pixToArcsec2], vmin = 6, origin='lower')
+        plt.xlabel('[arcsec]')
+        plt.ylabel('[arcsec]')
+        plt.title(f'Second stage PSF @ {lambdaRef2*1e+9:1.0f} nm')
 
 
+    def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=12):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : list, optional
+            The frames over which the std is computed, by default, the bottom half.
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        if frame_ids is None:
+            frame_ids = xp.arange(-self.Nits//2,0)
+        else:
+            frame_ids = xp.array(frame_ids)
+        frame_ids = xp.asnumpy(frame_ids)
+
+        _, _, res1_phases, _, _, _, _, res2_phases, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
+
+        res1_phase_in_rad = res1_phases[-1].data[~res1_phases[-1].mask]*(2*xp.pi/lambdaRef)
+        _,rad_profile,pix_dist=self.get_contrast(residual_phase_in_rad=res1_phase_in_rad,oversampling=oversampling)
+
+        N = len(frame_ids)
+        rad_profile1 = xp.zeros([N,len(rad_profile)])
+        rad_profile2 = xp.zeros([N,len(rad_profile)])
+        for k,frame_id in enumerate(frame_ids):
+            print(f'\rProcessing frame {k:1.0f}/{N:1.0f}',end='\r',flush=True)
+
+            res1_phase_in_rad = res1_phases[frame_id].data[~res1_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+            _,rad_profile1[k,:],_=self.get_contrast(residual_phase_in_rad=res1_phase_in_rad,oversampling=oversampling)
+
+            res2_phase_in_rad = res2_phases[frame_id].data[~res2_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+            _,rad_profile2[k,:],_=self.get_contrast(residual_phase_in_rad=res2_phase_in_rad,oversampling=oversampling)
+
+        std_psf1 = xp.std(rad_profile1,axis=0)
+        std_psf2 = xp.std(rad_profile2,axis=0)
         # plt.figure(figsize=(8,4))
         # plt.subplot(1,2,1)
         # showZoomCenter(xp.asnumpy(psf1), 1/oversampling, shrink=0.7,
@@ -331,16 +390,16 @@ class CascadingAO(HighLevelAO):
         # title = f'Coronographic PSF after DM2', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
 
         plt.figure()
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd1),label='First stage')
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd2),label='Second stage')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(std_psf1),label='First stage')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(std_psf2),label='Second stage')
         plt.legend()
         plt.grid()
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
-        plt.title('Contrast')
+        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f}\n(assuming a perfect coronograph)')
 
-        return psd1, psd2, pix_dist
+        return std_psf1, std_psf2, pix_dist
 
     # def __init__(self, tn, xp=np):
 

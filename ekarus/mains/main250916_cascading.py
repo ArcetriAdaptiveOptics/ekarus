@@ -21,9 +21,9 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
     amp1 = 0.2
     amp2 = 0.2
     if cascao.sc1.modulationAngleInLambdaOverD < 1.0:
-        amp1 = 0.05
+        amp1 = 0.02
     if cascao.sc2.modulationAngleInLambdaOverD < 1.0:
-        amp2 = 0.05
+        amp2 = 0.02
 
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
@@ -180,8 +180,8 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
         # rec1_modes = rec1_modes.get()
         # rec2_modes = rec2_modes.get()
 
-    cascao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_id=-1, save_prefix='')
+    cascao.plot_iteration(lambdaRef, save_prefix='')
+    cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_ids=xp.arange(800,1000).tolist(), save_prefix='')
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))

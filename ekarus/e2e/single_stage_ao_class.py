@@ -260,9 +260,9 @@ class SingleStageAO(HighLevelAO):
         plt.ylabel('[m]')
         plt.grid()
         plt.title(f'Last 5 modes amplitude\nLast {n_its} iterations')
-        
+    
 
-    def plot_contrast(self, lambdaRef, frame_id:int=-1, save_prefix:str='', oversampling:int=12):
+    def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=12):
         """
         Plots the telemetry data for a specific iteration/frame.
         
@@ -270,28 +270,48 @@ class SingleStageAO(HighLevelAO):
         ----------
         lambdaRef : float
             The reference wavelength in meters.
-        frame_id : int, optional
-            The frame/iteration index to plot, by default -1 (last frame).
+        frame_id : list, optional
+            The frames over which the std is computed, by default, the bottom half.
         save_prefix : str, optional
             The prefix used when saving telemetry data, by default None.
         """
         if save_prefix is None:
             save_prefix = self.save_prefix
 
+        if frame_ids is None:
+            frame_ids = xp.arange(-self.Nits//2,0)
+        else:
+            frame_ids = xp.array(frame_ids)
+        frame_ids = xp.asnumpy(frame_ids)
+
         _, _, ma_res_phases, _, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
-        res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-        psf,psd,pix_dist=self.get_contrast(residual_phase_in_rad=res_phase_in_rad, oversampling=oversampling)
+        res_phase_in_rad = ma_res_phases[-1].data[~ma_res_phases[-1].mask]*(2*xp.pi/lambdaRef)
+        _,rad_prof,pix_dist=self.get_contrast(residual_phase_in_rad=res_phase_in_rad,oversampling=oversampling)
 
-        # plt.figure()
-        # showZoomCenter(xp.asnumpy(psf), 1/oversampling, shrink=0.8,
-        # title = f'Coronographic PSF', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        N = len(frame_ids)
+        rad_profile = xp.zeros([N,len(rad_prof)])
+        for k,frame_id in enumerate(frame_ids):
+            print(f'\rProcessing frame {k:1.0f}/{N:1.0f}',end='\r',flush=True)
+
+            res1_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+            _,rad_profile[k,:],_=self.get_contrast(residual_phase_in_rad=res1_phase_in_rad,oversampling=oversampling)
+
+        std_psf = xp.std(rad_profile,axis=0)
+        # plt.figure(figsize=(8,4))
+        # plt.subplot(1,2,1)
+        # showZoomCenter(xp.asnumpy(psf1), 1/oversampling, shrink=0.7,
+        # title = f'Coronographic PSF after DM1', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        # plt.subplot(1,2,2)
+        # showZoomCenter(xp.asnumpy(psf2), 1/oversampling, shrink=0.7,
+        # title = f'Coronographic PSF after DM2', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
 
         plt.figure()
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd),'--')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(std_psf),label='First stage')
         plt.grid()
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
+        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f}\n(assuming a perfect coronograph)')
 
-        return psd, pix_dist
+        return std_psf, pix_dist
