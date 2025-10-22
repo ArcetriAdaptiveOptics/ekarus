@@ -291,7 +291,6 @@ class NestedStageAO(HighLevelAO):
         plt.xscale('log')
         plt.yscale('log')
 
-
     def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=12):
         """
         Plots the telemetry data for a specific iteration/frame.
@@ -316,42 +315,26 @@ class NestedStageAO(HighLevelAO):
 
         _, _, res1_phases, _, _, _, _, res2_phases, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
-        res1_phase_in_rad = res1_phases[-1].data[~res1_phases[-1].mask]*(2*xp.pi/lambdaRef)
-        _,rad_profile,pix_dist=self.get_contrast(residual_phase_in_rad=res1_phase_in_rad,oversampling=oversampling)
-
         N = len(frame_ids)
-        rad_profile1 = xp.zeros([N,len(rad_profile)])
-        rad_profile2 = xp.zeros([N,len(rad_profile)])
-        for k,frame_id in enumerate(frame_ids):
-            print(f'\rProcessing frame {k:1.0f}/{N:1.0f}',end='\r',flush=True)
-
-            res1_phase_in_rad = res1_phases[frame_id].data[~res1_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-            _,rad_profile1[k,:],_=self.get_contrast(residual_phase_in_rad=res1_phase_in_rad,oversampling=oversampling)
-
-            res2_phase_in_rad = res2_phases[frame_id].data[~res2_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-            _,rad_profile2[k,:],_=self.get_contrast(residual_phase_in_rad=res2_phase_in_rad,oversampling=oversampling)
-
-        std_psf1 = xp.std(rad_profile1,axis=0)
-        std_psf2 = xp.std(rad_profile2,axis=0)
-        # plt.figure(figsize=(8,4))
-        # plt.subplot(1,2,1)
-        # showZoomCenter(xp.asnumpy(psf1), 1/oversampling, shrink=0.7,
-        # title = f'Coronographic PSF after DM1', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
-        # plt.subplot(1,2,2)
-        # showZoomCenter(xp.asnumpy(psf2), 1/oversampling, shrink=0.7,
-        # title = f'Coronographic PSF after DM2', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        res1_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        for j in range(N):
+            res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+            res1_phases_in_rad[j] = xp.asarray(res1_phases[frame_ids[j]].data[~res1_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+        _,rms_psf1,pix_dist=self.get_contrast(res1_phases_in_rad,oversampling=oversampling)
+        _,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
 
         plt.figure()
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(std_psf1),label='First stage')
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(std_psf2),label='Second stage')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf2),label='After DM2 (inner loop)')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf1),label='After DM1 (outer loop)')
         plt.legend()
         plt.grid()
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
-        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f}\n(assuming a perfect coronograph)')
+        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
-        return std_psf1, std_psf2, pix_dist
+        return rms_psf1, rms_psf2, pix_dist
 
     # def __init__(self, tn, xp=np):
 

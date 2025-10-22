@@ -370,25 +370,32 @@ class HighLevelAO():
         return loaded_data
     
     
-    def get_contrast(self, residual_phase_in_rad, oversampling:int=12):
+    def get_contrast(self, residual_phases_in_rad, oversampling:int=12):
         """
         Computes the PSF and contrast from the residual phase
         using the formula for a perfect idealized coronograph.
-        """
-        res_phase = xp.asarray(residual_phase_in_rad)
+        """        
+        N = residual_phases_in_rad.shape[0]
+        res_phases = xp.array(residual_phases_in_rad)
         padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
         pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
-        phase_2d = reshape_on_mask(res_phase, pup_mask)
-        phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
-        perfect_coro_field = (1-pup_mask) * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
-        coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
-        coro_psf = abs(coro_focal_plane_ef)**2
-        input_field = (1-pup_mask) * xp.exp(1j*phase_2d)
-        focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(input_field))
-        psf = abs(focal_plane_ef)**2
-        rad_profile,dist = computeRadialProfile(xp.asnumpy(coro_psf/xp.max(psf)),coro_psf.shape[0]/2,coro_psf.shape[1]/2)
+        psf_rms = xp.zeros([self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling]) 
+        field_amp = 1-pup_mask
+        for k,res_phase in enumerate(res_phases):
+            print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
+            phase_2d = reshape_on_mask(res_phase, pup_mask)
+            phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
+            perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
+            coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
+            coro_psf = abs(coro_focal_plane_ef)**2
+            input_field = field_amp * xp.exp(1j*phase_2d)
+            psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
+            coro_psf /= xp.max(psf)
+            psf_rms += coro_psf**2
+        psf_rms = xp.sqrt(psf_rms/N)
+        rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),psf_rms.shape[0]/2,psf_rms.shape[1]/2)
         pix_dist = dist/oversampling
-        return xp.array(coro_psf), xp.array(rad_profile), xp.array(pix_dist)
+        return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
     
 
     def calibrate_optical_gains(self, timeInSeconds, slope_computer, MM, amps:float=0.02, use_diagonal:bool=False, save_prefix:str=''):

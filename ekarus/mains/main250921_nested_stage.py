@@ -92,8 +92,6 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
         cascao.sc1.load_reconstructor(Rec1,m2c1)
         cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
         cascao.sc2.load_reconstructor(Rec2,m2c2)
-        cascao.KL1 = KL1
-        cascao.KL2 = KL2
 
         plt.figure()
         plt.imshow(xp.asnumpy(SR_mat),cmap='jet')
@@ -116,6 +114,9 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
         print(f'Selecting inner loop gain = {cascao.sc1.intGain}, outer loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
 
+    cascao.KL1 = KL1
+    cascao.KL2 = KL2
+    
     print('Running the loop ...')
     dm_outer_sig2, dm_inner_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
     cascao.sig2 = dm_outer_sig2
@@ -173,7 +174,7 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
         myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     cascao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    cascao.psd1, cascao.psd2,cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_id=-1, save_prefix='')
+    cascao.psd1, cascao.psd2,cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(),save_prefix='')
 
     # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting

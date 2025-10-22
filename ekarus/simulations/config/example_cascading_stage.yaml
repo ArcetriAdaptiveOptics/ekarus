@@ -46,7 +46,7 @@ SLOPE.COMPUTER2:
   delay: 2                    # loop delay in steps
   nModes2Correct: 175         # number of reconstructor modes
   ttOffloadFrequencyInHz: 0   # if 0, no TT offloading
-  modulationInLambdaOverD: 1.0  # modulation amplitude
+  modulationInLambdaOverD: 0.0  # modulation amplitude
 
 
 TELESCOPE:
@@ -58,12 +58,11 @@ TELESCOPE:
 ATMO:
   outerScaleInM: 25         # [m]
   r0: [8e-2, 6e-2, 12e-2, 10e-2, 10e-2] # [m]
-  windSpeed: [6, 6, 8, 8, 10]     # [m/s]
+  windSpeed: [6,6,8,8,10]     # [m/s]
   windAngle: [-120, 30, 45, 65, 0]  # [deg] CCW from East
-  recompute: False
 
 LOOP:
-  nIterations: 1000
+  nIterations: 400
   starMagnitude: 1.0
   simFreqHz: 4000          # simulation frequency in Hz
   recompute: False         # if False, any calibration data saved from 

@@ -12,7 +12,7 @@ import ekarus.e2e.utils.my_fits_package as myfits
 
 
 def main(tn:str='example_single_stage', show:bool=False, gain_list=None, 
-         optimize_gain:bool=False, starMagnitudes=None):
+         optimize_gain:bool=False, starMagnitudes=None, lambdaRef:float=750e-9):
     
     if gain_list is not None:
         optimize_gain = True
@@ -31,7 +31,6 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     ssao.sc.load_reconstructor(Rec,m2c)
     ssao.KL = KL
 
-    lambdaRef = ssao.pyr.lambdaInM
     it_ss = 200
 
     if optimize_gain is True:
@@ -118,7 +117,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    ssao.plot_contrast(lambdaRef, frame_id=-1, save_prefix='')
+    ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='')
     if show:
         ssao.plot_rec_modes(save_prefix='')
     ssao.sig2 = sig2

@@ -286,32 +286,18 @@ class SingleStageAO(HighLevelAO):
 
         _, _, ma_res_phases, _, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
-        res_phase_in_rad = ma_res_phases[-1].data[~ma_res_phases[-1].mask]*(2*xp.pi/lambdaRef)
-        _,rad_prof,pix_dist=self.get_contrast(residual_phase_in_rad=res_phase_in_rad,oversampling=oversampling)
-
         N = len(frame_ids)
-        rad_profile = xp.zeros([N,len(rad_prof)])
-        for k,frame_id in enumerate(frame_ids):
-            print(f'\rProcessing frame {k:1.0f}/{N:1.0f}',end='\r',flush=True)
-
-            res1_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-            _,rad_profile[k,:],_=self.get_contrast(residual_phase_in_rad=res1_phase_in_rad,oversampling=oversampling)
-
-        std_psf = xp.std(rad_profile,axis=0)
-        # plt.figure(figsize=(8,4))
-        # plt.subplot(1,2,1)
-        # showZoomCenter(xp.asnumpy(psf1), 1/oversampling, shrink=0.7,
-        # title = f'Coronographic PSF after DM1', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
-        # plt.subplot(1,2,2)
-        # showZoomCenter(xp.asnumpy(psf2), 1/oversampling, shrink=0.7,
-        # title = f'Coronographic PSF after DM2', cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$') 
+        res_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        for j in range(N):
+            res_phases_in_rad[j] = xp.asarray(ma_res_phases[frame_ids[j]].data[~ma_res_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+        _,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling)
 
         plt.figure()
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(std_psf),label='First stage')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf),'--')
         plt.grid()
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
-        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f}\n(assuming a perfect coronograph)')
+        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
-        return std_psf, pix_dist
+        return rms_psf, pix_dist

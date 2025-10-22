@@ -21,7 +21,7 @@ def main(tn:str='optical_gains',
     ssao.initialize_turbulence()
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
-    Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.02)
+    Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
     ssao.sc.load_reconstructor(Rec,m2c)
     ssao.KL = KL
 
@@ -31,7 +31,7 @@ def main(tn:str='optical_gains',
     t_vec = xp.arange(4)/10
     opt_gains = xp.zeros([ssao.sc.nModes,len(t_vec)])
     for k,t in enumerate(t_vec):
-        opt_gains[:,k] = ssao.calibrate_optical_gains(timeInSeconds=t, slope_computer=ssao.sc, MM=KL, amps=0.02)
+        opt_gains[:,k] = ssao.calibrate_optical_gains(timeInSeconds=t, slope_computer=ssao.sc, MM=KL, amps=0.2)
     opt_gains = xp.mean(opt_gains,axis=1)    
     plt.figure()
     plt.plot(xp.asnumpy(opt_gains),'-.')
@@ -43,7 +43,7 @@ def main(tn:str='optical_gains',
     ogc_ssao.pyr.set_modulation_angle(ogc_ssao.sc.modulationAngleInLambdaOverD)
     ogc_ssao.sc.load_reconstructor(Rec,m2c)
     ogc_ssao.sc.load_optical_gains(opt_gains)
-    ogc_ssao.sc.intGain = 0.2
+    ogc_ssao.sc.intGain = 0.3
 
     it_ss = 200
 
@@ -84,18 +84,18 @@ def main(tn:str='optical_gains',
     ogc_sig2, _ = ogc_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogc_')
 
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    psd,pix_dist=ssao.plot_contrast(lambdaRef, frame_id=-1, save_prefix='')
+    # psd,pix_dist=ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='')
     ogc_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogc_')
-    ogc_psd,_=ogc_ssao.plot_contrast(lambdaRef, frame_id=-1, save_prefix='ogc_')
+    # ogc_psd,_=ogc_ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='ogc_')
 
-    plt.figure()
-    plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd),'--',label='no OG compensation')
-    plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(ogc_psd),'--',label='with OG compensation')
-    plt.grid()
-    plt.legend()
-    plt.yscale('log')
-    plt.xlabel(r'$\lambda/D$')
-    plt.xlim([0,30])
+    # plt.figure()
+    # plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd),'--',label='no OG compensation')
+    # plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(ogc_psd),'--',label='with OG compensation')
+    # plt.grid()
+    # plt.legend()
+    # plt.yscale('log')
+    # plt.xlabel(r'$\lambda/D$')
+    # plt.xlim([0,30])
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
     plt.figure()#figsize=(1.7*Nits/10,3))

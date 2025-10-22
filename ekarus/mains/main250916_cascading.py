@@ -20,20 +20,18 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
 
     amp1 = 0.2
     amp2 = 0.2
-    if cascao.sc1.modulationAngleInLambdaOverD < 1.0:
-        amp1 = 0.02
-    if cascao.sc2.modulationAngleInLambdaOverD < 1.0:
-        amp2 = 0.02
 
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
-    cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+    cascao.pyr1.set_modulation_angle(max((1.0,cascao.sc1.modulationAngleInLambdaOverD))) #cascao.sc1.modulationAngleInLambdaOverD)#
     Rec1, _ = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(Rec1,m2c1)
+    cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
 
     KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
-    cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
+    cascao.pyr2.set_modulation_angle(max((1.0,cascao.sc2.modulationAngleInLambdaOverD))) #cascao.sc2.modulationAngleInLambdaOverD)#
     Rec2, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(Rec2,m2c2)
+    cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
 
     cascao.get_photons_per_subap(starMagnitude=cascao.starMagnitude)
 
@@ -181,7 +179,11 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
         # rec2_modes = rec2_modes.get()
 
     cascao.plot_iteration(lambdaRef, save_prefix='')
-    cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_ids=xp.arange(800,1000).tolist(), save_prefix='')
+
+    t_interval = 0.02
+    hc_its = int(t_interval/cascao.dt)
+    cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, 
+                                                frame_ids=xp.arange(cascao.Nits-hc_its,cascao.Nits).tolist(), save_prefix='')
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
