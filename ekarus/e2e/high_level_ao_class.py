@@ -379,7 +379,8 @@ class HighLevelAO():
         res_phases = xp.array(residual_phases_in_rad)
         padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
         pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
-        psf_rms = xp.zeros([self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling]) 
+        # psf_rms = xp.zeros([self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling]) 
+        psf_stack = xp.zeros([N,self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling])
         field_amp = 1-pup_mask
         for k,res_phase in enumerate(res_phases):
             print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
@@ -391,8 +392,10 @@ class HighLevelAO():
             input_field = field_amp * xp.exp(1j*phase_2d)
             psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
             coro_psf /= xp.max(psf)
-            psf_rms += coro_psf**2
-        psf_rms = xp.sqrt(psf_rms/N)
+            psf_stack[k] = coro_psf
+            # psf_rms += coro_psf**2
+        # psf_rms = xp.sqrt(psf_rms/N)
+        psf_rms = xp.std(psf_stack,axis=0)
         rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),psf_rms.shape[0]/2,psf_rms.shape[1]/2)
         pix_dist = dist/oversampling
         return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)

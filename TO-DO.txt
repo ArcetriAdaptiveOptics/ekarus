@@ -1,11 +1,11 @@
 IMPORTANT:
 
-main subaperture finder
 Pyramid optical gain compensation
 Fix TestDM.ipynb
 
 Slaving update
 GPU-accelerated tps
+EMCCD noise
 
 
 

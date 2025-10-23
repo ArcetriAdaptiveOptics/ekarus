@@ -12,7 +12,8 @@ from numpy.ma import masked_array
 
 
 def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False, 
-         optimize_gain:bool=False, gain1_list:list=None, gain2_list:list=None):
+         optimize_gain:bool=False, gain1_list:list=None, gain2_list:list=None,
+         t_interval:float=0.1):
 
     print('Initializing devices ...')
     cascao = CascadingAO(tn)
@@ -180,7 +181,6 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
 
     cascao.plot_iteration(lambdaRef, save_prefix='')
 
-    t_interval = 0.02
     hc_its = int(t_interval/cascao.dt)
     cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, 
                                                 frame_ids=xp.arange(cascao.Nits-hc_its,cascao.Nits).tolist(), save_prefix='')
