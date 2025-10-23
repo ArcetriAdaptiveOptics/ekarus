@@ -21,15 +21,23 @@ def main(tn:str='example_pyr_diag'):
 
     diag_ssao = SingleStageAO(tn)
     diag_ssao.initialize_turbulence()
-    diag_ssao.pyr.set_modulation_angle(diag_ssao.sc.modulationAngleInLambdaOverD)
+    diag_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     Rec_diag, _ = diag_ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM,
-                                             use_diagonal=True, amps=0.2, save_prefix='diag_')
+                                             method='diagonal_slopes', amps=0.2, save_prefix='diag_')
     diag_ssao.sc.load_reconstructor(Rec_diag,m2c)
+
+    raw_ssao = SingleStageAO(tn)
+    raw_ssao.initialize_turbulence()
+    raw_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+    Rec_raw, _ = raw_ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM,
+                                             method='raw_intensity', amps=0.2, save_prefix='raw_')
+    raw_ssao.sc.load_reconstructor(Rec_raw,m2c)
 
     print('Running the loop ...')
     
     sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
-    diag_sig2, _ = diag_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, use_diagonal=True, save_prefix='diag_')
+    diag_sig2, _ = diag_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, method='diagonal_slopes', save_prefix='diag_')
+    raw_sig2, _ = raw_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, method='raw_intensity', save_prefix='raw_')
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -49,22 +57,26 @@ def main(tn:str='example_pyr_diag'):
     # plt.title('Interaction matrix standard deviation')
 
     lambdaRef = ssao.pyr.lambdaInM
+    ssao.KL = KL
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    diag_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='diag_')
+    ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='diag_')
+    ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='raw_')
 
     # cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
     if xp.on_gpu: # Convert to numpy for plotting
         input_sig2 = input_sig2.get()
         sig2 = sig2.get()
         diag_sig2 = diag_sig2.get()
+        raw_sig2 = raw_sig2.get()
         # rec_modes = rec_modes.get()
 
     tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
     tvec = xp.asnumpy(tvec)
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,sig2,'-o',label='closed loop')
-    plt.plot(tvec,diag_sig2,'-o',label='closed loop (diagonals)')
+    plt.plot(tvec,input_sig2,'-.',label='open loop')
+    plt.plot(tvec,sig2,'-.',label='slopes')
+    plt.plot(tvec,diag_sig2,'-.',label='slopes (including Sxy)')
+    plt.plot(tvec,raw_sig2,'-.',label='raw intensity')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -74,12 +86,11 @@ def main(tn:str='example_pyr_diag'):
 
     _,S,_ = xp.linalg.svd(Rec,full_matrices=False)
     _,diag_S,_ = xp.linalg.svd(Rec_diag,full_matrices=False)
-    if xp.on_gpu:
-        S = S.get()
-        diag_S = diag_S.get()
+    _,raw_S,_ = xp.linalg.svd(Rec_raw,full_matrices=False)
     plt.figure()
-    plt.plot(S,'-o',label=f'Sx, Sy')
-    plt.plot(diag_S,'-x',label=f'Sx, Sy, Sxy')
+    plt.plot(xp.asnumpy(S),'-o',label=f'slopes')
+    plt.plot(xp.asnumpy(diag_S),'-x',label=f'slopes, including Sxy')
+    plt.plot(xp.asnumpy(raw_S),'-x',label=f'raw intensity')
     plt.legend()
     plt.xlabel('Mode number')
     plt.grid()

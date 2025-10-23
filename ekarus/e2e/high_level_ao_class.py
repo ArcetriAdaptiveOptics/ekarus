@@ -132,7 +132,7 @@ class HighLevelAO():
         return KL, m2c
     
 
-    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, use_diagonal:bool=False, save_prefix:str=''):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, method:str='slopes', save_prefix:str=''):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
         
@@ -164,7 +164,7 @@ class HighLevelAO():
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
-            slopes = self._get_slopes(slope_computer, MM, lambdaInM, amps, use_diagonal=False)
+            slopes = self._get_slopes(slope_computer, MM, lambdaInM, amps, method=method)
             IM = slopes.T
             U,S,Vt = xp.linalg.svd(IM, full_matrices=False)
             Rec = xp.array((Vt.T*1/S) @ U.T,dtype=self.dtype)
@@ -278,7 +278,7 @@ class HighLevelAO():
 
 
     
-    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, use_diagonal:bool=False, starMagnitude:float=None, slaving=None):
+    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, method:str='slopes', starMagnitude:float=None, slaving=None):
         """
         Performs a single iteration of the AO loop.
         Parameters
@@ -306,7 +306,7 @@ class HighLevelAO():
 
         delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
         input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
-        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)
+        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, method=method)
         
         modes = slope_computer.Rec @ slopes
         if hasattr(slope_computer, 'optGains'):
@@ -448,7 +448,7 @@ class HighLevelAO():
         return opt_gains
     
 
-    def _get_slopes(self, slope_computer, MM, lambdaInM, amps, use_diagonal:bool=False, phase_offset=None):
+    def _get_slopes(self, slope_computer, MM, lambdaInM, amps, method:str='slopes', phase_offset=None):
         """ 
         Computes the slopes for the given mode matrix MM using push-pull method.
 
@@ -488,8 +488,8 @@ class HighLevelAO():
             mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
             push_field = xp.exp(1j*mode_phase + 1j*offset) * electric_field_amp
             pull_field = xp.exp(-1j*mode_phase + 1j*offset) * electric_field_amp
-            push_slope = slope_computer.compute_slopes(push_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp
-            pull_slope = slope_computer.compute_slopes(pull_field, lambdaOverD, Nphotons, use_diagonal=use_diagonal)/amp
+            push_slope = slope_computer.compute_slopes(push_field, lambdaOverD, Nphotons, method=method)/amp
+            pull_slope = slope_computer.compute_slopes(pull_field, lambdaOverD, Nphotons, method=method)/amp
             if slopes is None:
                 slopes = (push_slope-pull_slope)/2
             else:

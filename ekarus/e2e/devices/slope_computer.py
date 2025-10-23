@@ -75,7 +75,7 @@ class SlopeComputer():
 
         match self.wfs_type:
             case 'PyrWFS':
-                slopes = self._compute_pyramid_slopes(detector_image, **kwargs)
+                slopes = self._compute_pyramid_signal(detector_image, **kwargs)
             case _:
                 raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
 
@@ -95,35 +95,31 @@ class SlopeComputer():
         """
         self.optGains = opt_gains[:self.nModes]
 
-    def _compute_pyramid_slopes(self, detector_image, use_diagonal:bool=False):
 
+    def _compute_pyramid_signal(self, detector_image, method:str='slopes'):
         A = detector_image[~self._subaperture_masks[0]]
         B = detector_image[~self._subaperture_masks[1]]
         C = detector_image[~self._subaperture_masks[2]]
         D = detector_image[~self._subaperture_masks[3]]
 
-        up_down = (A+B) - (C+D)
-        left_right = (A+C) - (B+D)
+        match method:
+            case 'slopes':
+                up_down = (A+B) - (C+D)
+                left_right = (A+C) - (B+D)
+                slopes = xp.hstack((up_down, left_right))
 
-        slopes = xp.hstack((up_down, left_right))
+            case 'diagonal_slopes':
+                up_down = (A+B) - (C+D)
+                left_right = (A+C) - (B+D)
+                # diag = (A+D) - (B+C)
+                diag = xp.sqrt(2)*(A+D) - xp.sqrt(2)*(B+C)
+                slopes = xp.hstack((up_down, left_right, diag))
+                
+            case 'raw_intensity':
+                slopes = xp.hstack((A,B,C,D))
 
-        if use_diagonal:
-            diag = (A+D) - (B+C)
-            slopes = xp.hstack((up_down, left_right, diag))
-            # ccd_lr = xp.fliplr(detector_image)
-            # maskAlr = xp.fliplr(self._subaperture_masks[0])
-            # maskClr = xp.fliplr(self._subaperture_masks[2])
-            # Alr = ccd_lr[~maskAlr]
-            # Clr = ccd_lr[~maskClr]
-            # diag_lr = (B+Clr) - (Alr+D)
-            # # slopes = xp.hstack((up_down, left_right, diag_lr))
-            # ccd_ud = xp.flipud(detector_image)
-            # maskCud = xp.flipud(self._subaperture_masks[2])
-            # maskDud = xp.flipud(self._subaperture_masks[3])
-            # Cud = ccd_ud[~maskCud]
-            # Dud = ccd_ud[~maskDud]
-            # diag_ud = (B+Cud) - (A+Dud)
-            # slopes = xp.hstack((up_down, left_right, diag_lr, diag_ud))
+            case _:
+                raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'diagonal_slopes'")
 
         mean_intensity = xp.mean(xp.hstack((A,B,C,D)))#/4
         slopes *= 1/mean_intensity

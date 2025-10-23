@@ -54,7 +54,7 @@ class SingleStageAO(HighLevelAO):
         self.dm = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, use_diagonal:bool=False, save_prefix:str=None):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, method:str='slopes', save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 
@@ -108,7 +108,7 @@ class SingleStageAO(HighLevelAO):
             
             if i % int(self.sc.dt/self.dt) == 0:
                 dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, slaving=self.dm.slaving,
-                                                                  use_diagonal=use_diagonal, starMagnitude=starMagnitude)
+                                                                  method=method, starMagnitude=starMagnitude)
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 

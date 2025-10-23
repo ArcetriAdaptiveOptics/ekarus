@@ -31,12 +31,13 @@ TELESCOPE:
 
 ATMO:
   outerScaleInM: 25         # [m]
-  r0: [10e-2,12e-2,15e-2]   # [m]
-  windSpeed: [5,8,10]       # [m/s]
-  windAngle: [0,45,-60]     # [deg] CCW from East
+  r0: 892e-4                                                               # [m]
+  fractional_r0: [53.28, 1.45, 3.5, 9.57, 10.83, 4.37, 6.58, 3.71, 6.71]   # % contribution to r0
+  windSpeed: [15, 13, 13, 9, 9, 15, 25, 40, 21]                            # [m/s]
+  windAngle: [38, 34, 54, 42, 57, 48, -102, -83, -77]                      # [deg] CCW from East
 
 LOOP:
-  nIterations: 100
+  nIterations: 400
   starMagnitude: 6.0
   simFreqHz: 1500          # simulation frequency in Hz
   recompute: False         # if False, any calibration data saved from 

@@ -56,7 +56,7 @@ class ChangingGainSSAO(HighLevelAO):
     def run_loop(self, lambdaInM:float, starMagnitude:float,
                  changeGain_it_numbers:list=None, new_gains:list=None, 
                  new_modAngInLambdaOverD:float=None, changeMod_it_number:int=None, new_Rec=None,
-                 use_diagonal:bool=False, save_prefix:str=None):
+                 method:str='slopes', save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 
@@ -132,7 +132,7 @@ class ChangingGainSSAO(HighLevelAO):
             
             if i % int(self.sc.dt/self.dt) == 0:
                 dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, slaving = self.dm.slaving,
-                                                                  use_diagonal=use_diagonal, starMagnitude= starMagnitude)
+                                                                  method=method, starMagnitude=starMagnitude)
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 
