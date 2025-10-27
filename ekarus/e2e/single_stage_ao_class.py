@@ -200,16 +200,27 @@ class SingleStageAO(HighLevelAO):
         plt.title('Mirror command [m]')
         plt.axis('off')
 
-        res_phase = xp.asarray(ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask])
-        true_modes = (xp.linalg.pinv(self.KL)).T @ res_phase
+        N = 64 if 64 < self.Nits//2 else self.Nits//2
+        atmo_mode2 = xp.zeros(self.KL.shape[0])
+        res_mode2 = xp.zeros(self.KL.shape[0])
+        phase2modes = xp.linalg.pinv(self.KL.T)
+        for frame in range(N):
+            res_phase = xp.asarray(ma_atmo_phases[frame].data[~ma_atmo_phases[frame].mask])
+            modes = phase2modes @ res_phase
+            atmo_mode2 += modes**2
+            res_phase = xp.asarray(ma_res_phases[frame].data[~ma_res_phases[frame].mask])
+            modes = phase2modes @ res_phase
+            res_mode2 += modes**2
+        atmo_mode_rms = xp.sqrt(atmo_mode2/N)
+        res_mode_rms = xp.sqrt(res_mode2/N)
 
         plt.figure()
-        plt.plot(xp.asnumpy(xp.abs(true_modes))*1e+9,label='true')
-        plt.plot(xp.asnumpy(xp.abs(rec_modes[frame_id]))*1e+9,label='reconstructed')
+        plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
+        plt.plot(xp.asnumpy(res_mode_rms)*1e+9,label='cosed loop')
         plt.legend()
-        plt.xlabel('KL mode index')
-        plt.ylabel('KL mode amp [nm]')
-        plt.title('True vs reconstructed KL modes')
+        plt.xlabel('mode index')
+        plt.ylabel('mode RMS amp [nm]')
+        plt.title('KL modes')
         plt.grid()
         plt.xscale('log')
         plt.yscale('log')
@@ -232,7 +243,9 @@ class SingleStageAO(HighLevelAO):
         zern_modes = rec_modes[:,:5]
         max_mode = xp.max(xp.abs(rec_modes[:,5:]),axis=1)
         m2rad = 2*xp.pi/self.pyr.lambdaInM
-        n_its = 60
+
+        n_its = 100
+
         plt.figure()
         plt.plot(xp.asnumpy(xp.abs(zern_modes)*m2rad),'-o')
         plt.plot(xp.asnumpy(max_mode*m2rad),'-o')

@@ -13,7 +13,7 @@ from numpy.ma import masked_array
 
 def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False, 
          optimize_gain:bool=False, gain1_list:list=None, gain2_list:list=None,
-         t_interval:float=0.1):
+         t_interval:float=0.02):
 
     print('Initializing devices ...')
     cascao = CascadingAO(tn)
@@ -111,8 +111,7 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
         print(f'Selecting first loop gain = {cascao.sc1.intGain}, second loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
 
-    cascao.KL1 = KL1
-    cascao.KL2 = KL2
+    cascao.KL = KL1 if KL1.shape[0] > KL2.shape[0] else KL2
     print('Running the loop ...')
     dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
 
@@ -182,7 +181,7 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
     cascao.plot_iteration(lambdaRef, save_prefix='')
 
     hc_its = int(t_interval/cascao.dt)
-    cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, 
+    cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
                                                 frame_ids=xp.arange(cascao.Nits-hc_its,cascao.Nits).tolist(), save_prefix='')
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)

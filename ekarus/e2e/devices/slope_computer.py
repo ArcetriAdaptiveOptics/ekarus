@@ -233,16 +233,17 @@ class SlopeComputer():
         elif mode == 'triangle':
             match index:
                 case 1:
-                    roi_mask[X >= 0] = 1
+                    roi_mask[X > abs(Y)/xp.tan(xp.pi/3)] = 1
                 case 2:
-                    roi_mask[xp.logical_and(X < 0, Y >= 0)] = 1
+                    roi_mask[xp.logical_and(Y >= 0, X <= abs(Y)/xp.tan(xp.pi/3))] = 1
                 case 3:
-                    roi_mask[xp.logical_and(X < 0, Y < 0)] = 1
+                    roi_mask[xp.logical_and(Y < 0, X <= abs(Y)/xp.tan(xp.pi/3))] = 1
                 case _:
                     raise ValueError('Possible quadrant numbers are 1,2,3 (right, top-left, bottom-left)')
         roi_mask = xp.reshape(roi_mask, detector_image.shape)
         intensity = detector_image * roi_mask
         qx,qy = get_photocenter(intensity)
+        
         if mode == 'quadrant':
             return xp.round(qy), xp.round(qx)
         else:

@@ -7,11 +7,16 @@ from ekarus.e2e.utils.image_utils import reshape_on_mask
 
 class TurbulenceLayers():
 
-    def __init__(self, r0s, L0, windSpeeds, windAngles, savepath:str):
+    def __init__(self, r0s, L0, windSpeeds=None, windAngles=None, savepath:str=None):
         """ The constructor """
 
         self.r0s = r0s
         self.L0 = L0
+        self.nLayers = self._get_len(r0s)
+
+        if windAngles is None or windSpeeds is None:
+            windAngles = xp.zeros(self.nLayers)
+            windSpeeds = xp.zeros(self.nLayers)
 
         # Wrap angles to [-pi,pi)
         angles = ( windAngles + xp.pi) % (2 * xp.pi ) - xp.pi
@@ -19,12 +24,10 @@ class TurbulenceLayers():
         self.windAngles = angles
         self.windSpeeds = windSpeeds
 
-        self.dtype = xp.float
-
         self._check_same_length(r0s, windSpeeds)
         self._check_same_length(r0s, windAngles)
 
-        self.nLayers = self._get_len(r0s)
+        self.dtype = xp.float
         self.savepath = savepath
 
 
@@ -51,14 +54,16 @@ class TurbulenceLayers():
             if recompute is True:
                 raise FileNotFoundError('Recompute is True!')
             self._phs = self._phs.load_normalized_phase_screens(self.savepath)
-        except FileNotFoundError:   
+        except:# FileNotFoundError:   
             N, Npix = self.nLayers, screenSizeInPixels
-            if N > 1:
-                print(f'Generating {N:1.0f} {Npix:1.0f}x{Npix:1.0f} phase-screens ...')
-            else:
-                print(f'Generating {Npix:1.0f}x{Npix:1.0f} phase-screen ...')
+            if N*Npix > 1000:
+                if N > 1:
+                    print(f'Generating {N:1.0f} {Npix:1.0f}x{Npix:1.0f} phase-screens ...')
+                else:
+                    print(f'Generating {Npix:1.0f}x{Npix:1.0f} phase-screen ...')
             self._phs.generate_normalized_phase_screens(N)
-            self._phs.save_normalized_phase_screens(self.savepath)
+            if self.savepath is not None:
+                self._phs.save_normalized_phase_screens(self.savepath)
         
         self.phase_screens = xp.asarray(self._phs._phaseScreens, dtype=self.dtype)
         self._normalization_factors = (1/self.pixelsPerMeter / self.r0s) ** (5. / 6)
@@ -117,6 +122,16 @@ class TurbulenceLayers():
 
         return masked_phases
     
+
+    # def get_phase_at_coordinates(self,xx,yy):
+    #     masked_phases = xp.zeros([self.nLayers,self.mask_shape[0],self.mask_shape[1]])
+    #     if self.nLayers > 1:
+    #         for k in range(self.nLayers):
+    #             masked_phases[k,:,:] = self._get_single_masked_phase(0, self.phase_screens[k], 0,0, xx[k],yy[k])
+    #     else:
+    #         masked_phases[0,:,:] = self._get_single_masked_phase(0, self.phase_screens[0], 0,0, xx,yy)
+    #     return masked_phases
+
 
     def _get_single_masked_phase(self, dt, screen, windSpeed, windAngle, xStart, yStart):
         """ 

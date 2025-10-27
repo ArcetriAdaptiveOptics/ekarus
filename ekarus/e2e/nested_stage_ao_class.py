@@ -274,15 +274,29 @@ class NestedStageAO(HighLevelAO):
         plt.title('DM1 command [m]\n(inner loop)')
         plt.axis('off')
 
-
-        res1_phase = xp.asarray(res_in_phases[frame_id].data[~res_in_phases[frame_id].mask])
-        KL1_modes = (xp.linalg.pinv(self.KL1)).T @ res1_phase
-        res2_phase = xp.asarray(res_out_phases[frame_id].data[~res_out_phases[frame_id].mask])
-        KL2_modes = (xp.linalg.pinv(self.KL2)).T @ res2_phase
+        N = 64 if 64 < self.Nits//2 else self.Nits//2
+        atmo_mode2 = xp.zeros(self.KL.shape[0])
+        res1_mode2 = xp.zeros(self.KL.shape[0])
+        res2_mode2 = xp.zeros(self.KL.shape[0])
+        phase2modes = xp.linalg.pinv(self.KL.T)
+        for frame in range(N):
+            res_phase = xp.asarray(ma_atmo_phases[frame].data[~ma_atmo_phases[frame].mask])
+            modes = phase2modes @ res_phase
+            atmo_mode2 += modes**2
+            res_phase = xp.asarray(res_in_phases[frame].data[~res_in_phases[frame].mask])
+            modes = phase2modes @ res_phase
+            res1_mode2 += modes**2
+            res_phase = xp.asarray(res_out_phases[frame].data[~res_out_phases[frame].mask])
+            modes = phase2modes @ res_phase
+            res2_mode2 += modes**2
+        atmo_mode_rms = xp.sqrt(atmo_mode2/N)
+        res1_mode_rms = xp.sqrt(res1_mode2/N)
+        res2_mode_rms = xp.sqrt(res2_mode2/N)
 
         plt.figure()
-        plt.plot(xp.asnumpy(xp.abs(KL1_modes))*1e+9,label='first stage')
-        plt.plot(xp.asnumpy(xp.abs(KL2_modes))*1e+9,label='second stage')
+        plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
+        plt.plot(xp.asnumpy(res1_mode_rms)*1e+9,label='After DM1 (inner loop)')
+        plt.plot(xp.asnumpy(res2_mode_rms)*1e+9,label='After DM2 (outer loop)')
         plt.legend()
         plt.xlabel('mode index')
         plt.ylabel('mode RMS amp [nm]')
@@ -290,6 +304,9 @@ class NestedStageAO(HighLevelAO):
         plt.grid()
         plt.xscale('log')
         plt.yscale('log')
+
+
+
 
     def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=12):
         """

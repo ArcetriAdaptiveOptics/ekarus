@@ -46,6 +46,7 @@ class HighLevelAO():
 
     def _read_configuration(self):
         """ Reads the Telescope configuration file, defining the mask """
+        self.atmo_pars = self._config.read_atmo_pars()
         telescope_pars = self._config.read_telescope_pars()
         self.pupilSizeInM = telescope_pars['pupilSizeInM']
         self.pupilSizeInPixels = telescope_pars['pupilSizeInPixels']
@@ -187,8 +188,6 @@ class HighLevelAO():
             Maximum time step, screen length is computed using the maximum wind speeds and simulation time.
         The minimum length for the screen is 20 pupil diameters.
         """
-        if self.atmo_pars is None:
-            self.atmo_pars = self._config.read_atmo_pars()
         r0s = self.atmo_pars['r0']
         L0 = self.atmo_pars['outerScaleInM']
         windSpeeds = self.atmo_pars['windSpeed']
@@ -341,6 +340,24 @@ class HighLevelAO():
         masked_phase = xp.sum(masked_phases,axis=0)
         return masked_phase
     
+
+    # def get_random_phase_realization(self):
+    #     """
+    #     Retrieves the combined phase screen at a specific time.
+    #     """
+    #     H,W = self.layers.phase_screens.shape[1:]
+    #     h,w = self.cmask.shape
+    #     hMin,hMax = int(0), int(H-h)
+    #     wMin,wMax = int(0), int(W-w)
+    #     xx = xp.zeros(self.layers.nLayers)
+    #     yy = xp.zeros(self.layers.nLayers)
+    #     for i in range(self.layers.nLayers):
+    #         xx[i] = xp.random.randint(hMin,hMax)
+    #         yy[i] = xp.random.randint(wMin,wMax)
+    #     masked_phases = self.layers.get_phase_at_coordinates(xx,yy)
+    #     masked_phase = xp.sum(masked_phases,axis=0)
+    #     return masked_phase
+    
     
     def save_telemetry_data(self, data_dict, save_prefix:str=''):
         """
@@ -401,14 +418,14 @@ class HighLevelAO():
         return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
     
 
-    def calibrate_optical_gains(self, timeInSeconds, slope_computer, MM, amps:float=0.02, use_diagonal:bool=False, save_prefix:str=''):
+    def calibrate_optical_gains(self, N:int, slope_computer, MM, amps:float=0.02, method:str='slopes', save_prefix:str=''):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
         
         Parameters
         ----------
-        timeInSeconds : float
-            The time at which to retrieve the phase screen.
+        N : int
+            The number of random phase screen realizations to use.
         slope_computer : SlopeComputer
             The slope computer object.
         MM : array
@@ -417,8 +434,8 @@ class HighLevelAO():
             The wavelength(s) at which calibration is performed.
         amps : float or array
             The amplitudes for each mode.
-        use_diagonal : bool, optional
-            Whether to use diagonal slopes, by default False.
+        method : str, optional
+            Method to compute the sensor slopes.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
         
@@ -427,28 +444,71 @@ class HighLevelAO():
         opt_gains : array
             The computed optical gains.
         """
-        ogc_path = os.path.join(self.savecalibpath,str(save_prefix)+'OG.fits')
+        og_cl_path = os.path.join(self.savecalibpath,str(save_prefix)+'closed_lopp_OG.fits')
+        og_ol_path = os.path.join(self.savecalibpath,str(save_prefix)+'open_loop_OG.fits')
+        og_pl_path = os.path.join(self.savecalibpath,str(save_prefix)+'perfect_loop_OG.fits')
         try:
             if self.recompute is True:
                 raise FileNotFoundError('Recompute is True')
-            opt_gains = myfits.read_fits(ogc_path)
+            cl_opt_gains = myfits.read_fits(og_cl_path)
+            ol_opt_gains = myfits.read_fits(og_ol_path)
+            pl_opt_gains = myfits.read_fits(og_pl_path)
         except FileNotFoundError:
-            atmo_phase = self.get_phasescreen_at_time(timeInSeconds)
-            atmo_phase -= xp.mean(atmo_phase[~self.cmask])
-            phi = atmo_phase[~self.cmask]
-            modes = xp.linalg.pinv(MM).T @ phi
-            rec_phi = MM.T @ modes
-            rec_phase = reshape_on_mask(rec_phi, self.cmask)
-            phi_fit = rec_phase[~self.cmask]
-            phi_fit *= 2*xp.pi/self.pyr.lambdaInM
-            slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_fit, use_diagonal=use_diagonal)
+            IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
             Nmodes = slope_computer.nModes
-            opt_gains = xp.zeros(Nmodes)
-            for i in range(Nmodes):
-                rec_mode = slope_computer.Rec @ slopes[i,:]
-                opt_gains[i] = rec_mode[i]
-            myfits.save_fits(ogc_path, opt_gains)
-        return opt_gains
+            cl_opt_gains = xp.zeros(Nmodes)
+            ol_opt_gains = xp.zeros(Nmodes)
+            pl_opt_gains = xp.zeros(Nmodes)
+            phase2modes = xp.linalg.pinv(MM).T 
+            field_amp = 1-self.cmask
+            lambdaOverD = self.pyr.lambdaInM/self.pupilSizeInM
+            r0s = self.atmo_pars['r0']
+            L0 = self.atmo_pars['outerScaleInM']
+            turbulence = TurbulenceLayers(r0s,L0)
+            for i in range(N):
+                print(f'\rPhase realization {i+1}/{N}', end='\r', flush=True)
+                turbulence.generate_phase_screens(screenSizeInMeters=self.pupilSizeInM,screenSizeInPixels=self.pupilSizeInPixels)
+                turbulence.rescale_phasescreens()
+                atmo_phase = xp.sum(turbulence.phase_screens,axis=0)
+                atmo_phase -= xp.mean(atmo_phase[~self.cmask])
+                phi = atmo_phase[~self.cmask]
+                # modes = phase2modes @ phi
+                # rec_phi = MM.T @ modes
+                # rec_phase = reshape_on_mask(rec_phi, self.cmask)
+                # res_phi = rec_phase[~self.cmask]
+                # res_phi *= 2*xp.pi/self.pyr.lambdaInM
+                phi_atmo = phi*2*xp.pi/self.pyr.lambdaInM
+                input_field = field_amp * xp.exp(1j*atmo_phase*2*xp.pi/self.pyr.lambdaInM)
+                slopes = slope_computer.compute_slopes(input_field, lambdaOverD, None, method=method)
+                rec_modes = slope_computer.Rec @ slopes
+                rec_phi = MM[:slope_computer.nModes,:].T @ rec_modes
+                res_phi = phi_atmo - rec_phi
+                phi_modes = phase2modes @ phi_atmo
+                lo_phi = MM.T @ phi_modes
+                ho_phi = phi_atmo - lo_phi
+                ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo, method=method)
+                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi, method=method)
+                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi, method=method)
+                cl_gains = xp.zeros(Nmodes)
+                ol_gains = xp.zeros(Nmodes)
+                pl_gains = xp.zeros(Nmodes)
+                for i in range(Nmodes):
+                    # rec_modes = slope_computer.Rec @ ol_slopes[i,:]
+                    # ol_gains[i] = rec_modes[i]
+                    # rec_modes = slope_computer.Rec @ cl_slopes[i,:]
+                    # cl_gains[i] = rec_modes[i]
+                    calib_slope = IM[:,i]
+                    norm = xp.dot(calib_slope,calib_slope)
+                    ol_gains[i] = xp.dot(ol_slopes[i,:],calib_slope)/norm
+                    cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
+                    pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
+                cl_opt_gains += cl_gains/N
+                ol_opt_gains += ol_gains/N
+                pl_opt_gains += pl_gains/N
+            myfits.save_fits(og_ol_path,ol_opt_gains)
+            myfits.save_fits(og_cl_path,cl_opt_gains)
+            myfits.save_fits(og_pl_path,pl_opt_gains)
+        return ol_opt_gains, cl_opt_gains, pl_opt_gains
     
 
     def _get_slopes(self, slope_computer, MM, lambdaInM, amps, method:str='slopes', phase_offset=None):
@@ -486,7 +546,8 @@ class HighLevelAO():
         if isinstance(amps, float):
             amps *= xp.ones(Nmodes)
         for i in range(Nmodes):
-            print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)
+            if phase_offset is None:
+                print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)
             amp = amps[i]
             mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
             push_field = xp.exp(1j*mode_phase + 1j*offset) * electric_field_amp

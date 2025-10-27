@@ -113,9 +113,7 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
         cascao.sc2.intGain = best_gain2
         print(f'Selecting inner loop gain = {cascao.sc1.intGain}, outer loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
-
-    cascao.KL1 = KL1
-    cascao.KL2 = KL2
+    cascao.KL = KL1 if KL1.shape[0] > KL2.shape[0] else KL2
     
     print('Running the loop ...')
     dm_outer_sig2, dm_inner_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
