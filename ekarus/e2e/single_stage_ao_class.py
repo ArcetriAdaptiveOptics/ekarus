@@ -216,7 +216,7 @@ class SingleStageAO(HighLevelAO):
 
         plt.figure()
         plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
-        plt.plot(xp.asnumpy(res_mode_rms)*1e+9,label='cosed loop')
+        plt.plot(xp.asnumpy(res_mode_rms)*1e+9,label='closed loop')
         plt.legend()
         plt.xlabel('mode index')
         plt.ylabel('mode RMS amp [nm]')

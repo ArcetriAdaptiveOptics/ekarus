@@ -1,7 +1,6 @@
-import numpy as np
+import numpy as xp
 from functools import cache
 from scipy.special import jacobi
-
 
 class ZernikeGenerator(object):
     '''
@@ -140,9 +139,9 @@ class ZernikeGenerator(object):
                             (n, m))
 
         if (n == 0 and m == 0):
-            return np.ones(rho.shape)
-        rho = np.where(rho < 0, 0, rho)
-        Rnm = np.zeros(rho.shape)
+            return xp.ones(rho.shape)
+        rho = xp.where(rho < 0, 0, rho)
+        Rnm = xp.zeros(rho.shape)
         K = (n - abs(m)) / 2
         const = 1/jacobi(K, 0, m, monic=True)(1)  # BW pg 770, Magnus pg 210
         cJ = jacobi(K, 0, m, monic=True)(2 * rho**2 - 1)
@@ -155,13 +154,13 @@ class ZernikeGenerator(object):
         theta = thetaArray
 
         Rnm = self._rnm_jacobi(n, m, rho)
-        NC = np.sqrt(2 * (n + 1))
+        NC = xp.sqrt(2 * (n + 1))
         if m == 0:
-            return np.sqrt(0.5) * NC * Rnm
+            return xp.sqrt(0.5) * NC * Rnm
         if index % 2 == 0:
-            return NC * Rnm * np.cos(m * theta)
+            return NC * Rnm * xp.cos(m * theta)
         else:
-            return NC * Rnm * np.sin(m * theta)
+            return NC * Rnm * xp.sin(m * theta)
 
     def cartesian_coordinates(self):
         '''
@@ -206,17 +205,17 @@ class ZernikeGenerator(object):
         '''
         nPxY = self._shape[0]
         nPxX = self._shape[1]
-        c = np.array(self.center())
-        cc = np.expand_dims(c, axis=(1, 2))
-        Y, X = (np.mgrid[0.5: nPxY + 0.5: 1,
+        c = xp.array(self.center())
+        cc = xp.expand_dims(c, axis=(1, 2))
+        Y, X = (xp.mgrid[0.5: nPxY + 0.5: 1,
                          0.5: nPxX + 0.5: 1] - cc) / self.radius()
 
         return X, Y
 
     def _polar_array(self):
         X, Y = self.cartesian_coordinates()
-        r = np.sqrt(X ** 2 + Y ** 2)
-        th = np.arctan2(Y, X)
+        r = xp.sqrt(X ** 2 + Y ** 2)
+        th = xp.arctan2(Y, X)
         return r, th
 
     def getZernikeDict(self, indexVector):
@@ -236,13 +235,13 @@ class ZernikeGenerator(object):
         if index not in list(self._dictCache.keys()):
             res = self._polar(index, self._rhoMap,
                               self._thetaMap)
-            self._dictCache[index] = np.ma.masked_array(
+            self._dictCache[index] = xp.ma.masked_array(
                 data=res, mask=self._boolean_mask)
         return self._dictCache[index]
 
     @staticmethod
     def _is_integer_num(n):
-        if isinstance(n, (int, np.integer)):
+        if isinstance(n, (int, xp.integer)):
             return True
         if isinstance(n, float):
             return n.is_integer()
@@ -253,7 +252,7 @@ class ZernikeGenerator(object):
 
     def _computeDerivativeCoeffX(self, index):
         jmax = index
-        G_mat = np.zeros((jmax, jmax))
+        G_mat = xp.zeros((jmax, jmax))
         for i in range(1, jmax + 1):
             for j in range(1, jmax + 1):
                 ni, mi = ZernikeGenerator.degree(i)
@@ -283,14 +282,14 @@ class ZernikeGenerator(object):
                         j < i
                     )
                 ):
-                    G_mat[i - 1, j - 1] = np.sqrt((ni + 1) * (nj + 1))
+                    G_mat[i - 1, j - 1] = xp.sqrt((ni + 1) * (nj + 1))
                     if ((mi == 0) or (mj == 0)):
-                        G_mat[i - 1, j - 1] *= np.sqrt(2)
+                        G_mat[i - 1, j - 1] *= xp.sqrt(2)
         return G_mat
 
     def _computeDerivativeCoeffY(self, index):
         jmax = index
-        G_mat = np.zeros((jmax, jmax))
+        G_mat = xp.zeros((jmax, jmax))
         for i in range(1, jmax + 1):
             for j in range(1, jmax + 1):
                 ni, mi = ZernikeGenerator.degree(i)
@@ -320,9 +319,9 @@ class ZernikeGenerator(object):
                         j < i
                     )
                 ):
-                    G_mat[i - 1, j - 1] = np.sqrt((ni + 1) * (nj + 1))
+                    G_mat[i - 1, j - 1] = xp.sqrt((ni + 1) * (nj + 1))
                     if ((mi == 0) or (mj == 0)):
-                        G_mat[i - 1, j - 1] *= np.sqrt(2)
+                        G_mat[i - 1, j - 1] *= xp.sqrt(2)
                     if (
                         (
                             (
@@ -390,7 +389,7 @@ class ZernikeGenerator(object):
             radial order of the specified indexes
 
         '''
-        return np.ceil(0.5 * (np.sqrt(8 * np.array(j) + 1) - 3)).astype(int)
+        return xp.ceil(0.5 * (xp.sqrt(8 * xp.array(j) + 1) - 3)).astype(int)
 
     @classmethod
     @cache

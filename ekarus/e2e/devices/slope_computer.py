@@ -38,8 +38,10 @@ class SlopeComputer():
         elif hasattr(wfs,'vertex3_angle'):
             self.wfs_type = '3PWFS'
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
+        elif hasattr(wfs,'dot_radius'):
+            self.wfs_type = 'ZWFS'
         else:
-            raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS')
+            raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
 
 
     def calibrate_sensor(self, tn:str, prefix_str:str, recompute:bool, **kwargs):
@@ -50,15 +52,15 @@ class SlopeComputer():
         -----
         - PWFS/3PWFS: defines the subaperture masks
         """
+        roi_path = join(calibpath, tn, prefix_str+'ROI-Masks.fits')    
         match self.wfs_type:
             case 'PWFS':
-                subap_path = join(calibpath, tn, prefix_str+'SubapertureMasks.fits')
                 piston, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
                     if recompute is True:
                         raise FileNotFoundError('Recompute is True')
-                    subaperture_masks = read_fits(subap_path).astype(bool)
-                    self._subaperture_masks = xp.asarray(subaperture_masks)
+                    subaperture_masks = read_fits(roi_path).astype(bool)
+                    self._roi_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
@@ -66,15 +68,14 @@ class SlopeComputer():
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     self._define_pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
                     hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
-                    save_fits(subap_path, (self._subaperture_masks).astype(xp.uint8), hdr_dict)
+                    save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case '3PWFS':
-                subap_path = join(calibpath, tn, prefix_str+'SubapertureMasks.fits')
                 piston, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
                     if recompute is True:
                         raise FileNotFoundError('Recompute is True')
-                    subaperture_masks = read_fits(subap_path).astype(bool)
-                    self._subaperture_masks = xp.asarray(subaperture_masks)
+                    subaperture_masks = read_fits(roi_path).astype(bool)
+                    self._roi_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
@@ -82,9 +83,21 @@ class SlopeComputer():
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     self._define_3pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
                     hdr_dict = {'APEX_ANG': self._wfs.vertex3_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
-                    save_fits(subap_path, (self._subaperture_masks).astype(xp.uint8), hdr_dict)
+                    save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
+            case 'ZWFS':
+                try:
+                    if recompute is True:
+                        raise FileNotFoundError('Recompute is True')
+                    subaperture_masks = read_fits(roi_path).astype(bool)
+                    self._roi_masks = xp.asarray(subaperture_masks)
+                except FileNotFoundError:
+                    camera_shape = self._detector.detector_shape
+                    roiSizeInPix = max(camera_shape)/self._wfs.cropSize
+                    roi_mask = get_circular_mask(camera_shape, mask_radius=roiSizeInPix/2)
+                    self._roi_masks = roi_mask
+                    save_fits(roi_path, (self._roi_masks).astype(xp.uint8))
             case _:
-                raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS')
+                raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
     
 
     def compute_slopes(self, input_field, lambdaOverD, nPhotons, **kwargs):
@@ -100,8 +113,10 @@ class SlopeComputer():
                 slopes = self._compute_pyr_signal(detector_image, **kwargs)
             case '3PWFS':
                 slopes = self._compute_3pyr_signal(detector_image, **kwargs)
+            case 'ZWFS':
+                slopes = detector_image[~self._roi_masks]
             case _:
-                raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS')
+                raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
 
         return slopes
 
@@ -122,10 +137,10 @@ class SlopeComputer():
 
 
     def _compute_pyr_signal(self, detector_image, method:str='slopes'):
-        A = detector_image[~self._subaperture_masks[0]]
-        B = detector_image[~self._subaperture_masks[1]]
-        C = detector_image[~self._subaperture_masks[2]]
-        D = detector_image[~self._subaperture_masks[3]]
+        A = detector_image[~self._roi_masks[0]]
+        B = detector_image[~self._roi_masks[1]]
+        C = detector_image[~self._roi_masks[2]]
+        D = detector_image[~self._roi_masks[3]]
 
         match method:
             case 'slopes':
@@ -152,9 +167,9 @@ class SlopeComputer():
     
 
     def _compute_3pyr_signal(self, detector_image, method:str='slopes'):
-        A = detector_image[~self._subaperture_masks[0]]
-        B = detector_image[~self._subaperture_masks[1]]
-        C = detector_image[~self._subaperture_masks[2]]
+        A = detector_image[~self._roi_masks[0]]
+        B = detector_image[~self._roi_masks[1]]
+        C = detector_image[~self._roi_masks[2]]
 
         match method:
             case 'slopes':
@@ -194,7 +209,7 @@ class SlopeComputer():
             if centerObscPixDiam > 0.0:
                 obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
                 subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)
-        self._subaperture_masks = subaperture_masks
+        self._roi_masks = subaperture_masks
 
 
     def _define_3pyr_subaperture_masks(self, subaperture_image, Npix, centerObscPixDiam:float = 0.0):
@@ -211,7 +226,7 @@ class SlopeComputer():
             if centerObscPixDiam > 0.0:
                 obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
                 subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)
-        self._subaperture_masks = subaperture_masks
+        self._roi_masks = subaperture_masks
 
     
     @staticmethod

@@ -472,11 +472,6 @@ class HighLevelAO():
                 atmo_phase = xp.sum(turbulence.phase_screens,axis=0)
                 atmo_phase -= xp.mean(atmo_phase[~self.cmask])
                 phi = atmo_phase[~self.cmask]
-                # modes = phase2modes @ phi
-                # rec_phi = MM.T @ modes
-                # rec_phase = reshape_on_mask(rec_phi, self.cmask)
-                # res_phi = rec_phase[~self.cmask]
-                # res_phi *= 2*xp.pi/self.pyr.lambdaInM
                 phi_atmo = phi*2*xp.pi/self.pyr.lambdaInM
                 input_field = field_amp * xp.exp(1j*atmo_phase*2*xp.pi/self.pyr.lambdaInM)
                 slopes = slope_computer.compute_slopes(input_field, lambdaOverD, None, method=method)
