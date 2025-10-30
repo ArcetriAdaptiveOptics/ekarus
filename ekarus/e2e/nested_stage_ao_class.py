@@ -64,11 +64,11 @@ class NestedStageAO(HighLevelAO):
     def get_photons_per_subap(self, starMagnitude):
         collected_photons = self.get_photons_per_second(starMagnitude=starMagnitude)
 
-        Nsubaps1 = xp.sum(1-self.sc1._subaperture_masks)
+        Nsubaps1 = xp.sum(1-self.sc1._roi_masks)
         ph1 = collected_photons * self.ccd1.quantum_efficiency * self.ccd1.beam_split_ratio
         ph_per_subap1 = ph1 / Nsubaps1 * self.sc1.dt
 
-        Nsubaps2 = xp.sum(1-self.sc2._subaperture_masks)
+        Nsubaps2 = xp.sum(1-self.sc2._roi_masks)
         ph2 = collected_photons * self.ccd2.quantum_efficiency * self.ccd2.beam_split_ratio
         ph_per_subap2 = ph2 / Nsubaps2 * self.sc2.dt
 

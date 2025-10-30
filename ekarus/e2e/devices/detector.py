@@ -5,7 +5,7 @@ from arte.math.toccd import toccd
 
 class Detector:
 
-    def __init__(self, detector_shape = None, RON:float = 0.0, quantum_efficiency:float = 1.0, beam_split_ratio:float = 1.0, max_bits:int = 12):
+    def __init__(self, detector_shape = None, RON:float = 0.0, quantum_efficiency:float = 1.0, beam_split_ratio:float = 1.0, max_bits:int = 14):
         """
         Detector constructor.
         
@@ -56,7 +56,7 @@ class Detector:
         """
 
         # Re-scale the intensity based on the flux and quantum efficiency
-        norm_intensity = self.beam_split_ratio * self.quantum_efficiency * flux * intensity/xp.sum(intensity)
+        norm_intensity = self.beam_split_ratio * self.quantum_efficiency * flux * intensity/xp.sum(abs(intensity))
 
         # Noise
         poisson_noise = xp.random.poisson(norm_intensity, xp.shape(intensity)) # Possion noise

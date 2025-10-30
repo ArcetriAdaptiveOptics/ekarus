@@ -77,7 +77,7 @@ class HighLevelAO():
             self.recompute = False
     
 
-    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=5, save_prefix:str=''):
+    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2, save_prefix:str=''):
         """
         Defines the Karhunen-Loève (KL) modes for the given DM and oversampling.
         
@@ -119,7 +119,7 @@ class HighLevelAO():
                 print(f'SLAVING: downsized IFFs from {dm.IFF.shape} to {IFFs.shape}')
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes,
-                oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)            
+                oversampling=oversampling, if_max_condition_number=100, verbose=True, xp=xp, dtype=self.dtype)            
             # KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
             #     self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
             #     oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
@@ -340,24 +340,6 @@ class HighLevelAO():
         masked_phase = xp.sum(masked_phases,axis=0)
         return masked_phase
     
-
-    # def get_random_phase_realization(self):
-    #     """
-    #     Retrieves the combined phase screen at a specific time.
-    #     """
-    #     H,W = self.layers.phase_screens.shape[1:]
-    #     h,w = self.cmask.shape
-    #     hMin,hMax = int(0), int(H-h)
-    #     wMin,wMax = int(0), int(W-w)
-    #     xx = xp.zeros(self.layers.nLayers)
-    #     yy = xp.zeros(self.layers.nLayers)
-    #     for i in range(self.layers.nLayers):
-    #         xx[i] = xp.random.randint(hMin,hMax)
-    #         yy[i] = xp.random.randint(wMin,wMax)
-    #     masked_phases = self.layers.get_phase_at_coordinates(xx,yy)
-    #     masked_phase = xp.sum(masked_phases,axis=0)
-    #     return masked_phase
-    
     
     def save_telemetry_data(self, data_dict, save_prefix:str=''):
         """
@@ -402,6 +384,7 @@ class HighLevelAO():
         for k,res_phase in enumerate(res_phases):
             print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
             phase_2d = reshape_on_mask(res_phase, pup_mask)
+            # phase_var = xp.sum((res_phase-xp.mean(res_phase))**2) 
             phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
             perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
             coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
@@ -540,6 +523,8 @@ class HighLevelAO():
             offset = reshape_on_mask(phase_offset, self.cmask)
         if isinstance(amps, float):
             amps *= xp.ones(Nmodes)
+            rad_orders = xp.sqrt(xp.arange(Nmodes)+1)
+            amps /= xp.sqrt(rad_orders)
         for i in range(Nmodes):
             if phase_offset is None:
                 print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)

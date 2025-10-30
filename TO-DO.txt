@@ -1,6 +1,5 @@
 IMPORTANT:
 
-Pyramid optical gain compensation
 Fix TestDM.ipynb
 
 Slaving update
@@ -11,10 +10,8 @@ EMCCD noise
 
 FUTURE UPDATES:
 
-Triangular pyramid
 Control Filter Class ('leaky' integrator)
 Segmented hexagonal masks (HCIpy?)
-U-net transfer learning
 
 
 

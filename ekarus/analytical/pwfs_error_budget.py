@@ -29,7 +29,8 @@ def von_karman_power(k,r0,L0):
     return C * r0**(-5.0/3.0) * B**(-11.0/6.0)
 
 def radial_order(i_mode):
-    return int(xp.round(xp.sqrt(i_mode)))
+    noll = i_mode + 2
+    return xp.ceil(-3.0/2.0+xp.sqrt(1+8*noll)/2.0)
 
 def Nphot(T,mag,D,thrp=1.0):
     B0 = 8.9e+9
@@ -42,7 +43,7 @@ def Nphot(T,mag,D,thrp=1.0):
 
 class ErrorBudget():
 
-    def __init__(self,r0s,L0,V,D,delays,camera,IM):
+    def __init__(self,r0s,L0,V,D,delays,camera,IM,wfs_frame,subaperture_masks):
 
         self.D = D
 
@@ -53,9 +54,11 @@ class ErrorBudget():
         self.T_readout,self.T_rtc,self.T_dm = delays
         self.RON,self.dark,self.F,self.thrp = camera
 
-        im_imt = IM @ IM.T
-        self.p = xp.diag(xp.linalg.pinv(im_imt))
-        self.Rec = xp.linalg.pinv(IM)
+        DtD = IM.T @ IM
+        self.p = xp.diag(xp.linalg.inv(DtD))
+        self.IM = IM
+
+        self._define_pixel_intensities(wfs_frame,subaperture_masks)
 
     
     def update_freq_range(self,freq):
@@ -104,24 +107,24 @@ class ErrorBudget():
         sig_rad = xp.sqrt(sig2_rad)
         return rad2nm(sig_rad,lambdaInM)
     
-    def sigma_meas(self,T,Nsubaps,mag,lambdaInM):
+    def sigma_meas(self,T,mag,lambdaInM,rebin=0):
         sig2_rad = 0.0
         for i in range(len(self.gain)):
-            sig2_rad += self._sigma_meas_i(T,i,Nsubaps,mag)
+            sig2_rad += self._sigma_meas_i(T,i,mag,rebin)
         sig_rad = xp.sqrt(sig2_rad)
         return rad2nm(sig_rad,lambdaInM)
 
-    def sigma_tot(self,lambdaInM,N,T,Nsubaps,mag):
+    def sigma_tot(self,lambdaInM,N,T,mag,rebin=0):
         sig_fit = self.sigma_fit(N,lambdaInM)
-        sig_meas = self.sigma_meas(T,Nsubaps,mag,lambdaInM)
+        sig_meas = self.sigma_meas(T,mag,lambdaInM,rebin)
         sig_alias = self.sigma_alias(T,N,lambdaInM)
         sig_temp = self.sigma_temp(T,lambdaInM)
         sig_tot = xp.sqrt(sig_fit**2 + sig_meas**2 + sig_temp**2 + sig_alias**2)
         return sig_tot, sig_alias, sig_fit, sig_meas, sig_temp
     
 
-    def get_SR(self,lambdaInM,N,T,Nsubaps,mag):
-        sig,_,_,_,_ = self.sigma_tot(lambdaInM,N,T,Nsubaps,self.V,mag)
+    def get_SR(self,lambdaInM,N,T,mag,rebin=0):
+        sig,_,_,_,_ = self.sigma_tot(lambdaInM,N,T,mag,rebin)
         sig2_rad = (sig*(2*xp.pi)/lambdaInM)**2
         SR = xp.exp(-sig2_rad)
         return SR   
@@ -135,12 +138,20 @@ class ErrorBudget():
         RTF2 = xp.abs(self.RTF(T,i))**2
         sigma2_rad = amp*xp.trapz(PSD*RTF2,self.om) #xp.sum(xp.dot(PSD,RTF2))
         return sigma2_rad
+    
+    # def _sigma_meas_i(self,T,i,mag,rebin):
+    #     N = self.get_mean_intensity(mag,T)
+    #     sig2_I = self.F**2*(self.dark+self.get_pix_intensities(mag,T,i))+4*self.RON**2
+    #     sig2_w = xp.sum(sig2_I/N**2)
+    #     NTF2 = xp.abs(self.NTF(T,i))**2
+    #     sigma2_rad = sig2_w*xp.trapz(NTF2,self.om) #xp.sum(xp.dot(sig2_w,NTF2))
+    #     return sigma2_rad
 
-    def _sigma_meas_i(self,T,i,Nsubaps,mag):
-        I = Nphot(T,mag,self.D,self.thrp)
-        Npix = self._Npix_from_Nsubaps(Nsubaps)
-        sig2_I = self.F**2*(self.dark+I/(4*Npix)) + self.RON**2
-        sig2_s = 4*Npix*sig2_I/I**2
+    def _sigma_meas_i(self,T,i,mag,rebin):
+        Npix = float(len(self._ref_pix_intensities))
+        N = self.get_mean_intensity(mag,T)*Npix
+        sig2_I = self.F**2*(self.dark+self.get_pix_intensities(mag,T,i))+self.RON**2
+        sig2_s = xp.sum(4*sig2_I)/N**2
         sig2_w = self.p[i] * sig2_s
         NTF2 = xp.abs(self.NTF(T,i))**2
         sigma2_rad = sig2_w*xp.trapz(NTF2,self.om) #xp.sum(xp.dot(sig2_w,NTF2))
@@ -155,9 +166,10 @@ class ErrorBudget():
         return sigma2_rad
 
 
-    def define_aliasing_variance(self,r0s,cmask,slope_computer,lambdaInM,pixSize,KL,N):
+    def define_aliasing_variance(self,r0s,cmask,slope_computer,lambdaInM,pixSize,KL,N,Nmodes):
         aliasing = None
         phase2modes = xp.linalg.pinv(KL.T) 
+        Rec = xp.linalg.pinv(self.IM[:,:Nmodes])
         field_amp = 1-cmask
         lambdaOverD = lambdaInM/self.D
         m2rad = (2*xp.pi)/lambdaInM
@@ -175,14 +187,30 @@ class ErrorBudget():
             phase_in_rad = reshape_on_mask(res_phase*m2rad, cmask)
             input_field = field_amp * xp.exp(1j*phase_in_rad)
             slope = slope_computer.compute_slopes(input_field, lambdaOverD, None)
-            wfs_modes_in_rad = self.Rec @ slope
+            wfs_modes_in_rad = Rec @ slope
             if aliasing is None:
                 aliasing = wfs_modes_in_rad**2
             else:
                 aliasing += wfs_modes_in_rad**2
         aliasing = xp.sqrt(aliasing/N)
         self.sig2_alias = aliasing**2
+
+    def get_mean_intensity(self,mag,T):
+        return Nphot(T,mag,self.D,self.thrp)*self.diffraction_loss
     
-    @staticmethod
-    def _Npix_from_Nsubaps(Nsubaps):
-        return xp.pi/4*Nsubaps**2
+    def get_pix_intensities(self,mag,T,i):
+        I = self._ref_pix_intensities.copy()
+        I *= self.get_mean_intensity(mag,T)/xp.sum(abs(I))
+        return I
+
+    def _define_pixel_intensities(self, wfs_frame, subaperture_masks):
+        A = wfs_frame[~subaperture_masks[0]]
+        B = wfs_frame[~subaperture_masks[1]]
+        C = wfs_frame[~subaperture_masks[2]]
+        D = wfs_frame[~subaperture_masks[3]]
+        self.diffraction_loss = xp.mean(xp.hstack((A,B,C,D)))/xp.sum(wfs_frame) #
+        self._ref_pix_intensities = xp.mean(xp.vstack((A,B,C,D)),axis=0)
+
+    # @staticmethod
+    # def _Npix_from_Nsubaps(rebin):
+    #     return xp.pi/4*rebin**2

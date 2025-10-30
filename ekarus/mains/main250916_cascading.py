@@ -22,13 +22,13 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
     amp1 = 0.2
     amp2 = 0.2
 
-    KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
+    KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=2, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(max((1.0,cascao.sc1.modulationAngleInLambdaOverD))) #cascao.sc1.modulationAngleInLambdaOverD)#
     Rec1, _ = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(Rec1,m2c1)
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
 
-    KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
+    KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=2, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(max((1.0,cascao.sc2.modulationAngleInLambdaOverD))) #cascao.sc2.modulationAngleInLambdaOverD)#
     Rec2, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(Rec2,m2c2)
