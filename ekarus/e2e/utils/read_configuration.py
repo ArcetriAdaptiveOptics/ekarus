@@ -22,6 +22,10 @@ class ConfigReader():
         """ Read sensor parameters from the configuration file."""
         self._cfile[sensor_name]['lambdaInM'] = eval(self._cfile[sensor_name]['lambdaInM'])
         self._cfile[sensor_name]['bandWidthInM'] = eval(self._cfile[sensor_name]['bandWidthInM'])
+        try:
+            type = self._cfile[sensor_name]['type']
+        except KeyError:
+            self._cfile[sensor_name]['type'] = '4PWFS'
         return self._cfile[sensor_name]
 
     def read_detector_pars(self, detector_name: str = 'DETECTOR'):

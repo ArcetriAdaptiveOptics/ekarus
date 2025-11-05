@@ -1,22 +1,19 @@
 IMPORTANT:
 
-Fix TestDM.ipynb
-
+PWFS error budget (aliasing vs noise vs subaperture size)
 Slaving update
-GPU-accelerated tps
-EMCCD noise
-
 
 
 FUTURE UPDATES:
 
+Matrix OG
 Control Filter Class ('leaky' integrator)
 Segmented hexagonal masks (HCIpy?)
 
 
 
-EXTRAS:
+COSMETIC CHANGES:
 
 Remove xupy (cupy) dependency
 Remove arte dependency
-
+GPU-accelerated tps

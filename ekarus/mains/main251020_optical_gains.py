@@ -12,8 +12,8 @@ def main(tn:str='optical_gains', gain:float=0.3):
     ssao.initialize_turbulence()
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
-    Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
-    ssao.sc.load_reconstructor(Rec,m2c)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 
     lambdaRef = ssao.pyr.lambdaInM
@@ -32,22 +32,19 @@ def main(tn:str='optical_gains', gain:float=0.3):
     ogcl_ssao = SingleStageAO(tn)
     ogcl_ssao.initialize_turbulence()
     ogcl_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    ogcl_ssao.sc.load_reconstructor(Rec,m2c)
-    ogcl_ssao.sc.load_optical_gains(cl_opt_gains)
+    ogcl_ssao.sc.load_reconstructor(IM,m2c,cl_opt_gains)
     ogcl_ssao.sc.intGain = gain
 
     ogol_ssao = SingleStageAO(tn)
     ogol_ssao.initialize_turbulence()
     ogol_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    ogol_ssao.sc.load_reconstructor(Rec,m2c)
-    ogol_ssao.sc.load_optical_gains(ol_opt_gains)
+    ogol_ssao.sc.load_reconstructor(IM,m2c,ol_opt_gains)
     ogol_ssao.sc.intGain = gain
 
     ogpl_ssao = SingleStageAO(tn)
     ogpl_ssao.initialize_turbulence()
     ogpl_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    ogpl_ssao.sc.load_reconstructor(Rec,m2c)
-    ogpl_ssao.sc.load_optical_gains(pl_opt_gains)
+    ogpl_ssao.sc.load_reconstructor(IM,m2c,pl_opt_gains)
     ogpl_ssao.sc.intGain = gain
 
     # it_ss = 200

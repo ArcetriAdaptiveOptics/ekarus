@@ -21,13 +21,11 @@ class SlopeComputer():
                 self.intGain,
                 self.delay,
                 self.nModes,
-                # self.ttOffloadFreqHz,
             ) = (
                 1 / sc_pars["loopFrequencyInHz"],
                 sc_pars["integratorGain"],
                 sc_pars["delay"],
                 sc_pars["nModes2Correct"],
-                # sc_pars["ttOffloadFrequencyInHz"],
             )
         except KeyError:
             pass
@@ -119,21 +117,32 @@ class SlopeComputer():
                 raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
 
         return slopes
-
-
-    def load_reconstructor(self, Rec, m2c):
+    
+    
+    def load_reconstructor(self, IM, m2c, opt_gains=None):
         """
         Load the reconstructor and the mode-to-command matrix
         """
-        self.Rec = Rec[:self.nModes,:]
+        Rec = xp.linalg.pinv(IM[:,:self.nModes])
+        self.Rec = Rec
         self.m2c = m2c[:,:self.nModes]
+        if opt_gains is not None:
+            self.opt_gains = opt_gains.copy()
 
 
-    def load_optical_gains(self, opt_gains):
-        """
-        Load the optical gains
-        """
-        self.optGains = opt_gains[:self.nModes]
+    # def load_reconstructor(self, Rec, m2c):
+    #     """
+    #     Load the reconstructor and the mode-to-command matrix
+    #     """
+    #     self.Rec = Rec[:self.nModes,:]
+    #     self.m2c = m2c[:,:self.nModes]
+
+
+    # def load_optical_gains(self, opt_gains):
+    #     """
+    #     Load the optical gains
+    #     """
+    #     self.optGains = opt_gains[:self.nModes]
 
 
     def _compute_pyr_signal(self, detector_image, method:str='slopes'):

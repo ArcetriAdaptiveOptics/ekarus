@@ -27,13 +27,13 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
     cascao.initialize_turbulence()
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-    Rec1, _ = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
-    cascao.sc1.load_reconstructor(Rec1,m2c1)
+    Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
+    cascao.sc1.load_reconstructor(IM1,m2c1)
 
     KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-    Rec2, _ = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
-    cascao.sc2.load_reconstructor(Rec2,m2c2)
+    Rec2, IM2 = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
+    cascao.sc2.load_reconstructor(IM2,m2c2)
 
     cascao.get_photons_per_subap(cascao.starMagnitude)
 

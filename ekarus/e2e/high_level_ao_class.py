@@ -226,7 +226,6 @@ class HighLevelAO():
         Initialize devices for PyrWFS slope computation
         """
 
-        from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
         from ekarus.e2e.devices.detector import Detector
         from ekarus.e2e.devices.slope_computer import SlopeComputer
 
@@ -240,19 +239,34 @@ class HighLevelAO():
         )
 
         wfs_pars = self._config.read_sensor_pars(pyr_id) 
-        subapPixSep = wfs_pars["subapPixSep"]
         oversampling = wfs_pars["oversampling"]
         sensorLambda = wfs_pars["lambdaInM"]
         sensorBandwidth = wfs_pars['bandWidthInM']
+        subapPixSep = wfs_pars["subapPixSep"]
         subapertureSize = wfs_pars["subapPixSize"]
         rebin = oversampling*self.pupilSizeInPixels/max(detector_shape)
-        apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2
-        pyr= PyramidWFS(
-            apex_angle=apex_angle, 
-            oversampling=oversampling, 
-            sensorLambda=sensorLambda,
-            sensorBandwidth=sensorBandwidth
-        )
+        type = wfs_pars['type']
+        match type: # TODO Move to PWFS class
+            case '4PWFS':
+                from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
+                apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2
+                pyr= PyramidWFS(
+                    apex_angle=apex_angle, 
+                    oversampling=oversampling, 
+                    sensorLambda=sensorLambda,
+                    sensorBandwidth=sensorBandwidth
+                )
+            case '3PWFS':
+                from ekarus.e2e.devices.pyr3_wfs import Pyr3WFS
+                vertex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*((xp.floor(subapertureSize+1.0)+subapPixSep)/(2*xp.cos(xp.pi/6)))*rebin/2
+                pyr= Pyr3WFS(
+                    vertex_angle=vertex_angle, 
+                    oversampling=oversampling, 
+                    sensorLambda=sensorLambda,
+                    sensorBandwidth=sensorBandwidth
+                )
+            case _:
+                raise KeyError('Unrecognized WFS type: Available types are: 4PWFS, 3PWFS')
 
         # Size checks
         if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
@@ -378,8 +392,8 @@ class HighLevelAO():
         res_phases = xp.array(residual_phases_in_rad)
         padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
         pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
-        # psf_rms = xp.zeros([self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling]) 
-        psf_stack = xp.zeros([N,self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling])
+        psf_stack = []
+        # psf_stack = xp.zeros([N,self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling])
         field_amp = 1-pup_mask
         for k,res_phase in enumerate(res_phases):
             print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
@@ -392,9 +406,11 @@ class HighLevelAO():
             input_field = field_amp * xp.exp(1j*phase_2d)
             psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
             coro_psf /= xp.max(psf)
-            psf_stack[k] = coro_psf
+            # psf_stack[k] = coro_psf
+            psf_stack.append(coro_psf)
             # psf_rms += coro_psf**2
         # psf_rms = xp.sqrt(psf_rms/N)
+        psf_stack = xp.array(psf_stack)
         psf_rms = xp.std(psf_stack,axis=0)
         rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),psf_rms.shape[0]/2,psf_rms.shape[1]/2)
         pix_dist = dist/oversampling

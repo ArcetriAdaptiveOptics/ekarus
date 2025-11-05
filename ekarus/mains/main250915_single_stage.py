@@ -27,8 +27,8 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     ssao.initialize_turbulence()
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
-    Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
-    ssao.sc.load_reconstructor(Rec,m2c)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 
     it_ss = 200

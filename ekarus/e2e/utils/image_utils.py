@@ -161,7 +161,8 @@ def remap_on_new_mask(data, old_mask, new_mask):
 def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0, **kwargs):
     sz=image2d.shape
     plt.imshow(image2d, extent=[-sz[0]/2*pixelSize, sz[0]/2*pixelSize,
-                                -sz[1]/2*pixelSize, sz[1]/2*pixelSize],origin='lower', **kwargs)
+                                -sz[1]/2*pixelSize, sz[1]/2*pixelSize],
+                                origin='lower', **kwargs)
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -173,7 +174,7 @@ def showZoomCenter(image, pixelSize, **kwargs):
     if hasattr(image,'get'):
         image = image.get()
     imageHalfSizeInPoints= image.shape[0]/2
-    roi= [int(imageHalfSizeInPoints*0.9), int(imageHalfSizeInPoints*1.1)]
+    roi= [int(imageHalfSizeInPoints*0.8), int(imageHalfSizeInPoints*1.2)]
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
 

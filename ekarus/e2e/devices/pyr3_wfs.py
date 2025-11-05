@@ -13,13 +13,13 @@ class Pyr3WFS:
     where the phase shift depends on the distance from the apex.
     """
 
-    def __init__(self, vertex3_angle, oversampling, sensorLambda, sensorBandwidth=0.0):
+    def __init__(self, vertex_angle, oversampling, sensorLambda, sensorBandwidth=0.0):
         """
         Pyramid wavefront sensor constructor.
 
         :param vertex3_angle: pyramid vertex angle in radians
         """
-        self.vertex3_angle = vertex3_angle
+        self.vertex3_angle = vertex_angle
         self.oversampling = oversampling
         self.lambdaInM = sensorLambda
 
