@@ -43,9 +43,9 @@ class ConfigReader():
     def read_atmo_pars(self):
         """ Read atmosphere parameters from the configuration file."""
         try:
-            fractional_r0 = xp.array(self._cfile['ATMO']['fractional_r0'])/100
+            cn2 = xp.array(self._cfile['ATMO']['cn2'])/100
             r0 = eval(self._cfile['ATMO']['r0'])
-            self._cfile['ATMO']['r0'] = r0*fractional_r0**(-3/5)
+            self._cfile['ATMO']['r0'] = r0*cn2**(-3/5)
         except KeyError:
             self._cfile['ATMO']['r0'] = xp.array([eval(x) for x in self._cfile['ATMO']['r0']])
         self._cfile['ATMO']['windSpeed'] = xp.asarray(self._cfile['ATMO']['windSpeed'])

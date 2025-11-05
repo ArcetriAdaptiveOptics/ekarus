@@ -11,8 +11,13 @@ import os.path as op
 import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_single_stage', show:bool=False, gain_list=None, 
-         optimize_gain:bool=False, starMagnitudes=None, lambdaRef:float=750e-9):
+def main(tn:str='example_single_stage',
+         show:bool=False, 
+         gain_list=None, 
+         show_contrast:bool =False,
+         optimize_gain:bool=False, 
+         starMagnitudes=None, 
+         lambdaRef:float=750e-9):
     
     if gain_list is not None:
         optimize_gain = True
@@ -39,10 +44,6 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         SR_vec = xp.zeros(N)
         for jj in range(N):
             g = gain_vec[jj]
-            # ssao = SingleStageAO(tn)
-            # ssao.initialize_turbulence()
-            # ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-            # ssao.sc.load_reconstructor(Rec,m2c)
             ssao.sc.intGain = g
             err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
             SR = xp.mean(xp.exp(-err2[-it_ss:]))
@@ -51,10 +52,6 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
 
         best_gain = gain_vec[xp.argmax(SR_vec)]
         print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
-        # ssao = SingleStageAO(tn)
-        # ssao.initialize_turbulence()
-        # ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-        # ssao.sc.load_reconstructor(Rec,m2c)
         ssao.sc.intGain = best_gain
         if xp.on_gpu:
             gain_vec = gain_vec.get()
@@ -71,10 +68,6 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
     # ssao.SR_out = xp.exp(-sig2)
     
     if starMagnitudes is not None:
-        # new_ssao = SingleStageAO(tn)
-        # new_ssao.initialize_turbulence()
-        # new_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-        # new_ssao.sc.load_reconstructor(Rec,m2c)
         sig = xp.zeros([len(starMagnitudes),ssao.Nits])
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
@@ -117,24 +110,18 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='')
-    if show:
-        ssao.plot_rec_modes(save_prefix='')
+
+    if show_contrast:
+        ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='')
+
     ssao.sig2 = sig2
     if starMagnitudes is not None:
         ssao.sig = sig
 
-    if xp.on_gpu: # Convert to numpy for plotting
-        input_sig2 = input_sig2.get()
-        sig2 = sig2.get()
-        if starMagnitudes is not None:
-            sig = sig.get()
-
-    tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
-    tvec = tvec.get() if xp.on_gpu else tvec.copy()
+    tvec = xp.asnumpy(xp.arange(ssao.Nits)*ssao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-.',label='open loop')
-    plt.plot(tvec,sig2,'-.',label='closed loop')
+    plt.plot(tvec,xp.asnumpy(input_sig2),'-.',label='open loop')
+    plt.plot(tvec,xp.asnumpy(sig2),'-.',label='closed loop')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -147,7 +134,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         SR_stars = np.zeros(len(starMagnitudes))
         for k,mag in enumerate(starMagnitudes):
             SR_stars[k] = np.mean(np.exp(-sig[k,-it_ss:]))
-            plt.plot(tvec,sig[k],'-.',label=f'magV={mag:1.1f}, SR={SR_stars[k]:1.2f}')
+            plt.plot(tvec,xp.asnumpy(sig[k]),'-.',label=f'magV={mag:1.1f}, SR={xp.asnumpy(SR_stars[k]):1.2f}')
         plt.legend()
         plt.grid()
         plt.xlim([0.0,tvec[-1]])
@@ -157,7 +144,7 @@ def main(tn:str='example_single_stage', show:bool=False, gain_list=None,
         plt.title(f'Strehl @ {lambdaRef*1e+9:1.0f} [nm] vs star magnitude')
 
         plt.figure()
-        plt.plot(np.array(starMagnitudes),SR_stars*100,'-o')
+        plt.plot(np.array(starMagnitudes),xp.asnumpy(SR_stars)*100,'-o')
         # plt.errorbar(np.array(starMagnitudes),SR_stars*100,yerr=0.12,fmt='-o',capsize=4.0)
         plt.grid()
         plt.xlabel('magV')

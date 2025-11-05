@@ -11,8 +11,13 @@ import numpy as np
 from numpy.ma import masked_array
 
 
-def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
-         optimize_gain:bool=False, gain1_list:list=None, gain2_list:list=None):
+def main(tn:str='example_nested_stage', 
+         show:bool=False, 
+         show_contrast:bool=False,
+         lambdaRef:float=750e-9,
+         optimize_gain:bool=False, 
+         gain1_list:list=None, 
+         gain2_list:list=None):
 
     print('Initializing devices ...')
     cascao = NestedStageAO(tn)
@@ -172,44 +177,20 @@ def main(tn:str='example_nested_stage', show:bool=False, lambdaRef:float=750e-9,
         myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
     cascao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    cascao.psd1, cascao.psd2,cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(),save_prefix='')
-
-    # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
-    if xp.on_gpu: # Convert to numpy for plotting
-        dm_inner_sig2 = dm_inner_sig2.get()
-        dm_outer_sig2 = dm_outer_sig2.get()
-        input_sig2 = input_sig2.get()
-        # rec_in_modes = rec_in_modes.get()
-        # rec_out_modes = rec_out_modes.get()
+    if show_contrast:
+        cascao.psd1, cascao.psd2,cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(),save_prefix='')
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-.',label='open loop')
-    plt.plot(tvec,dm_inner_sig2,'-.',label='after DM1 (inner loop)')
-    plt.plot(tvec,dm_outer_sig2,'-.',label='after DM2 (outer loop)')
+    plt.plot(tvec,xp.asnumpy(input_sig2),'-.',label='open loop')
+    plt.plot(tvec,xp.asnumpy(dm_inner_sig2),'-.',label='after DM1 (inner loop)')
+    plt.plot(tvec,xp.asnumpy(dm_outer_sig2),'-.',label='after DM2 (outer loop)')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
     plt.xlabel('Time [ms]')
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.gca().set_yscale('log')
-
-    # plt.figure()
-    # plt.plot(tvec,rec_in_modes[:,:10],'-o')
-    # plt.grid()
-    # plt.xlim([0.0,tvec[-1]])
-    # plt.xlabel('Time [ms]')
-    # plt.ylabel('amplitude [m]')
-    # plt.title('Reconstructor (inner loop) modes\n(first 10)')
-
-    # plt.figure()
-    # plt.plot(tvec,rec_in_modes[:,:10],'-o')
-    # plt.grid()
-    # plt.xlim([0.0,tvec[-1]])
-    # plt.xlabel('Time [ms]')
-    # plt.ylabel('amplitude [m]')
-    # plt.title('Reconstructor (outer loop) modes\n(first 10)')
-    # plt.show()
 
     plt.show()
 

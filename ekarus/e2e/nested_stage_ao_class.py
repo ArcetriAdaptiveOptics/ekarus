@@ -225,7 +225,7 @@ class NestedStageAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, res_in_phases, det_in_frames, _, dm1_cmds, _, res_out_phases, det_out_frames, _, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, res_in_phases, det_in_frames, rec1_modes, dm1_cmds, _, res_out_phases, det_out_frames, rec2_modes, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_out_phase_in_rad = res_out_phases[frame_id].data[~res_out_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
@@ -274,29 +274,30 @@ class NestedStageAO(HighLevelAO):
         plt.title('DM1 command [m]\n(inner loop)')
         plt.axis('off')
 
-        N = 64 if 64 < self.Nits//2 else self.Nits//2
-        atmo_mode2 = xp.zeros(self.KL.shape[0])
-        res1_mode2 = xp.zeros(self.KL.shape[0])
-        res2_mode2 = xp.zeros(self.KL.shape[0])
+        N = 100 if 100 < self.Nits//2 else self.Nits//2
+        atmo_modes = xp.zeros([N,self.KL.shape[0]])
+        res1_modes = xp.zeros([N,self.KL.shape[0]])
+        res2_modes = xp.zeros([N,self.KL.shape[0]])
         phase2modes = xp.linalg.pinv(self.KL.T)
         for frame in range(N):
-            res_phase = xp.asarray(ma_atmo_phases[frame].data[~ma_atmo_phases[frame].mask])
-            modes = phase2modes @ res_phase
-            atmo_mode2 += modes**2
-            res_phase = xp.asarray(res_in_phases[frame].data[~res_in_phases[frame].mask])
-            modes = phase2modes @ res_phase
-            res1_mode2 += modes**2
-            res_phase = xp.asarray(res_out_phases[frame].data[~res_out_phases[frame].mask])
-            modes = phase2modes @ res_phase
-            res2_mode2 += modes**2
-        atmo_mode_rms = xp.sqrt(atmo_mode2/N)
-        res1_mode_rms = xp.sqrt(res1_mode2/N)
-        res2_mode_rms = xp.sqrt(res2_mode2/N)
+            atmo_phase = xp.asarray(ma_atmo_phases[frame].data[~ma_atmo_phases[frame].mask])
+            atmo_modes[frame,:] = phase2modes @ atmo_phase
+            res1_phase = xp.asarray(res_in_phases[frame].data[~res_in_phases[frame].mask])
+            res1_modes[frame,:] = phase2modes @ res1_phase
+            res2_phase = xp.asarray(res_out_phases[frame].data[~res_out_phases[frame].mask])
+            res2_modes[frame,:] = phase2modes @ res2_phase
+        atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
+        res1_mode_rms = xp.sqrt(xp.mean(res1_modes**2,axis=0))
+        res2_mode_rms = xp.sqrt(xp.mean(res2_modes**2,axis=0))
+        rec1_modes_rms = xp.sqrt(xp.mean(rec1_modes[-N-1:-1,:]**2,axis=0))
+        rec2_modes_rms = xp.sqrt(xp.mean(rec2_modes[-N-1:-1,:]**2,axis=0))
 
         plt.figure()
         plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
-        plt.plot(xp.asnumpy(res1_mode_rms)*1e+9,label='After DM1 (inner loop)')
-        plt.plot(xp.asnumpy(res2_mode_rms)*1e+9,label='After DM2 (outer loop)')
+        plt.plot(xp.asnumpy(res1_mode_rms)*1e+9,label='after inner DM1 (true)')
+        plt.plot(xp.asnumpy(rec1_modes_rms)*1e+9,'--',label='after inner DM1 (reconstructed)')
+        plt.plot(xp.asnumpy(res2_mode_rms)*1e+9,label='after outer DM2 (true)')
+        plt.plot(xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='after outer DM2 (reconstructed)')
         plt.legend()
         plt.xlabel('mode index')
         plt.ylabel('mode RMS amp [nm]')

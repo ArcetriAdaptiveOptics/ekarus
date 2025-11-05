@@ -1,13 +1,14 @@
 IMPORTANT:
 
+Matrix OG
+Control Filter Class ('leaky' integrator)
 PWFS error budget (aliasing vs noise vs subaperture size)
-Slaving update
+Slaving update (IMm.T @ IMm + LAMBDA) @ IMm.T
 
 
 FUTURE UPDATES:
 
-Matrix OG
-Control Filter Class ('leaky' integrator)
+Plot animation
 Segmented hexagonal masks (HCIpy?)
 
 

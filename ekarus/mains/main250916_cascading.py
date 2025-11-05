@@ -11,8 +11,13 @@ import numpy as np
 from numpy.ma import masked_array
 
 
-def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False, 
-         optimize_gain:bool=False, gain1_list:list=None, gain2_list:list=None,
+def main(tn:str='example_cascading_stage', 
+         lambdaRef=750e-9, 
+         show:bool=False, 
+         show_contrast:bool=True,
+         optimize_gain:bool=False, 
+         gain1_list:list=None, 
+         gain2_list:list=None,
          t_interval:float=0.02):
 
     print('Initializing devices ...')
@@ -170,25 +175,18 @@ def main(tn:str='example_cascading_stage', lambdaRef=750e-9, show:bool=False,
     cascao.dm1_sig2 = dm1_sig2
     cascao.dm2_sig2 = dm2_sig2
 
-    # cmask = cascao.cmask.get() if xp.__name__ == 'cupy' else cascao.cmask.copy()
-    if xp.on_gpu: # Convert to numpy for plotting
-        dm1_sig2 = dm1_sig2.get()
-        dm2_sig2 = dm2_sig2.get()
-        input_sig2 = input_sig2.get()
-        # rec1_modes = rec1_modes.get()
-        # rec2_modes = rec2_modes.get()
-
     cascao.plot_iteration(lambdaRef, save_prefix='')
 
-    hc_its = int(t_interval/cascao.dt)
-    cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
-                                                frame_ids=xp.arange(cascao.Nits-hc_its,cascao.Nits).tolist(), save_prefix='')
+    if show_contrast:
+        hc_its = int(t_interval/cascao.dt)
+        cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
+                                                    frame_ids=xp.arange(cascao.Nits-hc_its,cascao.Nits).tolist(), save_prefix='')
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-.',label='open loop')
-    plt.plot(tvec,dm1_sig2,'-.',label='after DM1')
-    plt.plot(tvec,dm2_sig2,'-.',label='after DM2')
+    plt.plot(tvec,xp.asnumpy(input_sig2),'-.',label='open loop')
+    plt.plot(tvec,xp.asnumpy(dm1_sig2),'-.',label='after DM1')
+    plt.plot(tvec,xp.asnumpy(dm2_sig2),'-.',label='after DM2')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
