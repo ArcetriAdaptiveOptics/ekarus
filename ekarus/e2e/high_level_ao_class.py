@@ -192,7 +192,9 @@ class HighLevelAO():
         L0 = self.atmo_pars['outerScaleInM']
         windSpeeds = self.atmo_pars['windSpeed']
         windAngles = self.atmo_pars['windAngle']
-        print(f'Fried parameter is: {(1/xp.sum(r0s**(-5/3)))**(3/5)*1e+2:1.1f} [cm]')
+        r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
+        seeing = 0.98*500e-9/r0
+        print(f'Fried parameter is: {r0*1e+2:1.1f} [cm] (seeing = {seeing*180/np.pi*3600:1.2f}")')
         try:
             recompute_atmo_screens = self.atmo_pars['recompute']
         except KeyError:
