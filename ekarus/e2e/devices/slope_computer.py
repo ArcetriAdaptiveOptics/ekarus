@@ -48,7 +48,7 @@ class SlopeComputer():
             self.iir_num = xp.hstack([float(n[i]) for i in range(len(n))])
             self.iir_den = xp.hstack([float(d[i]) for i in range(len(d))])
         except KeyError:
-            self.iir_num, self.iir_den = xp.array([1.0]), None
+            self.iir_num, self.iir_den = xp.array([1.0]), xp.array([1.0,-1.0])
 
         if len(self.integratorGain) != len(self.nModes):
             raise ValueError(f'Integrator gains {self.integratorGain} are not compatible with length of number of modes to correct {self.nModes}')

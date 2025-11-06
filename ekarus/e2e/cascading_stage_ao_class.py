@@ -93,7 +93,6 @@ class CascadingAO(HighLevelAO):
         """
         m2rad = 2 * xp.pi / lambdaInM 
 
-        dm1_cmd = xp.zeros(self.dm1.Nacts, dtype=self.dtype)
         IF1 = self.dm1.IFF.copy()
         dm1_surf = xp.zeros(IF1.shape[0])
 

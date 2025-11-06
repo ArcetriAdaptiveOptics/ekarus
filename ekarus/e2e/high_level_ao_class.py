@@ -133,7 +133,7 @@ class HighLevelAO():
         return KL, m2c
     
 
-    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, method:str='slopes', save_prefix:str=''):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, save_prefix:str=''):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
         
@@ -165,7 +165,7 @@ class HighLevelAO():
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
-            slopes = self._get_slopes(slope_computer, MM, lambdaInM, amps, method=method)
+            slopes = self._get_slopes(slope_computer, MM, lambdaInM, amps)
             IM = slopes.T
             U,S,Vt = xp.linalg.svd(IM, full_matrices=False)
             Rec = xp.array((Vt.T*1/S) @ U.T,dtype=self.dtype)
@@ -320,6 +320,7 @@ class HighLevelAO():
         input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
 
         slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+        print(slope_computer.Rec.shape, slopes.shape)
         modes = slope_computer.Rec @ slopes
         modes *= slope_computer.intGain
         cmd = slope_computer.m2c @ modes
@@ -413,7 +414,7 @@ class HighLevelAO():
         return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
     
 
-    def calibrate_optical_gains(self, N:int, slope_computer, MM, amps:float=0.02, method:str='slopes', save_prefix:str=''):
+    def calibrate_optical_gains(self, N:int, slope_computer, MM, amps:float=0.02, save_prefix:str=''):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
         
@@ -429,8 +430,6 @@ class HighLevelAO():
             The wavelength(s) at which calibration is performed.
         amps : float or array
             The amplitudes for each mode.
-        method : str, optional
-            Method to compute the sensor slopes.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
         
@@ -476,9 +475,9 @@ class HighLevelAO():
                 phi_modes = phase2modes @ phi_atmo
                 lo_phi = MM.T @ phi_modes
                 ho_phi = phi_atmo - lo_phi
-                ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo, method=method)
-                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi, method=method)
-                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi, method=method)
+                ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo)
+                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi)
+                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi)
                 cl_gains = xp.zeros(Nmodes)
                 ol_gains = xp.zeros(Nmodes)
                 pl_gains = xp.zeros(Nmodes)
@@ -501,7 +500,7 @@ class HighLevelAO():
         return ol_opt_gains, cl_opt_gains, pl_opt_gains
     
 
-    def _get_slopes(self, slope_computer, MM, lambdaInM, amps, method:str='slopes', phase_offset=None):
+    def _get_slopes(self, slope_computer, MM, lambdaInM, amps, phase_offset=None):
         """ 
         Computes the slopes for the given mode matrix MM using push-pull method.
 
@@ -515,8 +514,6 @@ class HighLevelAO():
             The wavelength(s) at which calibration is performed.
         amps : float or array
             The amplitudes for each mode.
-        use_diagonal : bool, optional
-            Whether to use diagonal slopes, by default False.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
         
@@ -544,8 +541,8 @@ class HighLevelAO():
             mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
             push_field = xp.exp(1j*mode_phase + 1j*offset) * electric_field_amp
             pull_field = xp.exp(-1j*mode_phase + 1j*offset) * electric_field_amp
-            push_slope = slope_computer.compute_slopes(push_field, lambdaOverD, Nphotons, method=method)/amp
-            pull_slope = slope_computer.compute_slopes(pull_field, lambdaOverD, Nphotons, method=method)/amp
+            push_slope = slope_computer.compute_slopes(push_field, lambdaOverD, Nphotons)/amp
+            pull_slope = slope_computer.compute_slopes(pull_field, lambdaOverD, Nphotons)/amp
             if slopes is None:
                 slopes = (push_slope-pull_slope)/2
             else:

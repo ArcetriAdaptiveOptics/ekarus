@@ -25,7 +25,7 @@ def main(tn:str='example_cascading_stage',
     cascao.initialize_turbulence()
 
     amp1 = 0.2
-    amp2 = 0.2
+    amp2 = 0.02 # 0.2
 
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=2, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(max((1.0,cascao.sc1.modulationAngleInLambdaOverD))) #cascao.sc1.modulationAngleInLambdaOverD)#
