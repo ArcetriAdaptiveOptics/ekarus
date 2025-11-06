@@ -54,6 +54,8 @@ class ConfigReader():
     
     def read_slope_computer_pars(self, slope_computer_name: str = 'SLOPE.COMPUTER'):
         """ Read slope computer parameters from the configuration file."""
+        self._cfile[slope_computer_name]['integratorGain'] = xp.array(self._cfile[slope_computer_name]['integratorGain'])
+        self._cfile[slope_computer_name]['nModes2Correct'] = xp.array(self._cfile[slope_computer_name]['nModes2Correct'])
         return self._cfile[slope_computer_name]
 
     def read_loop_pars(self):

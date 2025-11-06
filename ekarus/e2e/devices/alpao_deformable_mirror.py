@@ -55,9 +55,9 @@ class ALPAODM(DeformableMirror):
         if len(master_ids) < self.Nacts: # slaving
             self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, slaving_method='wmean', p=2, d_thr=2*self.pupil_size/self.Nacts)
             self.master_ids = master_ids
-            valid_ids = xp.arange(xp.sum(1-self.mask))
-            valid_ids_2d = reshape_on_mask(valid_ids, self.mask)
-            self.visible_pix_ids = (valid_ids_2d[~self.pupil_mask]).astype(int)
+        valid_ids = xp.arange(xp.sum(1-self.mask))
+        valid_ids_2d = reshape_on_mask(valid_ids, self.mask)
+        self.visible_pix_ids = (valid_ids_2d[~self.pupil_mask]).astype(int)
 
 
 

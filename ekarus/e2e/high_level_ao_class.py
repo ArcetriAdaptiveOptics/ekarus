@@ -293,15 +293,13 @@ class HighLevelAO():
 
 
     
-    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, method:str='slopes', starMagnitude:float=None, slaving=None):
+    def perform_loop_iteration(self, phase, slope_computer, starMagnitude:float=None, slaving=None):
         """
         Performs a single iteration of the AO loop.
         Parameters
         ----------
         phase : array
             The input phase screen in meters.
-        dm_cmd : array
-            The current DM command in meters.
         slope_computer : SlopeComputer
             The slope computer object.
         starMagnitude : float
@@ -318,24 +316,20 @@ class HighLevelAO():
         m2rad = 2*xp.pi/lambda_ref
         lambdaOverD = lambda_ref/self.pupilSizeInM
         Nphotons = self.get_photons_per_second(starMagnitude) * slope_computer.dt
-
         delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
         input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
-        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, method=method)
-        
-        modes = slope_computer.Rec @ slopes
-        if hasattr(slope_computer, 'optGains'):
-            modes /= slope_computer.optGains
-        cmd = slope_computer.m2c @ modes
 
+        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+        modes = slope_computer.Rec @ slopes
+        modes *= slope_computer.intGain
+        cmd = slope_computer.m2c @ modes
         cmd /= m2rad # convert to meters
         modes /= m2rad  # convert to meters
 
         if slaving is not None:
             cmd = slaving @ cmd
-        dm_cmd += cmd * slope_computer.intGain
 
-        return dm_cmd, modes
+        return cmd, modes
 
 
     def get_phasescreen_at_time(self, time: float):

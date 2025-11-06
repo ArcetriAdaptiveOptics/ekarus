@@ -72,15 +72,6 @@ class DeformableMirror():
         self.surface += self.IFF @ cmd_amps
 
 
-    def get_surface(self):
-        """ Get the DM surface pixels """
-        if hasattr(self, 'visible_pix_ids'):
-            return self.surface[self.visible_pix_ids]
-        else:
-            return self.surface
-        
-
-
     def plot_surface(self, surf2plot = None, title:str = '', plt_mask = None):
         """
         Plots surf2plot or (default) the segment's
@@ -102,7 +93,6 @@ class DeformableMirror():
         if surf2plot is None:
             surf2plot = self.surface
 
-        
         mask_ids = xp.arange(xp.size(self.mask))
 
         if xp.size(surf2plot) < xp.sum(1-self.mask):
