@@ -70,24 +70,22 @@ class SingleStageAO(HighLevelAO):
         """
         m2rad = 2 * xp.pi / lambdaInM
 
-        dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype)
-        self.dm.set_position(dm_cmd, absolute=True)
-        self.dm.surface -= self.dm.surface  # make sure DM is flat
+        IF = self.dm.IFF.copy()
+        dm_surf = xp.zeros(IF.shape[0])
 
         # Define variables
         mask_len = int(xp.sum(1 - self.cmask))
-        dm_mask_len = int(xp.sum(1 - self.dm.mask))
-        dm_cmds = xp.zeros([self.Nits, self.dm.Nacts])
+        int_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
+        dm_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
 
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
         if save_prefix is not None:
-            dm_phases = xp.zeros([self.Nits, dm_mask_len])
-            residual_phases = xp.zeros([self.Nits, mask_len])
-            input_phases = xp.zeros([self.Nits, mask_len])
-            detector_images = xp.zeros([self.Nits, self.ccd.detector_shape[0], self.ccd.detector_shape[1]])
-            rec_modes = xp.zeros([self.Nits,self.sc.Rec.shape[0]])
+            residual_phases = xp.zeros([self.Nits, mask_len],dtype=self.dtype)
+            input_phases = xp.zeros([self.Nits, mask_len],dtype=self.dtype)
+            detector_images = xp.zeros([self.Nits, self.ccd.detector_shape[0], self.ccd.detector_shape[1]],dtype=self.dtype)
+            rec_modes = xp.zeros([self.Nits,self.sc.Rec.shape[0]],dtype=self.dtype)
 
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)
@@ -96,28 +94,25 @@ class SingleStageAO(HighLevelAO):
             atmo_phase = self.get_phasescreen_at_time(sim_time)
             input_phase = atmo_phase[~self.cmask]
             input_phase -= xp.mean(input_phase)  # remove piston
-
-            if i >= self.sc.delay:
-                self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
                 
-            # if i>0 and int(i%200)==0 and i < 700:
-            #     self.integratorGain += 0.1
+            if i >= self.sc.delay:
+                dm_surf = IF @ dm_cmds[i - self.sc.delay, :]
+            residual_phase = input_phase - dm_surf[self.dm.visible_pix_ids]
 
-            residual_phase = input_phase - self.dm.get_surface()
-            
             if i % int(self.sc.dt/self.dt) == 0:
-                dm_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, dm_cmd, self.sc, slaving=self.dm.slaving,
-                                                                  method=method, starMagnitude=starMagnitude)
+                int_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, self.sc, 
+                                                                    starMagnitude=starMagnitude, 
+                                                                    slaving=self.dm.slaving)
+                dm_cmds[i,:] = self.sc.iir_filter(int_cmds[:i+1,:], dm_cmds[:i+1,:])
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 
-            res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
+            res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2 #[xp.abs(residual_phase)>0.0]
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
             if save_prefix is not None:            
                 residual_phases[i, :] = residual_phase
                 input_phases[i, :] = input_phase
-                dm_phases[i, :] = self.dm.surface
                 detector_images[i, :, :] = self.ccd.last_frame
                 rec_modes[i, :] = modes
         
@@ -127,7 +122,7 @@ class SingleStageAO(HighLevelAO):
             dm_mask_cube = xp.asnumpy(xp.stack([self.dm.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm_phases = xp.stack([reshape_on_mask(dm_phases[i, :], self.dm.mask)for i in range(self.Nits)])
+            dm_phases = xp.stack([reshape_on_mask(IF @ dm_cmds[i, :], self.dm.mask)for i in range(self.Nits)])
             res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)

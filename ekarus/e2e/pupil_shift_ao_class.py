@@ -51,7 +51,7 @@ class PupilShift(HighLevelAO):
   
 
     @override
-    def perform_loop_iteration(self, input_phase, dm_cmd, slope_computer, 
+    def perform_loop_iteration(self, input_phase, dm_cmds, int_cmds, dm_surf, slope_computer, 
                                tilt_before_DM:tuple=(0.0,0.0), tilt_after_DM:tuple=(0.0,0.0),
                                starMagnitude:float=None, method:str='slopes'):
         """
@@ -90,7 +90,7 @@ class PupilShift(HighLevelAO):
         if abs(max(tilt_before_DM)) > 0.0:
             input_field = self._tilt_field(input_field, tilt_before_DM[0], tilt_before_DM[1])
 
-        dm_phase_in_rad = reshape_on_mask(self.dm.surface * m2rad, padded_dm_mask)
+        dm_phase_in_rad = reshape_on_mask(dm_surf[self.dm.visible_pix_ids] * m2rad, padded_dm_mask)
         dm_field = (1-padded_dm_mask) * xp.exp(1j * dm_phase_in_rad)#, dtype=self.pyr.cdtype)
         residual_field = input_field * dm_field.conj()
 
@@ -102,14 +102,15 @@ class PupilShift(HighLevelAO):
         detector_image = self.ccd.image_on_detector(intensity, photon_flux=Nphotons)
         slopes = slope_computer._compute_pyr_signal(detector_image, method)
         modes = slope_computer.Rec @ slopes
-        # modes = modes * slope_computer.modal_gains
+        modes = modes * slope_computer.intGain
         cmd = slope_computer.m2c @ modes
+        cmd /= m2rad
+        modes /= m2rad  # convert to meters
 
         if self.dm.slaving is not None:
             cmd = self.dm.slaving @ cmd
-        
-        dm_cmd += cmd * slope_computer.intGain / m2rad
-        modes /= m2rad  # convert to meters
+
+        dm_cmd = self.sc.iir_filter(int_cmds, dm_cmds)
 
         # Recover the residual phase     
         if xp.max(abs(xp.angle(residual_field))) >= 0.99*xp.pi:
@@ -141,22 +142,18 @@ class PupilShift(HighLevelAO):
         """
         m2rad = 2 * xp.pi / lambdaInM
 
-        # self.pyr.set_modulation_angle(self.sc.modulationAngleInLambdaOverD) # reset modulation in case it was changed
-        dm_cmd = xp.zeros(self.dm.Nacts, dtype=self.dtype) # reset DM position
-        self.dm.set_position(dm_cmd, absolute=True)
-        self.dm.surface -= self.dm.surface  # make sure DM is flat
-        # print(xp.sum(self.dm.surface),xp.sum(self.dm.get_position()))
+        IF = self.dm.IFF.copy()
+        dm_surf = xp.zeros(IF.shape[0])
 
         # Define variables
-        dm_mask_len = int(xp.sum(1 - self.dm.mask))
         mask_len = int(xp.sum(1 - self.cmask))
-        dm_cmds = xp.zeros([self.Nits, self.dm.Nacts])
+        int_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
+        dm_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
 
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
         if save_prefix is not None:
-            dm_phases = xp.zeros([self.Nits, dm_mask_len])
             residual_phases = xp.zeros([self.Nits, mask_len])
             input_phases = xp.zeros([self.Nits, mask_len])
             detector_images = xp.zeros([self.Nits, self.ccd.detector_shape[0], self.ccd.detector_shape[1]])
@@ -171,12 +168,15 @@ class PupilShift(HighLevelAO):
             input_phase -= xp.mean(input_phase)  # remove piston
 
             if i >= self.sc.delay:
-                self.dm.set_position(dm_cmds[i - self.sc.delay, :], absolute=True)
+                dm_surf = IF @ dm_cmds[i - self.sc.delay, :]
 
-            residual_phase, dm_cmds[i,:], modes = self.perform_loop_iteration(input_phase, dm_cmd, self.sc,
-                                                              tilt_before_DM, tilt_after_DM, starMagnitude)
+            if i % int(self.sc.dt/self.dt) == 0:
+                residual_phase, dm_cmds[i,:], modes = self.perform_loop_iteration(input_phase, dm_cmds[:i+1,:], int_cmds[:i+1,:], dm_surf, self.sc,
+                                                                tilt_before_DM, tilt_after_DM, starMagnitude)
+            else:
+                dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 
-            res_phase_rad2[i] = self.phase_rms(residual_phase[xp.abs(residual_phase)>0.0]*m2rad)**2
+            res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
             if save_prefix is not None:            
@@ -192,7 +192,7 @@ class PupilShift(HighLevelAO):
             dm_mask_cube = xp.asnumpy(xp.stack([self.dm.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm_phases = xp.stack([reshape_on_mask(dm_phases[i, :], self.dm.mask)for i in range(self.Nits)])
+            dm_phases = xp.stack([reshape_on_mask(IF @ dm_cmds[i, :], self.dm.mask)for i in range(self.Nits)])
             res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)

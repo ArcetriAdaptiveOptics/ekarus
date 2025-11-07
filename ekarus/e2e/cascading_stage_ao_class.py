@@ -113,7 +113,6 @@ class CascadingAO(HighLevelAO):
             residual1_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
             ccd1_images = xp.zeros([self.Nits, self.ccd1.detector_shape[0], self.ccd1.detector_shape[1]], dtype=self.dtype)
             rec1_modes = xp.zeros([self.Nits,self.sc1.Rec.shape[0]], dtype=self.dtype)
-            dm2_cmds = xp.zeros([self.Nits,self.dm2.Nacts], dtype=self.dtype)
             residual2_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
             ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]], dtype=self.dtype)
             rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]], dtype=self.dtype)
