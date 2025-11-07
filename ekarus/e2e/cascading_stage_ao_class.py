@@ -2,7 +2,7 @@ import xupy as xp
 import numpy as np
 from numpy.ma import masked_array
 
-from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
+from ekarus.e2e.devices.deformable_secondary_mirror import DSM
 # from ekarus.e2e.pyramid_wfs import PyramidWFS
 # from ekarus.e2e.detector import Detector
 # from ekarus.e2e.slope_computer import SlopeComputer
@@ -53,14 +53,12 @@ class CascadingAO(HighLevelAO):
         self.pyr1, self.ccd1, self.sc1 = self._initialize_pyr_slope_computer('PYR1','CCD1','SLOPE.COMPUTER1')
 
         dm_pars = self._config.read_dm_pars('DM1')
-        # self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm1 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm1 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
 
         self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR2','CCD2','SLOPE.COMPUTER2')
 
         dm_pars = self._config.read_dm_pars('DM2')
-        # self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm2 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm2 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
 
 
     def get_photons_per_subap(self, starMagnitude):

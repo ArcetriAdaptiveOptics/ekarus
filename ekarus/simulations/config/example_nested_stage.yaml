@@ -1,5 +1,6 @@
 DM.out: 
-  Nacts: 468
+  Nacts: 24
+  geom: 'alpao'
   mmax_stroke_in_m: 5e-6  
 
 PYR.out:
@@ -24,7 +25,8 @@ SLOPE.COMPUTER.out:
   modulationInLambdaOverD: 3.0  # modulation amplitude
 
 DM.in: 
-  Nacts: 192
+  Nacts: 16
+  geom: 'alpao'
   max_stroke_in_m: 5e-6   
 
 PYR.in:

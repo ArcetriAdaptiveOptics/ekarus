@@ -1,5 +1,5 @@
 import numpy as np
-import configparser
+# import configparser
 import os
 import xupy as xp
 
@@ -7,19 +7,19 @@ from ekarus.e2e.devices.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
 from ekarus.e2e.utils import my_fits_package as myfits
-from ekarus.e2e.utils.root import alpaopath
+from ekarus.e2e.utils.root import dmpath as _dmpath
 
 
-class ALPAODM(DeformableMirror):
+class DSM(DeformableMirror):
 
     def __init__(self, input, pupil_mask=None, **kwargs):
         """
-        ALPAO DM constructor
+        DSM constructor
 
         Parameters
         ----------
         input : int | str
-            int: number of actuators of the ALPAO DM.
+            int: number of actuators on the mirror diameter.
             str: tracking number of the DM measured iff
         pupil_mask: int | ndarray(bool)
             int: number of pixels across the mask diameter
@@ -28,18 +28,15 @@ class ALPAODM(DeformableMirror):
 
         super().__init__()
 
-        self.config = configparser.ConfigParser()
-        self.alpaopath = alpaopath
-        config_path = os.path.join(self.alpaopath,'configuration.ini')
-        self.config.read(config_path)
+        self._dmpath = _dmpath
 
         if isinstance(input, int):
-            # pupilDiamInPixels = kwargs['Npix']
-            self._init_ALPAO_from_Nacts(input,pupil_mask)#,pupilDiamInPixels=pupilDiamInPixels)
+            geom = kwargs['geom']
+            self._init_from_Nacts(input,pupil_mask,geom)
         elif isinstance(input, str):
-            self._init_ALPAO_from_tn_data(input,pupil_mask)
+            self._init_from_tn_data(input,pupil_mask)
         elif isinstance(input, xp.array):
-            self._init_ALPAO_from_act_coords(input,pupil_mask)
+            self._init_from_act_coords(input,pupil_mask)
         else:
             raise NotImplementedError(f'Initialization method for {input} not implemented, please pass a data tracking number or the number of actuators')
 
@@ -60,58 +57,86 @@ class ALPAODM(DeformableMirror):
         self.visible_pix_ids = (valid_ids_2d[~self.pupil_mask]).astype(int)
 
 
-
     @staticmethod
-    def _getALPAOcoordinates(nacts_row_sequence):
+    def _getDMcoordinates(n_act:int, dim:int, geom:str='circular', angle_offset:float=0.0):
         """
         Generates the coordinates of the DM actuators for a given DM size and actuator sequence.
 
         Parameters
         ----------
-        Nacts : int
-            Total number of actuators in the DM.
+        n_act : int
+            Number of actuators on the DM diameter
+        dim: int
+            Number of pixels on the pupil diameter
+
+        geom: str (optional)
+            Type of geometry:
+                'circular': Microgate-like (Default)
+                'alpao':    square grid cut to circular shape
+                'square':   square grid
+        angle_offset: float (optional)
+            Only used ofr circular input: offset of the grid from horizontal
 
         Returns
         -------
         np.array
             Array of coordinates of the actuators.
         """
-        n_dim = nacts_row_sequence[-1]
-        upper_rows = nacts_row_sequence[:-1]
-        lower_rows = [l for l in reversed(upper_rows)]
-        center_rows = [n_dim] * upper_rows[0]
-        rows_number_of_acts = upper_rows + center_rows + lower_rows
-        n_rows = len(rows_number_of_acts)
-        cx = xp.array([], dtype=int)
-        cy = xp.array([], dtype=int)
-        for i in range(n_rows):
-            cx = xp.concatenate((cx, xp.arange(rows_number_of_acts[i]) + (n_dim - rows_number_of_acts[i]) // 2))
-            cy = xp.concatenate((cy, xp.full(rows_number_of_acts[i], i)))
-        coords = xp.array([cx, cy], dtype=xp.float)
+        step = float(dim)/float(n_act)    
+        match geom:
+            case 'circular':
+                if n_act % 2 == 0:
+                    na = xp.arange(xp.ceil((n_act + 1) / 2)) * 6
+                else:
+                    step *= float(n_act) / float(n_act - 1)
+                    na = xp.arange(xp.ceil(n_act / 2.)) * 6
+                na[0] = 1  # The first value is always 1
+                n_act_tot = int(xp.sum(na))
+                pol_coords = xp.zeros((2, n_act_tot))
+                ka = 0
+                for ia in range(len(na)):
+                    n_angles = int(na[ia])
+                    for ja in range(n_angles):
+                        pol_coords[0, ka] = 360. / na[ia] * ja + angle_offset  # Angle in degrees
+                        pol_coords[1, ka] = ia * step  # Radial distance
+                        ka += 1
+                x_c, y_c = dim / 2, dim / 2 # center
+                x = pol_coords[1] * xp.cos(xp.radians(pol_coords[0])) + x_c
+                y = pol_coords[1] * xp.sin(xp.radians(pol_coords[0])) + y_c
+            case 'alpao':
+                x, y = xp.meshgrid(xp.linspace(0, dim, n_act), xp.linspace(0, dim, n_act))
+                x, y = x.ravel(), y.ravel()
+                x_c, y_c = dim / 2, dim / 2 # center
+                rho = xp.sqrt((x-x_c)**2+(y-y_c)**2)
+                rho_max = (dim*(9/8-n_act/(24*16)))/2 # slightly larger than dim, depends on n_act
+                x = x[rho<=rho_max]
+                y = y[rho<=rho_max]
+            case _:
+                x, y = xp.meshgrid(xp.linspace(0, dim, n_act), xp.linspace(0, dim, n_act))
+                x, y = x.ravel(), y.ravel()
 
+        coords = xp.array([x,y])
         return coords
 
 
-    def _init_ALPAO_from_Nacts(self, Nacts:int, pupil_mask): #, multiprocessing:bool=False):
+    def _init_from_Nacts(self, Nacts:int, pupil_mask, geom:str='alpao'): 
         """
-        Initializes the ALPAO DM mask and actuator coordinates
+        Initializes the DM mask and actuator coordinates
 
         Parameters
         ----------
         Nacts : int
             The number of actuators in the DM.
-        pupilDiamInPixels : int
-            The number of pixels across the pupil
+        pupil_mask : int | ndarray(bool)
+            The number of pixels across the pupil or the pupil mask
+        
+        geom: str (optional)
+            Type of geometry:
+                'circular': Microgate-like
+                'alpao':    square grid cut to circular shape (Default)
+                'square':   square grid
         """
         self.Nacts = Nacts
-
-        # read configuration file
-        try:
-            dms = self.config[f'DM{Nacts}']
-        except:
-            raise ValueError(f'ALPAO DM{Nacts} not found in configuration file')
-        nacts_row_sequence = eval(dms['coords'])
-        self.pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
         # Define mask & pixel scale
         if isinstance(pupil_mask, int):
@@ -125,9 +150,8 @@ class ALPAODM(DeformableMirror):
             diagonals = xp.sqrt(xx**2+yy**2)*2
             pupilDiamInPixels = xp.max(diagonals)
             self.mask = xp.array(get_circular_mask(pupil_mask.shape,pupilDiamInPixels//2),dtype=bool)
-        self.pixel_scale = pupilDiamInPixels/self.pupil_size
 
-        dir_path = os.path.join(self.alpaopath,'DM'+str(self.Nacts)+'/')
+        dir_path = os.path.join(self._dmpath,str(geom)+'_DM'+str(self.Nacts)+'/')
         hdr_dict = {'N_ACTS': self.Nacts, 'PUP_SIZE': self.pupil_size, 'PIX_SIZE': pupilDiamInPixels}
         try:
             os.mkdir(dir_path)
@@ -139,12 +163,7 @@ class ALPAODM(DeformableMirror):
         try:
             self.act_coords = myfits.read_fits(coords_path)
         except FileNotFoundError:
-            coords = self._getALPAOcoordinates(nacts_row_sequence)
-            coords[0] -= (max(coords[0])-min(coords[0]))/2
-            coords[1] -= (max(coords[1])-min(coords[1]))/2
-            radii = xp.sqrt(coords[0]**2+coords[1]**2)/2
-            radii *= 1.02 # increase pupil by 2% to make sure all actuators fit
-            self.act_coords = xp.asarray(coords*self.pupil_size/2/(2*max(radii)))
+            self.act_coords = self._getDMcoordinates(Nacts, pupilDiamInPixels, geom=geom)
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
         Npix = xp.sum(1-self.mask)
@@ -158,9 +177,9 @@ class ALPAODM(DeformableMirror):
 
 
 
-    def _init_ALPAO_from_tn_data(self, tn, mask=None):
+    def _init_from_tn_data(self, tn, mask=None):
         """
-        Get the ALPAO DM mask and actuator coordinates from the interaction matrix.
+        Get the DM mask and actuator coordinates from the interaction matrix.
 
         Parameters
         ----------
@@ -168,13 +187,13 @@ class ALPAODM(DeformableMirror):
             Tracking number of the saved data
         """
 
-        im_path = os.path.join(self.alpaopath, str(tn) + '/IMCube.fits')
+        im_path = os.path.join(self._dmpath, str(tn) + '/IMCube.fits')
         IM = myfits.read_fits(im_path)
 
         self.Nacts = IM.shape[2]
 
         try:
-            cmdmat_path = os.path.join(self.alpaopath, str(tn) + '/cmdMatrix.fits')
+            cmdmat_path = os.path.join(self._dmpath, str(tn) + '/cmdMatrix.fits')
             self.CMat = myfits.read_fits(cmdmat_path)
         except FileNotFoundError:
             self.CMat = xp.eye(self.Nacts, dtype=xp.float)
@@ -205,9 +224,9 @@ class ALPAODM(DeformableMirror):
         # self.K = dmutils.estimate_stiffness_from_IFF(self.IM, self.CMat, self._iff_act_pix_coords, xp=xp)
 
 
-    def _init_ALPAO_from_act_coords(self, act_coords, mask):
+    def _init_from_act_coords(self, act_coords, mask):
         """
-        Get the ALPAO DM mask and influence functions from the actuator coordinated
+        Get the DM mask and influence functions from the actuator coordinated
 
         Parameters
         ----------

@@ -62,9 +62,6 @@ class DeformableMirror():
         if absolute:
             cmd_amps -= self.act_pos
 
-        # if self.slaving is not None:
-        #     cmd_amps = self.slaving @ cmd_amps
-
         # Update positions and shape
         self.act_pos += cmd_amps
         if self.max_stroke is not None:

@@ -6,8 +6,8 @@ configpath = op.join(bpath, 'config')
 resultspath = op.join(bpath, 'results')
 calibpath = op.join(bpath, 'calib')
 atmopath = op.join(bpath, 'atmo')
-alpaopath = op.join(op.dirname(bpath), 'e2e', 'alpao_dms_data')
+dmpath = op.join(op.dirname(bpath), 'e2e', 'alpao_dms_data')
 
-for p in [bpath, configpath, resultspath, calibpath, atmopath, alpaopath]:
+for p in [bpath, configpath, resultspath, calibpath, atmopath, dmpath]:
     if not op.exists(p):
         makedirs(p)

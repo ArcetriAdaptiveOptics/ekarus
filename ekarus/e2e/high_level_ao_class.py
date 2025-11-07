@@ -320,7 +320,6 @@ class HighLevelAO():
         input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
 
         slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
-        print(slope_computer.Rec.shape, slopes.shape)
         modes = slope_computer.Rec @ slopes
         modes *= slope_computer.intGain
         cmd = slope_computer.m2c @ modes

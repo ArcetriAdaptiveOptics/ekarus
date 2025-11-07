@@ -1,5 +1,6 @@
 DM: 
-  Nacts: 468
+  Nacts: 24
+  geom: 'alpao'
   max_stroke_in_m: 5e-6   
 
 PYR:

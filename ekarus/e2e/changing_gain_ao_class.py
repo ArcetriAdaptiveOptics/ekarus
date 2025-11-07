@@ -2,7 +2,7 @@ import xupy as xp
 import numpy as np
 from numpy.ma import masked_array
 
-from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
+from ekarus.e2e.devices.deformable_secondary_mirror import DSM
 # from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
 # from ekarus.e2e.devices.detector import Detector
 # from ekarus.e2e.devices.slope_computer import SlopeComputer
@@ -50,7 +50,7 @@ class ChangingGainSSAO(HighLevelAO):
         self.pyr, self.ccd, self.sc = self._initialize_pyr_slope_computer('PYR','CCD','SLOPE.COMPUTER')
 
         dm_pars = self._config.read_dm_pars()
-        self.dm = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float,
