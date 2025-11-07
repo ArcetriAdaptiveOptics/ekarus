@@ -48,7 +48,7 @@ class DSM(DeformableMirror):
         self.max_stroke = kwargs['max_stroke'] if 'max_stroke' in kwargs else None
 
         valid_ids = xp.arange(xp.sum(1-self.mask))
-        master_ids = dmutils.find_master_acts(self.pupil_mask, self.act_coords, self.pixel_scale)
+        master_ids = dmutils.find_master_acts(self.pupil_mask, self.act_coords, d_thr = xp.sqrt(8))
         if len(master_ids) < self.Nacts: # slaving
             self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, slaving_method='wmean', p=2, d_thr=2*self.pupil_size/self.Nacts)
             self.master_ids = master_ids
@@ -119,14 +119,14 @@ class DSM(DeformableMirror):
         return coords
 
 
-    def _init_from_Nacts(self, Nacts:int, pupil_mask, geom:str='alpao'): 
+    def _init_from_Nacts(self, n_act:int, pupil_mask, geom:str='alpao'): 
         """
         Initializes the DM mask and actuator coordinates
 
         Parameters
         ----------
-        Nacts : int
-            The number of actuators in the DM.
+        n_act : int
+            The number of actuators on the DM diameter.
         pupil_mask : int | ndarray(bool)
             The number of pixels across the pupil or the pupil mask
         
@@ -136,7 +136,6 @@ class DSM(DeformableMirror):
                 'alpao':    square grid cut to circular shape (Default)
                 'square':   square grid
         """
-        self.Nacts = Nacts
 
         # Define mask & pixel scale
         if isinstance(pupil_mask, int):
@@ -149,30 +148,40 @@ class DSM(DeformableMirror):
             yy = pix_coords[1,~pupil_mask.flatten()] - max(pix_coords[1,:])/2
             diagonals = xp.sqrt(xx**2+yy**2)*2
             pupilDiamInPixels = xp.max(diagonals)
-            self.mask = xp.array(get_circular_mask(pupil_mask.shape,pupilDiamInPixels//2),dtype=bool)
+            self.mask = xp.array(get_circular_mask(pupil_mask.shape,max(pupil_mask.shape)//2),dtype=bool)
 
-        dir_path = os.path.join(self._dmpath,str(geom)+'_DM'+str(self.Nacts)+'/')
-        hdr_dict = {'N_ACTS': self.Nacts, 'PUP_SIZE': self.pupil_size, 'PIX_SIZE': pupilDiamInPixels}
+        dir_path = os.path.join(self._dmpath,str(geom)+'_'+str(n_act)+'acts_on_diam/')
+        hdr_dict = {'N_ACTS': n_act, 'PIX_SIZE': pupilDiamInPixels}
         try:
             os.mkdir(dir_path)
         except FileExistsError:
             pass
 
-        # Define coordinates in meters, centering in (0,0)
         coords_path = os.path.join(dir_path,'ActuatorCoordinates.fits')
         try:
             self.act_coords = myfits.read_fits(coords_path)
         except FileNotFoundError:
-            self.act_coords = self._getDMcoordinates(Nacts, pupilDiamInPixels, geom=geom)
+            coords = self._getDMcoordinates(n_act, max(pupil_mask.shape), geom=geom)
+            cx = xp.mean(coords[0])
+            cy = xp.mean(coords[1])
+            centered_coords = coords.copy()
+            centered_coords[0] -= cx
+            centered_coords[1] -= cy
+            centered_coords *= (1.0 - 32**2/100/n_act**2)
+            coords[0] = centered_coords[0] + cx
+            coords[1] = centered_coords[1] + cy
+            self.act_coords = coords.copy()
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
+        self.Nacts = max(self.act_coords.shape)
+        self.pupil_size = pupilDiamInPixels
         Npix = xp.sum(1-self.mask)
 
         iff_path = os.path.join(dir_path,str(Npix)+'pixels_InfluenceFunctions.fits')
         try:
             self.IFF = myfits.read_fits(iff_path)
         except FileNotFoundError:
-            self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask, self.pixel_scale)
+            self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask)
             myfits.save_fits(iff_path, self.IFF, hdr_dict)
 
 

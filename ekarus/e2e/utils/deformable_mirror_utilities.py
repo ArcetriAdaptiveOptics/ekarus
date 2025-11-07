@@ -3,6 +3,8 @@ import numpy as np
 
 from tps import ThinPlateSpline # for the simulated IFF
 # from scipy.interpolate import griddata
+
+import matplotlib.pyplot as plt
     
 
 def compute_reconstructor(M, thr:float= 1e-12):
@@ -38,7 +40,7 @@ def compute_reconstructor(M, thr:float= 1e-12):
     return Rec, U
     
     
-def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0):
+def simulate_influence_functions(act_coords, local_mask):#, pix_scale:float=1.0):
     """ Simulate the influence functions by 
     imposing 'perfect' zonal commands """
     
@@ -51,7 +53,7 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0):
     pix_ids = mask_ids[xp.invert(local_mask).flatten()]
     
     pix_coords = xp.asnumpy(getMaskPixelCoords(local_mask)).T
-    act_pix_coords = xp.asnumpy(get_pixel_coords(local_mask, act_coords, pix_scale)).T
+    act_pix_coords = xp.asnumpy(act_coords.T) #xp.asnumpy(get_pixel_coords(local_mask, act_coords, pix_scale)).T
     pix_ids = xp.asnumpy(pix_ids)
         
     IFF = np.zeros([len(pix_ids),n_acts])
@@ -69,36 +71,36 @@ def simulate_influence_functions(act_coords, local_mask, pix_scale:float=1.0):
     return IFF
 
 
-def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
-    """ 
-    Convert x,y coordinates in coords to pixel coordinates
-    or get the pixel coordinates of a mask
+# def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
+#     """ 
+#     Convert x,y coordinates in coords to pixel coordinates
+#     or get the pixel coordinates of a mask
 
-    Parameters
-    ----------
-    mask : ndarray(bool)
-        The image mask where the pixels are.
+#     Parameters
+#     ----------
+#     mask : ndarray(bool)
+#         The image mask where the pixels are.
         
-    coords : ndarray(float) [2,N]
-        The N coordinates to convert in pixel coordinates.
-        Defaults to all pixels on the mask.
+#     coords : ndarray(float) [2,N]
+#         The N coordinates to convert in pixel coordinates.
+#         Defaults to all pixels on the mask.
         
-    pix_scale : float (Optional)
-        The number of pixels per meter.
-        Defaults to 1.0
+#     pix_scale : float (Optional)
+#         The number of pixels per meter.
+#         Defaults to 1.0
 
-    Returns
-    -------
-    pix_coords : ndarray(int) [2,N]
-        The obtained pixel coordinates.
-    """
+#     Returns
+#     -------
+#     pix_coords : ndarray(int) [2,N]
+#         The obtained pixel coordinates.
+#     """
     
-    H,W = mask.shape
-    pix_coords = xp.zeros([2,xp.shape(coords)[-1]], dtype=xp.float)
-    pix_coords[0,:] = coords[1,:]*pix_scale + H/2 #(coords[1,:]*pix_scale/2 + H)/2
-    pix_coords[1,:] = coords[0,:]*pix_scale + W/2 #(coords[0,:]*pix_scale/2 + W)/2
+#     H,W = mask.shape
+#     pix_coords = xp.zeros([2,xp.shape(coords)[-1]], dtype=xp.float)
+#     pix_coords[0,:] = coords[1,:]*pix_scale + H/2 #(coords[1,:]*pix_scale/2 + H)/2
+#     pix_coords[1,:] = coords[0,:]*pix_scale + W/2 #(coords[0,:]*pix_scale/2 + W)/2
     
-    return pix_coords
+#     return pix_coords
 
 
 def get_coords_from_IFF(IFF, mask, use_peak=True):
@@ -223,11 +225,11 @@ def getMaskPixelCoords(mask):
     return pix_coords
 
 
-def find_master_acts(mask, coords, pix_scale:float = 1.0):
+def find_master_acts(mask, coords, d_thr:float=xp.sqrt(2.0)):#, pix_scale:float = 1.0):
     """ Find the master actuator ids """
 
     nActs = len(coords[0,:])
-    act_pix_coords = get_pixel_coords(mask, coords, pix_scale)
+    act_pix_coords = coords.copy() # get_pixel_coords(mask, coords, pix_scale)
     mask_coords = getMaskPixelCoords(mask)
 
     valid_mask_coords = mask_coords[:,~mask.flatten()]
@@ -237,12 +239,17 @@ def find_master_acts(mask, coords, pix_scale:float = 1.0):
     master_ids = []
     for i in range(nActs):
         min_pix_dist = xp.min(dist(act_pix_coords[:,i]))
-        if min_pix_dist <= xp.sqrt(2.0):# 1.0:
+        if min_pix_dist <= d_thr:# 1.0:
             master_ids.append(i)
     
     master_ids = xp.array(master_ids)
     if len(master_ids) < nActs:
         print(f'Unobscured actuators: {len(master_ids)}/{nActs}')
+        plt.figure()
+        plt.imshow(xp.asnumpy(mask),origin='lower')
+        plt.scatter(xp.asnumpy(act_pix_coords[0]),xp.asnumpy(act_pix_coords[1]),c='red',label='slaves')
+        plt.scatter(xp.asnumpy(act_pix_coords[0,master_ids]),xp.asnumpy(act_pix_coords[1,master_ids]),c='green',label='masters')
+        plt.grid()
     
     return master_ids
 
