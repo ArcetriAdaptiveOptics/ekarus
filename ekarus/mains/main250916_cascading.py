@@ -75,9 +75,9 @@ def main(tn:str='example_cascading_stage',
                 cascao = CascadingAO(tn)
                 cascao.initialize_turbulence()
                 cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-                cascao.sc1.load_reconstructor(Rec1,m2c1)
+                cascao.sc1.load_reconstructor(IM1,m2c1)
                 cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-                cascao.sc2.load_reconstructor(Rec2,m2c2)
+                cascao.sc2.load_reconstructor(IM2,m2c2)
                 cascao.sc1.intGain = gain1_vec[i]
                 cascao.sc2.intGain = gain2_vec[j]
                 sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
@@ -104,9 +104,9 @@ def main(tn:str='example_cascading_stage',
         cascao = CascadingAO(tn)
         cascao.initialize_turbulence()
         cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-        cascao.sc1.load_reconstructor(Rec1,m2c1)
+        cascao.sc1.load_reconstructor(IM1,m2c1)
         cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-        cascao.sc2.load_reconstructor(Rec2,m2c2)
+        cascao.sc2.load_reconstructor(IM2,m2c2)
         cascao.tested_gains1 = gain1_vec        
         cascao.tested_gains2 = gain2_vec
         cascao.SR_mat = SR_mat

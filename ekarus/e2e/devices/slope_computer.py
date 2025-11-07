@@ -30,6 +30,8 @@ class SlopeComputer():
         except KeyError:
             pass
 
+        self.nModes = int(xp.max(xp.sum(self.nModes)))
+
         if hasattr(wfs,'apex_angle'):
             self.wfs_type = 'PWFS'
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
@@ -124,8 +126,8 @@ class SlopeComputer():
         Load the reconstructor and the mode-to-command matrix
         """
         Rec = xp.linalg.pinv(IM[:,:self.nModes])
-        self.Rec = Rec
-        self.m2c = m2c[:,:self.nModes]
+        self.Rec = Rec.copy()
+        self.m2c = m2c[:,:self.nModes].copy()
         if opt_gains is not None:
             self.opt_gains = opt_gains.copy()
 
