@@ -18,7 +18,7 @@ CCD:
 
 SLOPE.COMPUTER:
   loopFrequencyInHz: 2000     
-  integratorGain: [1.8,0.9]          # loop integrator gain
+  integratorGain: [1.1,0.9]          # loop integrator gain
   delay: 2                      # loop delay in steps
   nModes2Correct: [2,413]           # number of reconstructor modes
   modulationInLambdaOverD: 3.0
