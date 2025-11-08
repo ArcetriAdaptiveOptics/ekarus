@@ -62,23 +62,11 @@ class DeformableMirror():
         if absolute:
             cmd_amps -= self.act_pos
 
-        # if self.slaving is not None:
-        #     cmd_amps = self.slaving @ cmd_amps
-
         # Update positions and shape
         self.act_pos += cmd_amps
         if self.max_stroke is not None:
             self.act_pos = xp.maximum(xp.minimum(self.act_pos, self.max_stroke), -self.max_stroke)
         self.surface += self.IFF @ cmd_amps
-
-
-    def get_surface(self):
-        """ Get the DM surface pixels """
-        if hasattr(self, 'visible_pix_ids'):
-            return self.surface[self.visible_pix_ids]
-        else:
-            return self.surface
-        
 
 
     def plot_surface(self, surf2plot = None, title:str = '', plt_mask = None):
@@ -102,7 +90,6 @@ class DeformableMirror():
         if surf2plot is None:
             surf2plot = self.surface
 
-        
         mask_ids = xp.arange(xp.size(self.mask))
 
         if xp.size(surf2plot) < xp.sum(1-self.mask):

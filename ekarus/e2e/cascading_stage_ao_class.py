@@ -2,7 +2,7 @@ import xupy as xp
 import numpy as np
 from numpy.ma import masked_array
 
-from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
+from ekarus.e2e.devices.deformable_secondary_mirror import DSM
 # from ekarus.e2e.pyramid_wfs import PyramidWFS
 # from ekarus.e2e.detector import Detector
 # from ekarus.e2e.slope_computer import SlopeComputer
@@ -53,14 +53,12 @@ class CascadingAO(HighLevelAO):
         self.pyr1, self.ccd1, self.sc1 = self._initialize_pyr_slope_computer('PYR1','CCD1','SLOPE.COMPUTER1')
 
         dm_pars = self._config.read_dm_pars('DM1')
-        # self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm1 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm1 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
 
         self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR2','CCD2','SLOPE.COMPUTER2')
 
         dm_pars = self._config.read_dm_pars('DM2')
-        # self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm2 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm2 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
 
 
     def get_photons_per_subap(self, starMagnitude):
@@ -93,39 +91,31 @@ class CascadingAO(HighLevelAO):
         """
         m2rad = 2 * xp.pi / lambdaInM 
 
-        # self.pyr1.set_modulation_angle(self.sc1.modulationAngleInLambdaOverD)
-        # self.pyr2.set_modulation_angle(self.sc2.modulationAngleInLambdaOverD)
+        IF1 = self.dm1.IFF.copy()
+        dm1_surf = xp.zeros(IF1.shape[0])
 
-        dm1_cmd = xp.zeros(self.dm1.Nacts, dtype=self.dtype)
-        self.dm1.set_position(dm1_cmd, absolute=True)
-        self.dm1.surface -= self.dm1.surface  # make sure DM is flat
-
-        dm2_cmd = xp.zeros(self.dm2.Nacts, dtype=self.dtype)
-        self.dm2.set_position(dm2_cmd, absolute=True)
-        self.dm2.surface -= self.dm2.surface  # make sure DM is flat
+        IF2 = self.dm2.IFF.copy()
+        dm2_surf = xp.zeros(IF2.shape[0])
 
         # Define variables
         mask_len = int(xp.sum(1 - self.cmask))
-        dm1_mask_len = int(xp.sum(1 - self.dm1.mask))
-        dm1_cmds = xp.zeros([self.Nits, self.dm1.Nacts])
-
-        dm2_mask_len = int(xp.sum(1 - self.dm2.mask))
-        dm2_cmds = xp.zeros([self.Nits, self.dm2.Nacts])
+        int1_cmds = xp.zeros([self.Nits,self.dm1.Nacts], dtype=self.dtype)
+        int2_cmds = xp.zeros([self.Nits,self.dm2.Nacts], dtype=self.dtype)
+        dm1_cmds = xp.zeros([self.Nits,self.dm1.Nacts], dtype=self.dtype)
+        dm2_cmds = xp.zeros([self.Nits,self.dm2.Nacts], dtype=self.dtype)
 
         res2_phase_rad2 = xp.zeros(self.Nits)
         res1_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
         if save_prefix is not None:
-            input_phases = xp.zeros([self.Nits, mask_len])
-            dm1_phases = xp.zeros([self.Nits, dm1_mask_len])
-            residual1_phases = xp.zeros([self.Nits, mask_len])
-            ccd1_images = xp.zeros([self.Nits, self.ccd1.detector_shape[0], self.ccd1.detector_shape[1]])
-            rec1_modes = xp.zeros([self.Nits,self.sc1.Rec.shape[0]])
-            dm2_phases = xp.zeros([self.Nits, dm2_mask_len])
-            residual2_phases = xp.zeros([self.Nits, mask_len])
-            ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]])
-            rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]])
+            input_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
+            residual1_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
+            ccd1_images = xp.zeros([self.Nits, self.ccd1.detector_shape[0], self.ccd1.detector_shape[1]], dtype=self.dtype)
+            rec1_modes = xp.zeros([self.Nits,self.sc1.Rec.shape[0]], dtype=self.dtype)
+            residual2_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
+            ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]], dtype=self.dtype)
+            rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]], dtype=self.dtype)
 
 
         for i in range(self.Nits):
@@ -137,25 +127,27 @@ class CascadingAO(HighLevelAO):
             input_phase -= xp.mean(input_phase)  # remove piston
 
             if i >= self.sc1.delay:
-                self.dm1.set_position(dm1_cmds[i - self.sc1.delay, :], absolute=True)
-
-            residual1_phase = input_phase - self.dm1.get_surface()
+                dm1_surf = IF1 @ dm1_cmds[i - self.sc1.delay, :]
+            residual1_phase = input_phase - dm1_surf[self.dm1.visible_pix_ids]
 
             if i % int(self.sc1.dt/self.dt) == 0:
-                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual1_phase, dm1_cmd, self.sc1, 
-                                                                    starMagnitude=starMagnitude, slaving=self.dm1.slaving)
+                int1_cmds[i,:], modes1 = self.perform_loop_iteration(residual1_phase, self.sc1, 
+                                                                    starMagnitude=starMagnitude, 
+                                                                    slaving=self.dm1.slaving)
+                dm1_cmds[i,:] = self.sc1.iir_filter(int1_cmds[:i+1,:], dm1_cmds[:i+1,:])
             else:
                 dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
 
 
             if i >= self.sc2.delay:
-                self.dm2.set_position(dm2_cmds[i - self.sc2.delay, :], absolute=True)
-
-            residual2_phase = residual1_phase - self.dm2.get_surface()
+                dm2_surf = IF2 @ dm2_cmds[i - self.sc2.delay, :]
+            residual2_phase = residual1_phase - dm2_surf[self.dm2.visible_pix_ids]
 
             if i % int(self.sc2.dt/self.dt) == 0:
-                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual2_phase, dm2_cmd, self.sc2, 
-                                                                    starMagnitude=starMagnitude, slaving=self.dm2.slaving)
+                int2_cmds[i,:], modes2 = self.perform_loop_iteration(residual2_phase, self.sc2, 
+                                                                    starMagnitude=starMagnitude, 
+                                                                    slaving=self.dm2.slaving)
+                dm2_cmds[i,:] = self.sc2.iir_filter(int2_cmds[:i+1,:], dm2_cmds[:i+1,:])
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
@@ -166,12 +158,10 @@ class CascadingAO(HighLevelAO):
             if save_prefix is not None:  
                 input_phases[i, :] = input_phase          
                 residual1_phases[i, :] = residual1_phase
-                dm1_phases[i, :] = self.dm1.surface
                 ccd1_images[i, :, :] = self.ccd1.last_frame
                 rec1_modes[i, :] = modes1
 
                 residual2_phases[i, :] = residual2_phase
-                dm2_phases[i, :] = self.dm2.surface
                 ccd2_images[i, :, :] = self.ccd2.last_frame
                 rec2_modes[i, :] = modes2
         
@@ -182,9 +172,9 @@ class CascadingAO(HighLevelAO):
             dm2_mask_cube = xp.asnumpy(xp.stack([self.dm2.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm1_phases = xp.stack([reshape_on_mask(dm1_phases[i, :], self.dm1.mask)for i in range(self.Nits)])
+            dm1_phases = xp.stack([reshape_on_mask(IF1 @ dm1_cmds[i, :], self.dm1.mask)for i in range(self.Nits)])
             res1_phases = xp.stack([reshape_on_mask(residual1_phases[i, :], self.cmask)for i in range(self.Nits)])
-            dm2_phases = xp.stack([reshape_on_mask(dm2_phases[i, :], self.dm2.mask)for i in range(self.Nits)])
+            dm2_phases = xp.stack([reshape_on_mask(IF2 @ dm2_cmds[i, :], self.dm2.mask)for i in range(self.Nits)])
             res2_phases = xp.stack([reshape_on_mask(residual2_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
@@ -298,6 +288,8 @@ class CascadingAO(HighLevelAO):
         res2_mode_rms = xp.sqrt(xp.mean(res2_modes**2,axis=0))
         rec1_modes_rms = xp.sqrt(xp.mean(rec1_modes[-N-1:-1,:]**2,axis=0))
         rec2_modes_rms = xp.sqrt(xp.mean(rec2_modes[-N-1:-1,:]**2,axis=0))
+
+        print(xp.sum(atmo_mode_rms),xp.sum(res1_mode_rms),xp.sum(rec1_modes_rms),xp.sum(res2_mode_rms),xp.sum(rec2_modes_rms))
 
         plt.figure()
         plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')

@@ -30,7 +30,7 @@ class HighLevelAO():
         self._config = ConfigReader(tn)
         self._tn = tn
         
-        self._read_configuration()
+        self._define_pupil_mask()
         self._read_loop_parameters()
 
 
@@ -44,12 +44,12 @@ class HighLevelAO():
         return collected_flux
     
 
-    def _read_configuration(self):
+    def _define_pupil_mask(self):
         """ Reads the Telescope configuration file, defining the mask """
-        self.atmo_pars = self._config.read_atmo_pars()
         telescope_pars = self._config.read_telescope_pars()
         self.pupilSizeInM = telescope_pars['pupilSizeInM']
         self.pupilSizeInPixels = telescope_pars['pupilSizeInPixels']
+        self.pixelScale = self.pupilSizeInPixels/self.pupilSizeInM
         self.throughput = telescope_pars['throughput']
         mask_shape = (self.pupilSizeInPixels, self.pupilSizeInPixels)
         self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels/2)
@@ -60,21 +60,13 @@ class HighLevelAO():
             self.cmask = (self.cmask + (1-obs_mask)).astype(bool)
         except KeyError:
             self.centerObscurationInM = 0.0
-
-
-
-    def _read_loop_parameters(self):
-        """
-        Reads the loop parameters from the configuration file.
-        """
-        loop_pars = self._config.read_loop_pars()
-        self.Nits = loop_pars['nIterations']
-        self.starMagnitude = loop_pars['starMagnitude']
-        self.dt = 1/loop_pars['simFreqHz']
         try:
-            self.recompute = loop_pars['recompute']
+            spiderWidth = telescope_pars['spiders']['widthInM']
+            spiderAngles = telescope_pars['spiders']['angles']
+            spiderPixWidth = spiderWidth * self.pixelScale
+            self._add_telescope_spiders(spiderPixWidth, spiderAngles)
         except KeyError:
-            self.recompute = False
+            pass
     
 
     def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2, save_prefix:str=''):
@@ -133,7 +125,7 @@ class HighLevelAO():
         return KL, m2c
     
 
-    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, method:str='slopes', save_prefix:str=''):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, save_prefix:str=''):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
         
@@ -165,7 +157,7 @@ class HighLevelAO():
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
-            slopes = self._get_slopes(slope_computer, MM, lambdaInM, amps, method=method)
+            slopes = self._get_slopes(slope_computer, MM, lambdaInM, amps)
             IM = slopes.T
             U,S,Vt = xp.linalg.svd(IM, full_matrices=False)
             Rec = xp.array((Vt.T*1/S) @ U.T,dtype=self.dtype)
@@ -221,6 +213,142 @@ class HighLevelAO():
         self.layers.generate_phase_screens(screenPixels, screenMeters, recompute_atmo_screens)
         self.layers.rescale_phasescreens() # rescale in meters
         self.layers.update_mask(self.cmask)
+
+    
+    
+    def perform_loop_iteration(self, phase, slope_computer, starMagnitude:float=None, slaving=None):
+        """
+        Performs a single iteration of the AO loop.
+        Parameters
+        ----------
+        phase : array
+            The input phase screen in meters.
+        slope_computer : SlopeComputer
+            The slope computer object.
+        starMagnitude : float
+            The magnitude of the star being observed.
+        
+        Returns
+        -------
+        dm_cmd : xp.array
+            The DM command in meters.
+        modes : xp.array
+            The reconstructed modes in meters.
+        """
+        lambda_ref = slope_computer._wfs.lambdaInM
+        m2rad = 2*xp.pi/lambda_ref
+        lambdaOverD = lambda_ref/self.pupilSizeInM
+        Nphotons = self.get_photons_per_second(starMagnitude) * slope_computer.dt
+        delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
+        input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
+
+        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
+        modes = slope_computer.Rec @ slopes
+        modes *= slope_computer.intGain
+        cmd = slope_computer.m2c @ modes
+        cmd /= m2rad # convert to meters
+        modes /= m2rad  # convert to meters
+
+        if slaving is not None:
+            cmd = slaving @ cmd
+
+        return cmd, modes
+
+
+    def get_phasescreen_at_time(self, time: float):
+        """
+        Retrieves the combined phase screen at a specific time.
+
+        Parameters
+        ----------
+        time : float
+            The time at which to retrieve the phase screen.
+
+        Returns
+        -------
+        masked_phase : array
+            The combined phase screen at the specified time.
+        """
+        masked_phases = self.layers.move_mask_on_phasescreens(time)
+        masked_phase = xp.sum(masked_phases,axis=0)
+        return masked_phase
+    
+    
+    def save_telemetry_data(self, data_dict, save_prefix:str=''):
+        """
+        Saves the telemetry data to FITS files.
+        """
+        self.save_prefix = save_prefix
+        for key in data_dict:
+            file_path = os.path.join(self.savepath,save_prefix+str(key)+'.fits')
+            myfits.save_fits(file_path, data_dict[key])
+    
+            
+    def load_telemetry_data(self, data_keys:list[str]=None, save_prefix:str=''):
+        """
+        Load telemetry data from FITS files.
+        """
+        if data_keys is None:
+            data_keys = self.telemetry_keys
+        loaded_data = []
+        for key in data_keys:
+            try:
+                file_path = os.path.join(self.savepath, save_prefix+key+'.fits')
+                loaded_data.append(myfits.read_fits(file_path))
+            except FileNotFoundError:
+                new_path = os.path.join(self.savepath, key+'.fits')
+                print(f'File {file_path} not found, trying {new_path} instead')
+                loaded_data.append(myfits.read_fits(new_path))
+        return loaded_data
+    
+    
+    def get_contrast(self, residual_phases_in_rad, oversampling:int=10):
+        """
+        Computes the PSF and contrast from the residual phase
+        using the formula for a perfect idealized coronograph.
+        """        
+        N = residual_phases_in_rad.shape[0]
+        res_phases = xp.array(residual_phases_in_rad)
+        padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
+        pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
+        psf_stack = []
+        # psf_stack = xp.zeros([N,self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling])
+        field_amp = 1-pup_mask
+        for k,res_phase in enumerate(res_phases):
+            print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
+            phase_2d = reshape_on_mask(res_phase, pup_mask)
+            # phase_var = xp.sum((res_phase-xp.mean(res_phase))**2) 
+            phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
+            perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
+            coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
+            coro_psf = abs(coro_focal_plane_ef)**2
+            input_field = field_amp * xp.exp(1j*phase_2d)
+            psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
+            coro_psf /= xp.max(psf)
+            # psf_stack[k] = coro_psf
+            psf_stack.append(coro_psf)
+            # psf_rms += coro_psf**2
+        # psf_rms = xp.sqrt(psf_rms/N)
+        psf_stack = xp.array(psf_stack)
+        psf_rms = xp.std(psf_stack,axis=0)
+        rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),psf_rms.shape[0]/2,psf_rms.shape[1]/2)
+        pix_dist = dist/oversampling
+        return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
+
+    
+    def _read_loop_parameters(self):
+        """
+        Reads the loop parameters from the configuration file.
+        """
+        self.atmo_pars = self._config.read_atmo_pars()
+        loop_pars = self._config.read_loop_pars()
+        self.Nits = loop_pars['nIterations']
+        self.starMagnitude = loop_pars['starMagnitude']
+        self.dt = 1/loop_pars['simFreqHz']
+        try:
+            self.recompute = loop_pars['recompute']
+        except KeyError:
+            self.recompute = False
 
 
     def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):
@@ -290,136 +418,9 @@ class HighLevelAO():
         ) 
         
         return pyr, det, sc
-
-
-    
-    def perform_loop_iteration(self, phase, dm_cmd, slope_computer, method:str='slopes', starMagnitude:float=None, slaving=None):
-        """
-        Performs a single iteration of the AO loop.
-        Parameters
-        ----------
-        phase : array
-            The input phase screen in meters.
-        dm_cmd : array
-            The current DM command in meters.
-        slope_computer : SlopeComputer
-            The slope computer object.
-        starMagnitude : float
-            The magnitude of the star being observed.
-        
-        Returns
-        -------
-        dm_cmd : xp.array
-            The DM command in meters.
-        modes : xp.array
-            The reconstructed modes in meters.
-        """
-        lambda_ref = slope_computer._wfs.lambdaInM
-        m2rad = 2*xp.pi/lambda_ref
-        lambdaOverD = lambda_ref/self.pupilSizeInM
-        Nphotons = self.get_photons_per_second(starMagnitude) * slope_computer.dt
-
-        delta_phase_in_rad = reshape_on_mask(phase * m2rad, self.cmask)
-        input_field = (1-self.cmask) * xp.exp(1j * delta_phase_in_rad)
-        slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons, method=method)
-        
-        modes = slope_computer.Rec @ slopes
-        if hasattr(slope_computer, 'optGains'):
-            modes /= slope_computer.optGains
-        cmd = slope_computer.m2c @ modes
-
-        cmd /= m2rad # convert to meters
-        modes /= m2rad  # convert to meters
-
-        if slaving is not None:
-            cmd = slaving @ cmd
-        dm_cmd += cmd * slope_computer.intGain
-
-        return dm_cmd, modes
-
-
-    def get_phasescreen_at_time(self, time: float):
-        """
-        Retrieves the combined phase screen at a specific time.
-
-        Parameters
-        ----------
-        time : float
-            The time at which to retrieve the phase screen.
-
-        Returns
-        -------
-        masked_phase : array
-            The combined phase screen at the specified time.
-        """
-        masked_phases = self.layers.move_mask_on_phasescreens(time)
-        masked_phase = xp.sum(masked_phases,axis=0)
-        return masked_phase
-    
-    
-    def save_telemetry_data(self, data_dict, save_prefix:str=''):
-        """
-        Saves the telemetry data to FITS files.
-        """
-        self.save_prefix = save_prefix
-        for key in data_dict:
-            file_path = os.path.join(self.savepath,save_prefix+str(key)+'.fits')
-            myfits.save_fits(file_path, data_dict[key])
-    
-            
-    def load_telemetry_data(self, data_keys:list[str]=None, save_prefix:str=''):
-        """
-        Load telemetry data from FITS files.
-        """
-        if data_keys is None:
-            data_keys = self.telemetry_keys
-        loaded_data = []
-        for key in data_keys:
-            try:
-                file_path = os.path.join(self.savepath, save_prefix+key+'.fits')
-                loaded_data.append(myfits.read_fits(file_path))
-            except FileNotFoundError:
-                new_path = os.path.join(self.savepath, key+'.fits')
-                print(f'File {file_path} not found, trying {new_path} instead')
-                loaded_data.append(myfits.read_fits(new_path))
-        return loaded_data
-    
-    
-    def get_contrast(self, residual_phases_in_rad, oversampling:int=12):
-        """
-        Computes the PSF and contrast from the residual phase
-        using the formula for a perfect idealized coronograph.
-        """        
-        N = residual_phases_in_rad.shape[0]
-        res_phases = xp.array(residual_phases_in_rad)
-        padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
-        pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
-        psf_stack = []
-        # psf_stack = xp.zeros([N,self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling])
-        field_amp = 1-pup_mask
-        for k,res_phase in enumerate(res_phases):
-            print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
-            phase_2d = reshape_on_mask(res_phase, pup_mask)
-            # phase_var = xp.sum((res_phase-xp.mean(res_phase))**2) 
-            phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
-            perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
-            coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
-            coro_psf = abs(coro_focal_plane_ef)**2
-            input_field = field_amp * xp.exp(1j*phase_2d)
-            psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
-            coro_psf /= xp.max(psf)
-            # psf_stack[k] = coro_psf
-            psf_stack.append(coro_psf)
-            # psf_rms += coro_psf**2
-        # psf_rms = xp.sqrt(psf_rms/N)
-        psf_stack = xp.array(psf_stack)
-        psf_rms = xp.std(psf_stack,axis=0)
-        rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),psf_rms.shape[0]/2,psf_rms.shape[1]/2)
-        pix_dist = dist/oversampling
-        return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
     
 
-    def calibrate_optical_gains(self, N:int, slope_computer, MM, amps:float=0.02, method:str='slopes', save_prefix:str=''):
+    def calibrate_optical_gains(self, N:int, slope_computer, MM, amps:float=0.02, save_prefix:str=''):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
         
@@ -435,8 +436,6 @@ class HighLevelAO():
             The wavelength(s) at which calibration is performed.
         amps : float or array
             The amplitudes for each mode.
-        method : str, optional
-            Method to compute the sensor slopes.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
         
@@ -482,9 +481,9 @@ class HighLevelAO():
                 phi_modes = phase2modes @ phi_atmo
                 lo_phi = MM.T @ phi_modes
                 ho_phi = phi_atmo - lo_phi
-                ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo, method=method)
-                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi, method=method)
-                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi, method=method)
+                ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo)
+                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi)
+                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi)
                 cl_gains = xp.zeros(Nmodes)
                 ol_gains = xp.zeros(Nmodes)
                 pl_gains = xp.zeros(Nmodes)
@@ -507,7 +506,7 @@ class HighLevelAO():
         return ol_opt_gains, cl_opt_gains, pl_opt_gains
     
 
-    def _get_slopes(self, slope_computer, MM, lambdaInM, amps, method:str='slopes', phase_offset=None):
+    def _get_slopes(self, slope_computer, MM, lambdaInM, amps, phase_offset=None):
         """ 
         Computes the slopes for the given mode matrix MM using push-pull method.
 
@@ -521,8 +520,6 @@ class HighLevelAO():
             The wavelength(s) at which calibration is performed.
         amps : float or array
             The amplitudes for each mode.
-        use_diagonal : bool, optional
-            Whether to use diagonal slopes, by default False.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
         
@@ -550,8 +547,8 @@ class HighLevelAO():
             mode_phase = reshape_on_mask(MM[i,:]*amp, self.cmask)
             push_field = xp.exp(1j*mode_phase + 1j*offset) * electric_field_amp
             pull_field = xp.exp(-1j*mode_phase + 1j*offset) * electric_field_amp
-            push_slope = slope_computer.compute_slopes(push_field, lambdaOverD, Nphotons, method=method)/amp
-            pull_slope = slope_computer.compute_slopes(pull_field, lambdaOverD, Nphotons, method=method)/amp
+            push_slope = slope_computer.compute_slopes(push_field, lambdaOverD, Nphotons)/amp
+            pull_slope = slope_computer.compute_slopes(pull_field, lambdaOverD, Nphotons)/amp
             if slopes is None:
                 slopes = (push_slope-pull_slope)/2
             else:
@@ -587,6 +584,40 @@ class HighLevelAO():
         pixelSize = 1/oversampling
         return psf, pixelSize
     
+
+    def _add_telescope_spiders(self, spiderWidth, spiderAngles):
+        """
+        Adds radial spiders to self.cmask.
+
+        Parameters
+        ----------
+        spiderWidth : array
+            The spiders' width in pixels.
+        spiderAngles : array
+            Spiders' orientation angle, CCW from East.
+        """
+        cmask = self.cmask.copy()
+        cx,cy = cmask.shape[0]/2,cmask.shape[1]/2
+        top = xp.zeros_like(cmask)
+        top[cx:,:] = 1
+        right = xp.zeros_like(cmask)
+        right[:,cy:] = 1
+        for angle in spiderAngles:
+            dist = lambda x,y: xp.asarray(y-cy)-xp.asarray(x-cx)*xp.tan(angle) if abs(abs(angle)-xp.pi/2) > 1e-10 else xp.asarray(x-cx)
+            spider_mask = xp.fromfunction(lambda j,i: abs(dist(i,j))<spiderWidth, cmask.shape)
+            dist_grid = xp.fromfunction(lambda j,i: dist(i,j), cmask.shape)
+            if xp.sin(angle) >= 0:
+                spider_mask *= top
+            else:
+                spider_mask *= (1-top).astype(bool)
+            if xp.cos(angle) >= 0:
+                spider_mask *= right
+            else:
+                spider_mask *= (1-right).astype(bool)
+            cmask = xp.logical_or(cmask, (spider_mask).astype(bool))
+        self.cmask = cmask.copy()
+        
+
     @staticmethod
     def phase_rms(vec):
         return xp.sqrt(xp.sum(vec**2)/len(vec))

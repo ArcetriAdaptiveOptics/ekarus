@@ -16,6 +16,10 @@ class ConfigReader():
 
     def read_telescope_pars(self):
         """ Read telescope parameters from the configuration file."""
+        try:
+            self._cfile['TELESCOPE']['spiders']['angles'] = xp.asarray(self._cfile['TELESCOPE']['spiders']['angles'])*xp.pi/180
+        except KeyError:
+            pass
         return self._cfile['TELESCOPE']
 
     def read_sensor_pars(self, sensor_name: str = 'WFS'):
@@ -54,8 +58,8 @@ class ConfigReader():
     
     def read_slope_computer_pars(self, slope_computer_name: str = 'SLOPE.COMPUTER'):
         """ Read slope computer parameters from the configuration file."""
-        self._cfile[slope_computer_name]['integratorGain'] = xp.asarray(self._cfile[slope_computer_name]['integratorGain'])
-        self._cfile[slope_computer_name]['nModes2Correct'] = xp.asarray(self._cfile[slope_computer_name]['nModes2Correct'])
+        self._cfile[slope_computer_name]['integratorGain'] = xp.array(self._cfile[slope_computer_name]['integratorGain'])
+        self._cfile[slope_computer_name]['nModes2Correct'] = xp.array(self._cfile[slope_computer_name]['nModes2Correct'])
         return self._cfile[slope_computer_name]
 
     def read_loop_pars(self):

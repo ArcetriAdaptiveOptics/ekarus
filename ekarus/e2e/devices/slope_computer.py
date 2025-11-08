@@ -1,10 +1,22 @@
 from os.path import join
 import xupy as xp
-# import numpy as np
 
 from ekarus.e2e.utils.image_utils import image_grid, get_photocenter, get_circular_mask
 from ..utils.my_fits_package import save_fits, read_fits
 from ..utils.root import calibpath #resultspath
+
+
+def get_iir_from_zeros_and_poles(zeros:list,poles:list):
+    import sympy as sp
+    import numpy as np
+    zeros = np.array(zeros)
+    poles = np.array(poles)
+    z = sp.symbols('z')
+    num = np.prod((z-zeros))
+    num = sp.Poly(sp.expand(num))
+    den = np.prod((z-poles))
+    den = sp.Poly(sp.expand(den))
+    return num.all_coeffs(), den.all_coeffs()
 
 
 class SlopeComputer():
@@ -18,7 +30,7 @@ class SlopeComputer():
         try:
             (
                 self.dt,
-                self.intGain,
+                self.integratorGain,
                 self.delay,
                 self.nModes,
             ) = (
@@ -30,19 +42,41 @@ class SlopeComputer():
         except KeyError:
             pass
 
-        self.nModes = int(xp.max(xp.sum(self.nModes)))
+        try:
+            zeros, poles = sc_pars['zeros'], sc_pars['poles']
+            n,d = get_iir_from_zeros_and_poles(zeros, poles)
+            self.iir_num = xp.hstack([float(n[i]) for i in range(len(n))])
+            self.iir_den = xp.hstack([float(d[i]) for i in range(len(d))])
+        except KeyError:
+            self.iir_num, self.iir_den = xp.array([1.0]), xp.array([1.0,-1.0])
+
+        if len(self.integratorGain) != len(self.nModes):
+            raise ValueError(f'Integrator gains {self.integratorGain} are not compatible with length of number of modes to correct {self.nModes}')
+        
+        self.intGain = xp.hstack([xp.repeat(self.integratorGain[i],int(self.nModes[i])) for i in range(len(self.nModes))])
+        self.nModes = int(xp.max(xp.cumsum(self.nModes)))
 
         if hasattr(wfs,'apex_angle'):
             self.wfs_type = 'PWFS'
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
+            self._slope_method = 'slopes'
         elif hasattr(wfs,'vertex3_angle'):
             self.wfs_type = '3PWFS'
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
+            self._slope_method = 'slopes'
         elif hasattr(wfs,'dot_radius'):
             self.wfs_type = 'ZWFS'
         else:
             raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
 
+    def iir_filter(self, x, y):
+        L = xp.shape(x)[0]
+        fb = xp.stack([self.iir_num[i]*x[-1-i] for i in range(min(len(self.iir_num),L))])
+        iir = xp.sum(fb,axis=0)
+        if self.iir_den is not None and L > 1:
+            ff = xp.stack([self.iir_den[i]*y[-1-i] for i in range(1,min(len(self.iir_den),L))])
+            iir -= xp.sum(ff,axis=0)
+        return iir
 
     def calibrate_sensor(self, tn:str, prefix_str:str, recompute:bool, **kwargs):
         """
@@ -100,19 +134,18 @@ class SlopeComputer():
                 raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
     
 
-    def compute_slopes(self, input_field, lambdaOverD, nPhotons, **kwargs):
+    def compute_slopes(self, input_field, lambdaOverD, nPhotons):
         """
         Compute slopes from the input field
         """
-
         intensity = self._wfs.get_intensity(input_field, lambdaOverD)
         detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
 
         match self.wfs_type:
             case 'PWFS':
-                slopes = self._compute_pyr_signal(detector_image, **kwargs)
+                slopes = self._compute_pyr_signal(detector_image)
             case '3PWFS':
-                slopes = self._compute_3pyr_signal(detector_image, **kwargs)
+                slopes = self._compute_3pyr_signal(detector_image)
             case 'ZWFS':
                 slopes = detector_image[~self._roi_masks]
             case _:
@@ -121,39 +154,24 @@ class SlopeComputer():
         return slopes
     
     
-    def load_reconstructor(self, IM, m2c, opt_gains=None):
+    def load_reconstructor(self, IM, m2c, method:str=None):
         """
         Load the reconstructor and the mode-to-command matrix
         """
         Rec = xp.linalg.pinv(IM[:,:self.nModes])
-        self.Rec = Rec.copy()
-        self.m2c = m2c[:,:self.nModes].copy()
-        if opt_gains is not None:
-            self.opt_gains = opt_gains.copy()
+        self.Rec = Rec
+        self.m2c = m2c[:,:self.nModes]
+        if method is not None:
+            self._slope_method = method
 
 
-    # def load_reconstructor(self, Rec, m2c):
-    #     """
-    #     Load the reconstructor and the mode-to-command matrix
-    #     """
-    #     self.Rec = Rec[:self.nModes,:]
-    #     self.m2c = m2c[:,:self.nModes]
-
-
-    # def load_optical_gains(self, opt_gains):
-    #     """
-    #     Load the optical gains
-    #     """
-    #     self.optGains = opt_gains[:self.nModes]
-
-
-    def _compute_pyr_signal(self, detector_image, method:str='slopes'):
+    def _compute_pyr_signal(self, detector_image):
         A = detector_image[~self._roi_masks[0]]
         B = detector_image[~self._roi_masks[1]]
         C = detector_image[~self._roi_masks[2]]
         D = detector_image[~self._roi_masks[3]]
 
-        match method:
+        match self._slope_method:
             case 'slopes':
                 up_down = (A+B) - (C+D)
                 left_right = (A+C) - (B+D)
@@ -177,12 +195,12 @@ class SlopeComputer():
         return slopes
     
 
-    def _compute_3pyr_signal(self, detector_image, method:str='slopes'):
+    def _compute_3pyr_signal(self, detector_image):
         A = detector_image[~self._roi_masks[0]]
         B = detector_image[~self._roi_masks[1]]
         C = detector_image[~self._roi_masks[2]]
 
-        match method:
+        match self._slope_method:
             case 'slopes':
                 up_down = xp.sqrt(3)/2*(B-C)
                 left_right = A - (B+C)/2

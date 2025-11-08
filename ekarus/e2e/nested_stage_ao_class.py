@@ -2,7 +2,7 @@ import xupy as xp
 import numpy as np
 from numpy.ma import masked_array
 
-from ekarus.e2e.devices.alpao_deformable_mirror import ALPAODM
+from ekarus.e2e.devices.deformable_secondary_mirror import DSM
 # from ekarus.e2e.pyramid_wfs import PyramidWFS
 # from ekarus.e2e.detector import Detector
 # from ekarus.e2e.slope_computer import SlopeComputer
@@ -52,14 +52,12 @@ class NestedStageAO(HighLevelAO):
         self.pyr1, self.ccd1, self.sc1 = self._initialize_pyr_slope_computer('PYR.in','CCD.in','SLOPE.COMPUTER.in')
 
         dm_pars = self._config.read_dm_pars('DM.in')
-        # self.dm1 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm1 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm1 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
 
         self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR.out','CCD.out','SLOPE.COMPUTER.out')
 
         dm_pars = self._config.read_dm_pars('DM.out')
-        # self.dm2 = ALPAODM(dm_pars["Nacts"], Npix=self.pupilSizeInPixels, max_stroke=dm_pars['max_stroke_in_m'])
-        self.dm2 = ALPAODM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), max_stroke=dm_pars['max_stroke_in_m'])
+        self.dm2 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
   
     def get_photons_per_subap(self, starMagnitude):
         collected_photons = self.get_photons_per_second(starMagnitude=starMagnitude)
@@ -89,39 +87,31 @@ class NestedStageAO(HighLevelAO):
         """
         m2rad = 2 * xp.pi / lambdaInM 
 
-        # self.pyr1.set_modulation_angle(self.sc1.modulationAngleInLambdaOverD)
-        # self.pyr2.set_modulation_angle(self.sc2.modulationAngleInLambdaOverD)
+        IF1 = self.dm1.IFF.copy()
+        dm1_surf = xp.zeros(IF1.shape[0])
 
-        dm1_cmd = xp.zeros(self.dm1.Nacts, dtype=self.dtype)
-        self.dm1.set_position(dm1_cmd, absolute=True)
-        self.dm1.surface -= self.dm1.surface  # make sure DM is flat
-
-        dm2_cmd = xp.zeros(self.dm2.Nacts, dtype=self.dtype)
-        self.dm2.set_position(dm2_cmd, absolute=True)
-        self.dm2.surface -= self.dm2.surface  # make sure DM is flat
+        IF2 = self.dm2.IFF.copy()
+        dm2_surf = xp.zeros(IF2.shape[0])
 
         # Define variables
         mask_len = int(xp.sum(1 - self.cmask))
-        dm1_mask_len = int(xp.sum(1 - self.dm1.mask))
-        dm1_cmds = xp.zeros([self.Nits, self.dm1.Nacts])
-
-        dm2_mask_len = int(xp.sum(1 - self.dm2.mask))
-        dm2_cmds = xp.zeros([self.Nits, self.dm2.Nacts])
+        int1_cmds = xp.zeros([self.Nits,self.dm1.Nacts], dtype=self.dtype)
+        int2_cmds = xp.zeros([self.Nits,self.dm2.Nacts], dtype=self.dtype)
+        dm1_cmds = xp.zeros([self.Nits,self.dm1.Nacts], dtype=self.dtype)
+        dm2_cmds = xp.zeros([self.Nits,self.dm2.Nacts], dtype=self.dtype)
 
         res_in_phase_rad2 = xp.zeros(self.Nits)
         res_out_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
         if save_prefix is not None:
-            input_phases = xp.zeros([self.Nits, mask_len])
-            dm1_phases = xp.zeros([self.Nits, dm1_mask_len])
-            residual_phases = xp.zeros([self.Nits, mask_len])
-            ccd1_images = xp.zeros([self.Nits, self.ccd1.detector_shape[0], self.ccd1.detector_shape[1]])
-            rec1_modes = xp.zeros([self.Nits,self.sc1.Rec.shape[0]])
-            dm2_phases = xp.zeros([self.Nits, dm2_mask_len])
-            residual_in_phases = xp.zeros([self.Nits, mask_len])
-            ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]])
-            rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]])
+            input_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
+            residual_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
+            ccd1_images = xp.zeros([self.Nits, self.ccd1.detector_shape[0], self.ccd1.detector_shape[1]], dtype=self.dtype)
+            rec1_modes = xp.zeros([self.Nits,self.sc1.Rec.shape[0]], dtype=self.dtype)
+            residual_in_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
+            ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]], dtype=self.dtype)
+            rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]], dtype=self.dtype)
 
 
         for i in range(self.Nits):
@@ -133,23 +123,29 @@ class NestedStageAO(HighLevelAO):
             input_phase -= xp.mean(input_phase)  # remove piston
 
             if i >= self.sc2.delay:
-                self.dm2.set_position(dm2_cmds[i - self.sc2.delay, :], absolute=True)
-            
+                dm2_surf = IF2 @ dm2_cmds[i - self.sc2.delay, :]
+
             if i >= self.sc1.delay:
-                self.dm1.set_position(dm1_cmds[i - self.sc1.delay, :], absolute=True)
+                dm1_surf = IF1 @ dm1_cmds[i - self.sc1.delay, :]
 
-            residual_in_phase = input_phase - self.dm2.get_surface()
-            residual_phase = residual_in_phase - self.dm1.get_surface()
-
-            if i % int(self.sc1.dt/self.dt) == 0:
-                dm1_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, dm1_cmd, self.sc1, starMagnitude=starMagnitude, slaving=self.dm1.slaving)
-            else:
-                dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
+            residual_in_phase = input_phase - dm2_surf[self.dm2.visible_pix_ids]
+            residual_phase = residual_in_phase - dm1_surf[self.dm1.visible_pix_ids]
 
             if i % int(self.sc2.dt/self.dt) == 0:
-                dm2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, dm2_cmd, self.sc2, starMagnitude=starMagnitude, slaving=self.dm2.slaving)
+                int2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, self.sc2, 
+                                                                    starMagnitude=starMagnitude, 
+                                                                    slaving=self.dm2.slaving)
+                dm2_cmds[i,:] = self.sc2.iir_filter(int2_cmds[:i+1,:], dm2_cmds[:i+1,:])
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
+
+            if i % int(self.sc1.dt/self.dt) == 0:
+                int1_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, self.sc1, 
+                                                                    starMagnitude=starMagnitude, 
+                                                                    slaving=self.dm1.slaving)
+                dm1_cmds[i,:] = self.sc1.iir_filter(int1_cmds[:i+1,:], dm1_cmds[:i+1,:])
+            else:
+                dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
 
             res_in_phase_rad2[i] = self.phase_rms(residual_in_phase*m2rad)**2
             res_out_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
@@ -174,9 +170,9 @@ class NestedStageAO(HighLevelAO):
             dm2_mask_cube = xp.asnumpy(xp.stack([self.dm2.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm1_phases = xp.stack([reshape_on_mask(dm1_phases[i, :], self.dm1.mask)for i in range(self.Nits)])
+            dm1_phases = xp.stack([reshape_on_mask(IF1 @ dm1_cmds[i, :], self.dm1.mask)for i in range(self.Nits)])
             res_out_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
-            dm2_phases = xp.stack([reshape_on_mask(dm2_phases[i, :], self.dm2.mask)for i in range(self.Nits)])
+            dm2_phases = xp.stack([reshape_on_mask(IF2 @ dm2_cmds[i, :], self.dm2.mask)for i in range(self.Nits)])
             res_in_phases = xp.stack([reshape_on_mask(residual_in_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
