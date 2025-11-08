@@ -16,6 +16,10 @@ class ConfigReader():
 
     def read_telescope_pars(self):
         """ Read telescope parameters from the configuration file."""
+        try:
+            self._cfile['TELESCOPE']['spiders']['angles'] = xp.asarray(self._cfile['TELESCOPE']['spiders']['angles'])*xp.pi/180
+        except KeyError:
+            pass
         return self._cfile['TELESCOPE']
 
     def read_sensor_pars(self, sensor_name: str = 'WFS'):

@@ -157,7 +157,10 @@ class DSM(DeformableMirror):
         except FileExistsError:
             pass
 
-        coords_path = os.path.join(dir_path,'ActuatorCoordinates.fits')
+        self.pupil_size = pupilDiamInPixels
+        Npix = xp.sum(1-self.mask)
+
+        coords_path = os.path.join(dir_path,str(Npix)+'pixels_ActuatorCoordinates.fits')
         try:
             self.act_coords = myfits.read_fits(coords_path)
         except FileNotFoundError:
@@ -167,15 +170,13 @@ class DSM(DeformableMirror):
             centered_coords = coords.copy()
             centered_coords[0] -= cx
             centered_coords[1] -= cy
-            centered_coords *= (1.0 - 32**2/100/n_act**2)
+            centered_coords *= (1.0 - 40**2/100/n_act**2)
             coords[0] = centered_coords[0] + cx
             coords[1] = centered_coords[1] + cy
             self.act_coords = coords.copy()
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
         self.Nacts = max(self.act_coords.shape)
-        self.pupil_size = pupilDiamInPixels
-        Npix = xp.sum(1-self.mask)
 
         iff_path = os.path.join(dir_path,str(Npix)+'pixels_InfluenceFunctions.fits')
         try:

@@ -30,7 +30,7 @@ class HighLevelAO():
         self._config = ConfigReader(tn)
         self._tn = tn
         
-        self._read_configuration()
+        self._define_pupil_mask()
         self._read_loop_parameters()
 
 
@@ -44,12 +44,12 @@ class HighLevelAO():
         return collected_flux
     
 
-    def _read_configuration(self):
+    def _define_pupil_mask(self):
         """ Reads the Telescope configuration file, defining the mask """
-        self.atmo_pars = self._config.read_atmo_pars()
         telescope_pars = self._config.read_telescope_pars()
         self.pupilSizeInM = telescope_pars['pupilSizeInM']
         self.pupilSizeInPixels = telescope_pars['pupilSizeInPixels']
+        self.pixelScale = self.pupilSizeInPixels/self.pupilSizeInM
         self.throughput = telescope_pars['throughput']
         mask_shape = (self.pupilSizeInPixels, self.pupilSizeInPixels)
         self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels/2)
@@ -60,21 +60,13 @@ class HighLevelAO():
             self.cmask = (self.cmask + (1-obs_mask)).astype(bool)
         except KeyError:
             self.centerObscurationInM = 0.0
-
-
-
-    def _read_loop_parameters(self):
-        """
-        Reads the loop parameters from the configuration file.
-        """
-        loop_pars = self._config.read_loop_pars()
-        self.Nits = loop_pars['nIterations']
-        self.starMagnitude = loop_pars['starMagnitude']
-        self.dt = 1/loop_pars['simFreqHz']
         try:
-            self.recompute = loop_pars['recompute']
+            spiderWidth = telescope_pars['spiders']['widthInM']
+            spiderAngles = telescope_pars['spiders']['angles']
+            spiderPixWidth = spiderWidth * self.pixelScale
+            self._add_telescope_spiders(spiderPixWidth, spiderAngles)
         except KeyError:
-            self.recompute = False
+            pass
     
 
     def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2, save_prefix:str=''):
@@ -222,76 +214,7 @@ class HighLevelAO():
         self.layers.rescale_phasescreens() # rescale in meters
         self.layers.update_mask(self.cmask)
 
-
-    def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):
-        """ 
-        Initialize devices for PyrWFS slope computation
-        """
-
-        from ekarus.e2e.devices.detector import Detector
-        from ekarus.e2e.devices.slope_computer import SlopeComputer
-
-        det_pars = self._config.read_detector_pars(detector_id)
-        detector_shape=det_pars["detector_shape"]
-        det = Detector(
-            detector_shape=detector_shape,
-            RON=det_pars["RON"],
-            quantum_efficiency=det_pars["quantum_efficiency"],
-            beam_split_ratio=det_pars["beam_splitter_ratio"],
-        )
-
-        wfs_pars = self._config.read_sensor_pars(pyr_id) 
-        oversampling = wfs_pars["oversampling"]
-        sensorLambda = wfs_pars["lambdaInM"]
-        sensorBandwidth = wfs_pars['bandWidthInM']
-        subapPixSep = wfs_pars["subapPixSep"]
-        subapertureSize = wfs_pars["subapPixSize"]
-        rebin = oversampling*self.pupilSizeInPixels/max(detector_shape)
-        type = wfs_pars['type']
-        match type: # TODO Move to PWFS class
-            case '4PWFS':
-                from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
-                apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2
-                pyr= PyramidWFS(
-                    apex_angle=apex_angle, 
-                    oversampling=oversampling, 
-                    sensorLambda=sensorLambda,
-                    sensorBandwidth=sensorBandwidth
-                )
-            case '3PWFS':
-                from ekarus.e2e.devices.pyr3_wfs import Pyr3WFS
-                vertex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*((xp.floor(subapertureSize+1.0)+subapPixSep)/(2*xp.cos(xp.pi/6)))*rebin/2
-                pyr= Pyr3WFS(
-                    vertex_angle=vertex_angle, 
-                    oversampling=oversampling, 
-                    sensorLambda=sensorLambda,
-                    sensorBandwidth=sensorBandwidth
-                )
-            case _:
-                raise KeyError('Unrecognized WFS type: Available types are: 4PWFS, 3PWFS')
-
-        # Size checks
-        if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
-            raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f}  separated by {subapPixSep:1.0f} cannot fit on a  {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
-        
-        if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
-            raise ValueError(f'Pupil center in the subquadrant is {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
-
-        sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
-        sc = SlopeComputer(pyr, det, sc_pars)
-        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_', 
-                        recompute=self.recompute,
-                        piston=1-self.cmask, 
-                        lambdaOverD = sensorLambda/self.pupilSizeInM,
-                        Npix = subapertureSize,
-                        centerObscurationInPixels = 
-                        # self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
-                        xp.floor(subapertureSize+1.0)*self.centerObscurationInM/self.pupilSizeInM
-        ) 
-        
-        return pyr, det, sc
-
-
+    
     
     def perform_loop_iteration(self, phase, slope_computer, starMagnitude:float=None, slaving=None):
         """
@@ -379,7 +302,7 @@ class HighLevelAO():
         return loaded_data
     
     
-    def get_contrast(self, residual_phases_in_rad, oversampling:int=12):
+    def get_contrast(self, residual_phases_in_rad, oversampling:int=10):
         """
         Computes the PSF and contrast from the residual phase
         using the formula for a perfect idealized coronograph.
@@ -411,6 +334,90 @@ class HighLevelAO():
         rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),psf_rms.shape[0]/2,psf_rms.shape[1]/2)
         pix_dist = dist/oversampling
         return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
+
+    
+    def _read_loop_parameters(self):
+        """
+        Reads the loop parameters from the configuration file.
+        """
+        self.atmo_pars = self._config.read_atmo_pars()
+        loop_pars = self._config.read_loop_pars()
+        self.Nits = loop_pars['nIterations']
+        self.starMagnitude = loop_pars['starMagnitude']
+        self.dt = 1/loop_pars['simFreqHz']
+        try:
+            self.recompute = loop_pars['recompute']
+        except KeyError:
+            self.recompute = False
+
+
+    def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):
+        """ 
+        Initialize devices for PyrWFS slope computation
+        """
+
+        from ekarus.e2e.devices.detector import Detector
+        from ekarus.e2e.devices.slope_computer import SlopeComputer
+
+        det_pars = self._config.read_detector_pars(detector_id)
+        detector_shape=det_pars["detector_shape"]
+        det = Detector(
+            detector_shape=detector_shape,
+            RON=det_pars["RON"],
+            quantum_efficiency=det_pars["quantum_efficiency"],
+            beam_split_ratio=det_pars["beam_splitter_ratio"],
+        )
+
+        wfs_pars = self._config.read_sensor_pars(pyr_id) 
+        oversampling = wfs_pars["oversampling"]
+        sensorLambda = wfs_pars["lambdaInM"]
+        sensorBandwidth = wfs_pars['bandWidthInM']
+        subapPixSep = wfs_pars["subapPixSep"]
+        subapertureSize = wfs_pars["subapPixSize"]
+        rebin = oversampling*self.pupilSizeInPixels/max(detector_shape)
+        type = wfs_pars['type']
+        match type: # TODO Move to PWFS class
+            case '4PWFS':
+                from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
+                apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2
+                pyr= PyramidWFS(
+                    apex_angle=apex_angle, 
+                    oversampling=oversampling, 
+                    sensorLambda=sensorLambda,
+                    sensorBandwidth=sensorBandwidth
+                )
+            case '3PWFS':
+                from ekarus.e2e.devices.pyr3_wfs import Pyr3WFS
+                vertex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*((xp.floor(subapertureSize+1.0)+subapPixSep)/(2*xp.cos(xp.pi/6)))*rebin/2
+                pyr= Pyr3WFS(
+                    vertex_angle=vertex_angle, 
+                    oversampling=oversampling, 
+                    sensorLambda=sensorLambda,
+                    sensorBandwidth=sensorBandwidth
+                )
+            case _:
+                raise KeyError('Unrecognized WFS type: Available types are: 4PWFS, 3PWFS')
+
+        # Size checks
+        if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
+            raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f}  separated by {subapPixSep:1.0f} cannot fit on a  {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
+        
+        if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
+            raise ValueError(f'Pupil center in the subquadrant is {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
+
+        sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
+        sc = SlopeComputer(pyr, det, sc_pars)
+        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_', 
+                        recompute=self.recompute,
+                        piston=1-self.cmask, 
+                        lambdaOverD = sensorLambda/self.pupilSizeInM,
+                        Npix = subapertureSize,
+                        centerObscurationInPixels = 
+                        # self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
+                        xp.floor(subapertureSize+1.0)*self.centerObscurationInM/self.pupilSizeInM
+        ) 
+        
+        return pyr, det, sc
     
 
     def calibrate_optical_gains(self, N:int, slope_computer, MM, amps:float=0.02, save_prefix:str=''):
@@ -577,6 +584,40 @@ class HighLevelAO():
         pixelSize = 1/oversampling
         return psf, pixelSize
     
+
+    def _add_telescope_spiders(self, spiderWidth, spiderAngles):
+        """
+        Adds radial spiders to self.cmask.
+
+        Parameters
+        ----------
+        spiderWidth : array
+            The spiders' width in pixels.
+        spiderAngles : array
+            Spiders' orientation angle, CCW from East.
+        """
+        cmask = self.cmask.copy()
+        cx,cy = cmask.shape[0]/2,cmask.shape[1]/2
+        top = xp.zeros_like(cmask)
+        top[cx:,:] = 1
+        right = xp.zeros_like(cmask)
+        right[:,cy:] = 1
+        for angle in spiderAngles:
+            dist = lambda x,y: xp.asarray(y-cy)-xp.asarray(x-cx)*xp.tan(angle) if abs(abs(angle)-xp.pi/2) > 1e-10 else xp.asarray(x-cx)
+            spider_mask = xp.fromfunction(lambda j,i: abs(dist(i,j))<spiderWidth, cmask.shape)
+            dist_grid = xp.fromfunction(lambda j,i: dist(i,j), cmask.shape)
+            if xp.sin(angle) >= 0:
+                spider_mask *= top
+            else:
+                spider_mask *= (1-top).astype(bool)
+            if xp.cos(angle) >= 0:
+                spider_mask *= right
+            else:
+                spider_mask *= (1-right).astype(bool)
+            cmask = xp.logical_or(cmask, (spider_mask).astype(bool))
+        self.cmask = cmask.copy()
+        
+
     @staticmethod
     def phase_rms(vec):
         return xp.sqrt(xp.sum(vec**2)/len(vec))
