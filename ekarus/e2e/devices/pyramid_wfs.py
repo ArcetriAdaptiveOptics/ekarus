@@ -39,6 +39,10 @@ class PyramidWFS:
 
 
     def get_intensity(self, input_field, lambda0OverD):
+        """
+        Computes the intensity on the detector of the pyramid wavefront sensor
+        given an input electric field.
+        """
         L = max(input_field.shape) # TBI: deal with non-square input fields
         padded_field = xp.pad(input_field, int((self.oversampling-1)/2*L), mode='constant', constant_values=0.0)
 
@@ -49,7 +53,9 @@ class PyramidWFS:
             lambdasOverD = lambda0OverD/self.lambdaInM*self._lambdaRange
             for lambdaOverD in lambdasOverD:
                 rescaled_field = padded_field * (self.lambdaInM/lambdaOverD)
-                intensity += self._intensity_from_field(padded_field, lambdaOverD)/len(self._lambdaRange)
+                # intensity += self._intensity_from_field(rescaled_field, lambdaOverD)/len(self._lambdaRange)
+                # always tilt by the same amount, assuming chromaticity is corrected for:
+                intensity += self._intensity_from_field(rescaled_field, lambda0OverD)/len(self._lambdaRange) 
 
         return intensity
     
@@ -60,6 +66,7 @@ class PyramidWFS:
         else:
             intensity = self.modulate(padded_field, lambdaOverD)
         return intensity
+    
 
     def set_modulation_angle(self, modulationAngleInLambdaOverD):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
@@ -83,7 +90,7 @@ class PyramidWFS:
         self.field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(input_field))
 
         phase_delay = self.pyramid_phase_delay(input_field.shape) / lambdaOverD
-        self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype = self.cdtype)
+        self._ef_focal_plane_delayed = self.field_on_focal_plane * xp.exp(1j*phase_delay, dtype=self.cdtype)
 
         output_field = xp.fft.ifft2(xp.fft.ifftshift(self._ef_focal_plane_delayed))
 
@@ -108,16 +115,17 @@ class PyramidWFS:
         alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*xp.pi)
         phi_vec = (2*xp.pi)*xp.arange(self._modNsteps)/self._modNsteps
 
-        intensity = xp.zeros(input_field.shape, dtype = self.dtype)
+        intensity = xp.zeros(input_field.shape,dtype = self.dtype)
 
         for phi in phi_vec:
             tilt = tiltX * xp.cos(phi) + tiltY * xp.sin(phi)
-            tilted_input = input_field * xp.exp(1j*tilt*alpha_pix, dtype = self.cdtype)
+            tilted_input = input_field * xp.exp(1j*tilt*alpha_pix, dtype=self.cdtype)
 
             output = self.propagate(tilted_input, lambdaOverD)
             intensity += (abs(output**2))/self._modNsteps
 
         return intensity
+    
     
     @lru_cache(maxsize=5)
     def pyramid_phase_delay(self, shape):

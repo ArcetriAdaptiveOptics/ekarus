@@ -2,8 +2,10 @@
 *.fits
 *.ini
 *.yaml
-!ekarus/simulations/Config/example*
-!ekarus/e2e/alpao_dms_data/config.ini
+*.txt
+!ekarus/simulations/config/example_single_stage.yaml
+!ekarus/simulations/config/example_dual_stage.yaml
+!ekarus/e2e/alpao_dms_data/configuration.ini
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

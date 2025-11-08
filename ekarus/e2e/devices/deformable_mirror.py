@@ -1,5 +1,6 @@
-import numpy as np
+import xupy as xp
 import matplotlib.pyplot as plt
+import numpy as np
 
 from numpy.ma import masked_array
 
@@ -19,10 +20,9 @@ class DeformableMirror():
 
     """
     
-    def __init__(self, xp=np):
+    def __init__(self):
         self.max_stroke = None
-        self._xp = xp
-        self.dtype = xp.float32 if xp.__name__ == 'cupy' else xp.float64
+        self.slaving = None
 
 
     def get_position(self):
@@ -49,12 +49,11 @@ class DeformableMirror():
             True for modal amplitudes. The default is False.
 
         """
-        
         if modal: # convert modal to zonal
             mode_amps = cmd_amps.copy()
-            n_modes = self._xp.shape(self.U)[1]
+            n_modes = xp.shape(self.U)[1]
             if len(mode_amps) < n_modes:
-                mode_amps = self._xp.zeros(n_modes, dtype = self.dtype)
+                mode_amps = xp.zeros(n_modes, dtype=xp.float)
                 mode_amps[:len(cmd_amps)] = cmd_amps
         
             shape = self.U @ mode_amps
@@ -63,12 +62,22 @@ class DeformableMirror():
         if absolute:
             cmd_amps -= self.act_pos
 
-        # Update positions and shape
+        # if self.slaving is not None:
+        #     cmd_amps = self.slaving @ cmd_amps
 
+        # Update positions and shape
         self.act_pos += cmd_amps
         if self.max_stroke is not None:
-            self.act_pos = self._xp.maximum(self._xp.minimum(self.act_pos, self.max_stroke), -self.max_stroke)
+            self.act_pos = xp.maximum(xp.minimum(self.act_pos, self.max_stroke), -self.max_stroke)
         self.surface += self.IFF @ cmd_amps
+
+
+    def get_surface(self):
+        """ Get the DM surface pixels """
+        if hasattr(self, 'visible_pix_ids'):
+            return self.surface[self.visible_pix_ids]
+        else:
+            return self.surface
         
 
 
@@ -92,15 +101,20 @@ class DeformableMirror():
         
         if surf2plot is None:
             surf2plot = self.surface
+
         
-        mask_ids = self._xp.arange(self._xp.size(self.mask))
-        pix_ids = mask_ids[~(self.mask).flatten()]
+        mask_ids = xp.arange(xp.size(self.mask))
+
+        if xp.size(surf2plot) < xp.sum(1-self.mask):
+            pix_ids = mask_ids[~(self.pupil_mask).flatten()]
+        else:
+            pix_ids = mask_ids[~(self.mask).flatten()]
             
-        image = self._xp.zeros(self._xp.size(self.mask), dtype = self.dtype)
+        image = xp.zeros(xp.size(self.mask), dtype = xp.float)
         image[pix_ids] = surf2plot
-        image = self._xp.reshape(image, self.mask.shape)
+        image = xp.reshape(image, self.mask.shape)
         
-        plt_mask = self._xp.logical_or(self.mask, plt_mask) if plt_mask is not None else self.mask.copy()
+        plt_mask = xp.logical_or(self.mask, plt_mask) if plt_mask is not None else self.mask.copy()
 
         if hasattr(image, 'get'):
             image = image.get()
@@ -111,13 +125,13 @@ class DeformableMirror():
         image = masked_array(image, plt_mask)
         plt.imshow(image, origin = 'lower', cmap = 'hot')
         
-        img_rms = np.std(image.data[~image.mask])
-        
+        img_rms = xp.std(image.data[~image.mask])
         if title == '':
             title = f"RMS: {img_rms:.2e}"
             
         plt.axis('off')
         plt.title(title)
+        plt.colorbar()
         
         return img_rms
     

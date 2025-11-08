@@ -4,40 +4,66 @@ masked_array = xp.masked_array
 
 import matplotlib.pyplot as plt
 
-from ekarus.e2e.utils.image_utils import showZoomCenter, reshape_on_mask, myimshow
+from ekarus.e2e.utils.image_utils import myimshow #showZoomCenter, reshape_on_mask, 
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 import os.path as op
 
 import ekarus.e2e.utils.my_fits_package as myfits
 
 
-def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
+def main(tn:str='example_single_stage',
+         show:bool=False, 
+         gain_list=None, 
+         show_contrast:bool =False,
+         optimize_gain:bool=False, 
+         starMagnitudes=None, 
+         lambdaRef:float=750e-9):
+    
+    if gain_list is not None:
+        optimize_gain = True
+
+    if optimize_gain is True:
+        if gain_list is not None:
+            gain_vec = xp.array(gain_list)
+        else:
+            gain_vec = xp.arange(1,11)/10
 
     ssao = SingleStageAO(tn)
-
     ssao.initialize_turbulence()
-
-    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    Rec, _ = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
-    ssao.sc.load_reconstructor(Rec,m2c)
+    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    ssao.sc.load_reconstructor(IM,m2c)
+    ssao.KL = KL
 
+    it_ss = 200
 
-    print('Running the loop ...')
-    try:
-        masked_input_phases, _, masked_residual_phases, _, _, _ = ssao.load_telemetry_data()
-        m2rad = 2 * xp.pi / ssao.pyr.lambdaInM
-        residual_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-        input_phases = xp.zeros([ssao.Nits,int(xp.sum(1-ssao.cmask))])
-        for i in range(ssao.Nits):
-            ma_res_phase = masked_residual_phases[i,:,:]
-            residual_phases[i,:] = ma_res_phase[~ssao.cmask]
-            ma_in_phase = masked_input_phases[i,:,:]
-            input_phases[i,:] = ma_in_phase[~ssao.cmask]
-        sig2 = xp.std(residual_phases * m2rad, axis=-1) ** 2
-        input_sig2 = xp.std(input_phases * m2rad, axis=-1) ** 2
-    except:
-        sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
+    if optimize_gain is True:
+        print('Finding best gains:')
+        N = len(gain_vec)
+        SR_vec = xp.zeros(N)
+        for jj in range(N):
+            g = gain_vec[jj]
+            ssao.sc.intGain = g
+            err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
+            SR = xp.mean(xp.exp(-err2[-it_ss:]))
+            SR_vec[jj] = SR.copy()
+            print(f'Tested gain = {g:1.2f}, final SR = {SR*100:1.2f}%' )
+
+        best_gain = gain_vec[xp.argmax(SR_vec)]
+        print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
+        ssao.sc.intGain = best_gain
+        if xp.on_gpu:
+            gain_vec = gain_vec.get()
+            SR_vec = SR_vec.get()
+        plt.figure()
+        plt.plot(gain_vec,SR_vec*100,'-o')
+        plt.grid()
+        plt.xlabel('Integrator gain')
+        plt.ylabel('SR %')
+        plt.title('Strehl ratio vs integrator gain')
+
+    sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
     # ssao.SR_in = xp.exp(-input_sig2)
     # ssao.SR_out = xp.exp(-sig2)
     
@@ -46,8 +72,8 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
             print(f'Now simulating for magnitude: {starMag:1.1f}')
-            sig[k,:],_ = ssao.run_loop(ssao.pyr.lambdaInM, starMag, save_prefix=f'magV{starMag:1.0f}_')
-        # ssao.SR = xp.exp(-sig)
+            sig[k,:],_ = ssao.run_loop(lambdaRef, starMag, save_prefix=f'magV{starMag:1.0f}_')
+        ssao.SR = xp.mean(xp.exp(-sig[:,-it_ss:]),axis=1)
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -65,73 +91,37 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
             plt.subplot(4,N,i+1+N)
             ssao.dm.plot_surface(KL[i+N,:],title=f'KL Mode {i+N}')
             plt.subplot(4,N,i+1+N*2)
-            ssao.dm.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-i-1-N}')
+            ssao.dm.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-2*N+i}')
             plt.subplot(4,N,i+1+N*3)
-            ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
+            ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-N+i}')
 
         IM = myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits'))
-        IM_std = xp.std(IM,axis=0)
-        if xp.on_gpu:
-            IM_std = IM_std.get()
+        # IM_std = xp.std(IM,axis=0)
+        _,Sim,_ = xp.linalg.svd(IM, full_matrices=False)
         plt.figure()
-        plt.plot(IM_std,'-o')
+        plt.plot(xp.asnumpy(Sim),'-o')
         plt.grid()
-        plt.title('Interaction matrix standard deviation')
+        plt.title('Interaction matrix eigenvalues')
 
         screen = ssao.get_phasescreen_at_time(0)
         if xp.on_gpu:
             screen = screen.get()
         plt.figure()
-        myimshow(screen, title='Atmo screen [m]', cmap='RdBu')
+        myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
-    masked_input_phases, _, masked_residual_phases, detector_frames, rec_modes, dm_commands = ssao.load_telemetry_data()
+    ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
 
-    last_res_phase = xp.array(masked_residual_phases[-1,:,:])
-    residual_phase = last_res_phase[~ssao.cmask]
+    if show_contrast:
+        ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='')
 
-    oversampling = 8
-    padding_len = int(ssao.cmask.shape[0]*(oversampling-1)/2)
-    psf_mask = xp.pad(ssao.cmask, padding_len, mode='constant', constant_values=1)
-    electric_field_amp = 1-psf_mask
-    input_phase = reshape_on_mask(residual_phase, psf_mask)
-    electric_field = electric_field_amp * xp.exp(-1j*xp.asarray(input_phase*(2*xp.pi)/ssao.pyr.lambdaInM))
-    field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(electric_field))
-    psf = abs(field_on_focal_plane)**2
-    # psf = abs(ssao.pyr.field_on_focal_plane)**2
+    ssao.sig2 = sig2
+    if starMagnitudes is not None:
+        ssao.sig = sig
 
-    cmask = ssao.cmask.get() if xp.on_gpu else ssao.cmask.copy()
-    if xp.on_gpu: # Convert to numpy for plotting
-        input_sig2 = input_sig2.get()
-        sig2 = sig2.get()
-        if starMagnitudes is not None:
-            sig = sig.get()
-        rec_modes = rec_modes.get()
-
-    plt.figure(figsize=(9,9))
-    plt.subplot(2,2,1)
-    myimshow(masked_array(masked_input_phases[-1],cmask), \
-        title=f'Atmosphere phase [m]\nStrehl ratio = {xp.exp(-input_sig2[-1]):1.3f}',\
-        cmap='RdBu',shrink=0.8)
-    plt.axis('off')
-
-    pixelsPerMAS = ssao.pyr.lambdaInM/ssao.pupilSizeInM/ssao.pyr.oversampling*180/xp.pi*3600*1000
-    plt.subplot(2,2,2)
-    showZoomCenter(psf, pixelsPerMAS, shrink=0.8, \
-        title = f'Corrected PSF\nStrehl ratio = {xp.exp(-sig2[-1]):1.3f}',cmap='inferno') 
-
-    plt.subplot(2,2,3)
-    myimshow(detector_frames[-1], title = 'Detector image', shrink=0.8)
-
-    plt.subplot(2,2,4)
-    ssao.dm.plot_position(dm_commands[-1])
-    plt.title('Mirror command [m]')
-    plt.axis('off')
-
-    tvec = xp.arange(ssao.Nits)*ssao.dt*1e+3
-    tvec = tvec.get() if xp.on_gpu else tvec.copy()
+    tvec = xp.asnumpy(xp.arange(ssao.Nits)*ssao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,input_sig2,'-o',label='open loop')
-    plt.plot(tvec,sig2,'-o',label='closed loop')
+    plt.plot(tvec,xp.asnumpy(input_sig2),'-.',label='open loop')
+    plt.plot(tvec,xp.asnumpy(sig2),'-.',label='closed loop')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])
@@ -141,24 +131,26 @@ def main(tn:str='example_single_stage', show:bool=False, starMagnitudes=None): #
 
     if starMagnitudes is not None:
         plt.figure()
+        SR_stars = np.zeros(len(starMagnitudes))
         for k,mag in enumerate(starMagnitudes):
-            sr_ss = np.mean(np.exp(-sig[k,100:]))
-            plt.plot(tvec,sig[k],label=f'magV={mag:1.1f}, SR={sr_ss:1.2f}')
+            SR_stars[k] = np.mean(np.exp(-sig[k,-it_ss:]))
+            plt.plot(tvec,xp.asnumpy(sig[k]),'-.',label=f'magV={mag:1.1f}, SR={xp.asnumpy(SR_stars[k]):1.2f}')
         plt.legend()
         plt.grid()
         plt.xlim([0.0,tvec[-1]])
         plt.xlabel('Time [ms]')
         plt.ylabel(r'$\sigma^2 [rad^2]$')
         plt.gca().set_yscale('log')
-        plt.title('Strehl vs star magnitude')
+        plt.title(f'Strehl @ {lambdaRef*1e+9:1.0f} [nm] vs star magnitude')
 
-    plt.figure()
-    plt.plot(tvec,rec_modes[:,:10],'-o')
-    plt.grid()
-    plt.xlim([0.0,tvec[-1]])
-    plt.xlabel('Time [ms]')
-    plt.ylabel('amplitude [m]')
-    plt.title('Reconstructor modes\n(first 10)')
+        plt.figure()
+        plt.plot(np.array(starMagnitudes),xp.asnumpy(SR_stars)*100,'-o')
+        # plt.errorbar(np.array(starMagnitudes),SR_stars*100,yerr=0.12,fmt='-o',capsize=4.0)
+        plt.grid()
+        plt.xlabel('magV')
+        plt.ylabel('SR %')
+        plt.title('Strehl ratio vs star magnitude')
+        plt.xticks(np.array(starMagnitudes))
     
     plt.show()
 

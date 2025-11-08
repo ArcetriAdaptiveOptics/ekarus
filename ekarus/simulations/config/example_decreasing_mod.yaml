@@ -1,0 +1,43 @@
+DM: 
+  Nacts: 468
+  max_stroke_in_m: 5e-6   
+
+PYR:
+  oversampling: 4           # oversampling for PSF computation
+  lambdaInM: 750e-9        # [m] sensor wavelength
+  bandWidthInM: 0e-9        # [m] sensor band amplitude
+  subapPixSize: 35.5        # subaperture diameter in pix
+  subapPixSep: 8           # pixel distance between subaps
+
+CCD:
+  detector_shape: [144,144]    # detector pixel size
+  RON: 0.3                      # readout noise in e-
+  quantum_efficiency: 0.9       # detector quantum efficiency
+  beam_splitter_ratio: 0.5      # fraction of light to WFS
+
+SLOPE.COMPUTER:
+  loopFrequencyInHz: 1500     
+  integratorGain: 0.9           # loop integrator gain
+  delay: 2                      # loop delay in steps
+  nModes2Correct: 415           # number of reconstructor modes
+  ttOffloadFrequencyInHz: 0     # TBI
+  modulationInLambdaOverD: 3.0
+
+TELESCOPE:
+  pupilSizeInM: 1.8         # [m] telescope diameter
+  centerObscuration: 0.6    # [m] central obscuration diameter
+  pupilSizeInPixels: 128    # pixels across the pupil diameter
+  throughput: 0.11          # accounting for beam splitter
+
+ATMO:
+  outerScaleInM: 25         # [m]
+  r0: [12e-2, 10e-2, 10e-2] # [m]
+  windSpeed: [6, 8, 12]     # [m/s]
+  windAngle: [-120, 45, 0]  # [deg] CCW from East
+
+LOOP:
+  nIterations: 500
+  starMagnitude: 1.0
+  simFreqHz: 1500          # simulation frequency in Hz
+  recompute: False         # if False, any calibration data saved from 
+                           # previous runs is loaded rather than recomputed

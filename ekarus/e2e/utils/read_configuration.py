@@ -22,6 +22,10 @@ class ConfigReader():
         """ Read sensor parameters from the configuration file."""
         self._cfile[sensor_name]['lambdaInM'] = eval(self._cfile[sensor_name]['lambdaInM'])
         self._cfile[sensor_name]['bandWidthInM'] = eval(self._cfile[sensor_name]['bandWidthInM'])
+        try:
+            type = self._cfile[sensor_name]['type']
+        except KeyError:
+            self._cfile[sensor_name]['type'] = '4PWFS'
         return self._cfile[sensor_name]
 
     def read_detector_pars(self, detector_name: str = 'DETECTOR'):
@@ -38,12 +42,20 @@ class ConfigReader():
     
     def read_atmo_pars(self):
         """ Read atmosphere parameters from the configuration file."""
-        self._cfile['ATMO']['r0'] = xp.array([eval(x) for x in self._cfile['ATMO']['r0']])
+        try:
+            cn2 = xp.array(self._cfile['ATMO']['cn2'])/100
+            r0 = eval(self._cfile['ATMO']['r0'])
+            self._cfile['ATMO']['r0'] = r0*cn2**(-3/5)
+        except KeyError:
+            self._cfile['ATMO']['r0'] = xp.array([eval(x) for x in self._cfile['ATMO']['r0']])
+        self._cfile['ATMO']['windSpeed'] = xp.asarray(self._cfile['ATMO']['windSpeed'])
         self._cfile['ATMO']['windAngle'] = xp.asarray(self._cfile['ATMO']['windAngle'])*xp.pi/180
         return self._cfile['ATMO']
     
     def read_slope_computer_pars(self, slope_computer_name: str = 'SLOPE.COMPUTER'):
         """ Read slope computer parameters from the configuration file."""
+        self._cfile[slope_computer_name]['integratorGain'] = xp.asarray(self._cfile[slope_computer_name]['integratorGain'])
+        self._cfile[slope_computer_name]['nModes2Correct'] = xp.asarray(self._cfile[slope_computer_name]['nModes2Correct'])
         return self._cfile[slope_computer_name]
 
     def read_loop_pars(self):

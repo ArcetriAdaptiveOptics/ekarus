@@ -1,19 +1,20 @@
 IMPORTANT:
-Loop on different wavelengths check
-Central obscuration
 
-
-EXTRAS:
-Zernike WFS
-Shack Hartmann WFS
-
-Pass the mask as input to the DM constructor!
+Matrix OG
 Control Filter Class ('leaky' integrator)
+PWFS error budget (aliasing vs noise vs subaperture size)
+Slaving update (IMm.T @ IMm + LAMBDA) @ IMm.T
 
-Convert DM sim with GPU
+
+FUTURE UPDATES:
+
+Plot animation
+Segmented hexagonal masks (HCIpy?)
 
 
-CODING/EASE-OF_USE:
-Documentation (!!!)
-Restore Circular Mask
 
+COSMETIC CHANGES:
+
+Remove xupy (cupy) dependency
+Remove arte dependency
+GPU-accelerated tps

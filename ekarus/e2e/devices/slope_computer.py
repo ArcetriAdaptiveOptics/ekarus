@@ -9,61 +9,95 @@ from ..utils.root import calibpath #resultspath
 
 class SlopeComputer():
 
-    def __init__(self, wfs, detector, sc_pars):
+    def __init__(self, wfs, detector, sc_pars=None):
         """ The constructor """
 
         self._wfs = wfs
         self._detector = detector
 
-        (
-            self.dt,
-            self.intGain,
-            self.delay,
-            self.nModes,
-            self.ttOffloadFreqHz,
-        ) = (
-            1 / sc_pars["loopFrequencyInHz"],
-            sc_pars["integratorGain"],
-            sc_pars["delay"],
-            sc_pars["nModes2Correct"],
-            sc_pars["ttOffloadFrequencyInHz"],
-        )
+        try:
+            (
+                self.dt,
+                self.intGain,
+                self.delay,
+                self.nModes,
+            ) = (
+                1 / sc_pars["loopFrequencyInHz"],
+                sc_pars["integratorGain"],
+                sc_pars["delay"],
+                sc_pars["nModes2Correct"],
+            )
+        except KeyError:
+            pass
+
+        self.nModes = int(xp.max(xp.sum(self.nModes)))
 
         if hasattr(wfs,'apex_angle'):
-            self.wfs_type = 'PyrWFS'
+            self.wfs_type = 'PWFS'
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
+        elif hasattr(wfs,'vertex3_angle'):
+            self.wfs_type = '3PWFS'
+            self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
+        elif hasattr(wfs,'dot_radius'):
+            self.wfs_type = 'ZWFS'
         else:
-            raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
-        
-
-        self.dtype = xp.float
+            raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
 
 
-    def calibrate_sensor(self, tn:str, prefix_str:str, **kwargs):
+    def calibrate_sensor(self, tn:str, prefix_str:str, recompute:bool, **kwargs):
         """
         Calibrates the sensor.
         
         Cases
         -----
-        - PyrWFS: defines the subaperture masks
+        - PWFS/3PWFS: defines the subaperture masks
         """
+        roi_path = join(calibpath, tn, prefix_str+'ROI-Masks.fits')    
         match self.wfs_type:
-            case 'PyrWFS':
-                subap_path = join(calibpath, tn, prefix_str+'SubapertureMasks.fits')
+            case 'PWFS':
                 piston, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
-                    subaperture_masks = read_fits(subap_path).astype(bool)
-                    self._subaperture_masks = xp.asarray(subaperture_masks)
+                    if recompute is True:
+                        raise FileNotFoundError('Recompute is True')
+                    subaperture_masks = read_fits(roi_path).astype(bool)
+                    self._roi_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
-                    self._define_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
+                    self._define_pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
                     hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
-                    save_fits(subap_path, (self._subaperture_masks).astype(xp.uint8), hdr_dict)
+                    save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
+            case '3PWFS':
+                piston, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
+                try:
+                    if recompute is True:
+                        raise FileNotFoundError('Recompute is True')
+                    subaperture_masks = read_fits(roi_path).astype(bool)
+                    self._roi_masks = xp.asarray(subaperture_masks)
+                except FileNotFoundError:
+                    print('Defining the detector subaperture masks ...')
+                    self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
+                    modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
+                    detector_image = self._detector.image_on_detector(modulated_intensity)
+                    self._define_3pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
+                    hdr_dict = {'APEX_ANG': self._wfs.vertex3_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
+                    save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
+            case 'ZWFS':
+                try:
+                    if recompute is True:
+                        raise FileNotFoundError('Recompute is True')
+                    subaperture_masks = read_fits(roi_path).astype(bool)
+                    self._roi_masks = xp.asarray(subaperture_masks)
+                except FileNotFoundError:
+                    camera_shape = self._detector.detector_shape
+                    roiSizeInPix = max(camera_shape)/self._wfs.cropSize
+                    roi_mask = get_circular_mask(camera_shape, mask_radius=roiSizeInPix/2)
+                    self._roi_masks = roi_mask
+                    save_fits(roi_path, (self._roi_masks).astype(xp.uint8))
             case _:
-                raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
+                raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
     
 
     def compute_slopes(self, input_field, lambdaOverD, nPhotons, **kwargs):
@@ -75,103 +109,168 @@ class SlopeComputer():
         detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
 
         match self.wfs_type:
-            case 'PyrWFS':
-                slopes = self._compute_pyramid_slopes(detector_image, **kwargs)
+            case 'PWFS':
+                slopes = self._compute_pyr_signal(detector_image, **kwargs)
+            case '3PWFS':
+                slopes = self._compute_3pyr_signal(detector_image, **kwargs)
+            case 'ZWFS':
+                slopes = detector_image[~self._roi_masks]
             case _:
-                raise NotImplementedError('Unrecognized sensor type. Available types are: PyrWFS')
+                raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
 
         return slopes
-
-
-    def load_reconstructor(self, Rec, m2c):
+    
+    
+    def load_reconstructor(self, IM, m2c, opt_gains=None):
         """
         Load the reconstructor and the mode-to-command matrix
         """
-        self.Rec = Rec
-        self.m2c = m2c
-        modal_gains = xp.zeros(xp.shape(Rec)[0])
-        modal_gains[:self.nModes] = 1
-        self.modal_gains = modal_gains
-        
+        Rec = xp.linalg.pinv(IM[:,:self.nModes])
+        self.Rec = Rec.copy()
+        self.m2c = m2c[:,:self.nModes].copy()
+        if opt_gains is not None:
+            self.opt_gains = opt_gains.copy()
 
-    def _compute_pyramid_slopes(self, detector_image, use_diagonal:bool=False):
 
-        A = detector_image[~self._subaperture_masks[0]]
-        B = detector_image[~self._subaperture_masks[1]]
-        C = detector_image[~self._subaperture_masks[2]]
-        D = detector_image[~self._subaperture_masks[3]]
+    # def load_reconstructor(self, Rec, m2c):
+    #     """
+    #     Load the reconstructor and the mode-to-command matrix
+    #     """
+    #     self.Rec = Rec[:self.nModes,:]
+    #     self.m2c = m2c[:,:self.nModes]
 
-        up_down = (A+B) - (C+D)
-        left_right = (A+C) - (B+D)
 
-        slopes = xp.hstack((up_down, left_right))
+    # def load_optical_gains(self, opt_gains):
+    #     """
+    #     Load the optical gains
+    #     """
+    #     self.optGains = opt_gains[:self.nModes]
 
-        if use_diagonal:
-            ccd_lr = xp.fliplr(detector_image)
-            maskAlr = xp.fliplr(self._subaperture_masks[0])
-            maskClr = xp.fliplr(self._subaperture_masks[2])
-            Alr = ccd_lr[~maskAlr]
-            Clr = ccd_lr[~maskClr]
-            diag = (B+Clr) - (Alr+D)
-            slopes = xp.hstack((up_down, left_right, diag))
 
-        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))
+    def _compute_pyr_signal(self, detector_image, method:str='slopes'):
+        A = detector_image[~self._roi_masks[0]]
+        B = detector_image[~self._roi_masks[1]]
+        C = detector_image[~self._roi_masks[2]]
+        D = detector_image[~self._roi_masks[3]]
+
+        match method:
+            case 'slopes':
+                up_down = (A+B) - (C+D)
+                left_right = (A+C) - (B+D)
+                slopes = xp.hstack((up_down, left_right))
+
+            case 'diagonal_slopes':
+                up_down = (A+B) - (C+D)
+                left_right = (A+C) - (B+D)
+                # diag = (A+D) - (B+C)
+                diag = xp.sqrt(2)*(A+D) - xp.sqrt(2)*(B+C)
+                slopes = xp.hstack((up_down, left_right, diag))
+                
+            case 'raw_intensity':
+                slopes = xp.hstack((A,B,C,D))
+
+            case _:
+                raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'diagonal_slopes'")
+            
+        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))#/4
         slopes *= 1/mean_intensity
+        return slopes
+    
 
+    def _compute_3pyr_signal(self, detector_image, method:str='slopes'):
+        A = detector_image[~self._roi_masks[0]]
+        B = detector_image[~self._roi_masks[1]]
+        C = detector_image[~self._roi_masks[2]]
+
+        match method:
+            case 'slopes':
+                up_down = xp.sqrt(3)/2*(B-C)
+                left_right = A - (B+C)/2
+                slopes = xp.hstack((up_down, left_right))
+
+            case 'all_slopes':
+                ab = (A+B)/2-C
+                ac = (A+C)/2-B
+                bc = (C+B)/2-A
+                slopes = xp.hstack((ab,ac,bc))
+                
+            case 'raw_intensity':
+                slopes = xp.hstack((A,B,C))
+
+            case _:
+                raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'all_slopes'")
+            
+        mean_intensity = xp.mean(xp.hstack((A,B,C)))
+        slopes *= 1/mean_intensity
         return slopes
     
     
-    def _define_subaperture_masks(self, subaperture_image, Npix, centerObscPixDiam:float = 0.0):
+    def _define_pyr_subaperture_masks(self, subaperture_image, Npix, centerObscPixDiam:float = 0.0):
         """
         Create subaperture masks for the given shape and pixel size.
 
         :return: array of 4 boolean masks for each subaperture
         """
-
         ny,nx = subaperture_image.shape
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
-
         for i in range(4):
-            # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=self.dtype)
-            qx,qy = self.find_subaperture_center(subaperture_image, quad_n=i+1)
+            # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=xp.float)
+            qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
             if centerObscPixDiam > 0.0:
-                obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam/2+0.5, mask_center=(qx,qy))
+                obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
                 subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)
+        self._roi_masks = subaperture_masks
 
-        self._subaperture_masks = subaperture_masks
+
+    def _define_3pyr_subaperture_masks(self, subaperture_image, Npix, centerObscPixDiam:float = 0.0):
+        """
+        Create subaperture masks for the given shape and pixel size.
+
+        :return: array of 3 boolean masks for each subaperture
+        """
+        ny,nx = subaperture_image.shape
+        subaperture_masks = xp.zeros((3, ny, nx), dtype=bool)
+        for i in range(3):
+            qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='triangle')
+            subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
+            if centerObscPixDiam > 0.0:
+                obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
+                subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)
+        self._roi_masks = subaperture_masks
 
     
     @staticmethod
-    def find_subaperture_center(detector_image, quad_n:int = 1):
-
+    def find_subaperture_center(detector_image, index:int=1, mode:str='quadrant'):
         X,Y = image_grid(detector_image.shape, recenter=True)
-        quadrant_mask = xp.zeros_like(detector_image, dtype=xp.float)
-
-        match quad_n:
-            # case 1:
-            #     quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
-            # case 2:
-            #     quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
-            # case 3:
-            #     quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
-            # case 4:
-            #     quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
-            case 1:
-                quadrant_mask[xp.logical_and(X >= 0, Y < 0)] = 1
-            case 2:
-                quadrant_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
-            case 3:
-                quadrant_mask[xp.logical_and(X < 0, Y < 0)] = 1
-            case 4:
-                quadrant_mask[xp.logical_and(X < 0, Y >= 0)] = 1
-            case _:
-                raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
-
-        quadrant_mask = xp.reshape(quadrant_mask, detector_image.shape)
-        intensity = detector_image * quadrant_mask
-
+        roi_mask = xp.zeros_like(detector_image, dtype=xp.float)
+        if mode == 'quadrant':
+            match index:
+                case 1:
+                    roi_mask[xp.logical_and(X >= 0, Y < 0)] = 1
+                case 2:
+                    roi_mask[xp.logical_and(X >= 0, Y >= 0)] = 1
+                case 3:
+                    roi_mask[xp.logical_and(X < 0, Y < 0)] = 1
+                case 4:
+                    roi_mask[xp.logical_and(X < 0, Y >= 0)] = 1
+                case _:
+                    raise ValueError('Possible quadrant numbers are 1,2,3,4 (numbered left-to-right top-to-bottom starting from the top left)')
+        elif mode == 'triangle':
+            match index:
+                case 1:
+                    roi_mask[X > abs(Y)/xp.tan(xp.pi/3)] = 1
+                case 2:
+                    roi_mask[xp.logical_and(Y >= 0, X <= abs(Y)/xp.tan(xp.pi/3))] = 1
+                case 3:
+                    roi_mask[xp.logical_and(Y < 0, X <= abs(Y)/xp.tan(xp.pi/3))] = 1
+                case _:
+                    raise ValueError('Possible quadrant numbers are 1,2,3 (right, top-left, bottom-left)')
+        roi_mask = xp.reshape(roi_mask, detector_image.shape)
+        intensity = detector_image * roi_mask
         qx,qy = get_photocenter(intensity)
-
-        # return qy,qx
-        return xp.round(qy), xp.round(qx)
+        
+        if mode == 'quadrant':
+            return xp.round(qy), xp.round(qx)
+        else:
+            return xp.round(qx-0.5), xp.round(qy-0.5)

@@ -17,16 +17,14 @@ def image_grid(shape, recenter:bool = False):
     :param xp: (optional) numpy or cupy for GPU acceleration
     :return: X,Y grid of coordinates
     """
-
     ny, nx = shape
-    dtype = xp.float
 
     cy, cx = (0,0)
     if recenter:
         cy, cx = ny//2, nx//2
 
-    x = xp.arange(nx, dtype=dtype) - cx
-    y = xp.arange(ny, dtype=dtype) - cy
+    x = xp.arange(nx, dtype=xp.float) - cx
+    y = xp.arange(ny, dtype=xp.float) - cy
     X,Y = xp.meshgrid(x, y)
 
     return X,Y
@@ -67,6 +65,7 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None):
     mask = xp.asarray(mask,dtype=bool)
     return mask
 
+
 def reshape_on_mask(vec, mask):
     """
     Reshape a given array on a 2D mask.
@@ -77,23 +76,93 @@ def reshape_on_mask(vec, mask):
     image = xp.zeros(mask.shape, dtype=xp.float)
     image[~mask] = vec
     image = xp.reshape(image, mask.shape)
-    return image
+    return xp.array(image)
 
+
+def bilinear_interp(data_2D, full_mask, xy_shift:tuple, min_shift:float=1e-8):
+
+    dx, dy = abs(xy_shift[0]), abs(xy_shift[1])
+    sdx, sdy = int(xp.sign(xy_shift[0])), int(xp.sign(xy_shift[1]))
+
+    dx_int = int(xp.floor(dx) * (sdx>0) + xp.ceil(dx) * (sdx<0))
+    dy_int = int(xp.floor(dy) * (sdy>0) + xp.ceil(dy) * (sdy<0))
+
+    shifted_mask = xp.roll(full_mask,(dy_int*sdy,dx_int*sdx),axis=(0,1))
+    data = data_2D[~shifted_mask]
+    shifted_data = reshape_on_mask(data, shifted_mask)
+
+    dx -= dx_int
+    dy -= dy_int
+
+    if dx > min_shift and dy > min_shift:
+        dx_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,sdx,axis=1)], shifted_mask)
+        dy_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,sdy,axis=0)], shifted_mask)
+        dxdy_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,(sdy,sdx),axis=(0,1))], shifted_mask)
+        interp_data = (shifted_data * (1-dx) + dx * dx_data) * (1-dy) + (dy_data * (1-dx) + dx * dxdy_data) * dy
+
+    elif dx > min_shift:
+        dx_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,sdx,axis=1)], shifted_mask)
+        interp_data = shifted_data * (1-dx) + dx_data * dx
+
+    elif dy > min_shift:
+        dy_data = reshape_on_mask(shifted_data[~xp.roll(shifted_mask,sdy,axis=0)], shifted_mask)
+        interp_data = shifted_data * (1-dy) + dy_data * dy
+
+    else:
+        interp_data = shifted_data.copy()
+
+    return interp_data
+
+
+def remap_on_new_mask(data, old_mask, new_mask):
+    """ 
+    Remaps the matrix data defined on valid values 
+    of old_mask to valid values on new_mask.
+
+    """
+    old_len = xp.sum(1-old_mask)
+    new_len = xp.sum(1-new_mask)
+
+    if old_len < new_len:
+        raise ValueError(f'Cannot reshape from {old_len} to {new_len}')
+
+    transpose = False
+    if xp.shape(data)[0] != old_len:
+        data = data.T
+        transpose = True
+
+    if xp.shape(data)[0] != old_len:
+        raise ValueError(f'Mask length {old_len} is incompatible with dimensions {data.shape}')
+    elif len(xp.shape(data)) > 2:
+        raise ValueError('Can only operate on 2D arrays')
+    
+    N = data.shape[1]
+    remasked_data = xp.zeros([int(new_len),N])
+
+    for j in range(N):
+        old_data_2D = reshape_on_mask(data[:,j], old_mask)
+        remasked_data[:,j] = old_data_2D[~new_mask]
+
+    if transpose:
+        remasked_data = remasked_data.T
+    
+    return remasked_data
 
 # def get_masked_array(vec, mask):
-#     if hasattr(vec, 'get'):
-#         vec = vec.get()
+#     vec2D = reshape_on_mask(vec, mask)
+#     if hasattr(vec2D, 'get'):
+#         vec2D = vec2D.get()
 #     if hasattr(mask, 'get'):
 #         mask = mask.get() 
-#     aux = reshape_on_mask(vec, mask)
-#     ma_vec = xp.masked_array(aux, mask)
+#     ma_vec = np.ma.masked_array(vec2D, mask)
 #     return ma_vec
 
 
 def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', shrink=1.0, **kwargs):
     sz=image2d.shape
     plt.imshow(image2d, extent=[-sz[0]/2*pixelSize, sz[0]/2*pixelSize,
-                                -sz[1]/2*pixelSize, sz[1]/2*pixelSize],origin='lower', **kwargs)
+                                -sz[1]/2*pixelSize, sz[1]/2*pixelSize],
+                                origin='lower', **kwargs)
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -105,7 +174,7 @@ def showZoomCenter(image, pixelSize, **kwargs):
     if hasattr(image,'get'):
         image = image.get()
     imageHalfSizeInPoints= image.shape[0]/2
-    roi= [int(imageHalfSizeInPoints*0.9), int(imageHalfSizeInPoints*1.1)]
+    roi= [int(imageHalfSizeInPoints*0.8), int(imageHalfSizeInPoints*1.2)]
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
 
@@ -118,3 +187,5 @@ def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
     cbar = plt.colorbar(shrink=shrink)
     cbar.set_label(cbar_title,loc='top')
     plt.title(title)
+
+
