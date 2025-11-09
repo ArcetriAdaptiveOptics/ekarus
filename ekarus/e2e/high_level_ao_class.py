@@ -24,7 +24,7 @@ class HighLevelAO():
         if not os.path.exists(self.savecalibpath):
             os.mkdir(self.savecalibpath)
 
-        self.dtype = xp.float
+        self.dtype = np.float64 #xp.float
         self.atmo_pars = None
 
         self._config = ConfigReader(tn)
@@ -69,7 +69,7 @@ class HighLevelAO():
             pass
     
 
-    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2, save_prefix:str=''):
+    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2, filt_modes=None, save_prefix:str=''):
         """
         Defines the Karhunen-Loève (KL) modes for the given DM and oversampling.
         
@@ -110,15 +110,8 @@ class HighLevelAO():
                 IFFs = IFFs[:,dm.master_ids]
                 print(f'SLAVING: downsized IFFs from {dm.IFF.shape} to {IFFs.shape}')
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
-                self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes,
-                oversampling=oversampling, if_max_condition_number=100, verbose=True, xp=xp, dtype=self.dtype)            
-            # KL, m2c, _ = make_modal_base_from_ifs_fft(1-dm.mask, self.pupilSizeInPixels, 
-            #     self.pupilSizeInM, dm.IFF.T, r0, L0, zern_modes=zern_modes,
-            #     oversampling=oversampling, verbose=True, xp=xp, dtype=self.dtype)
-            # if dm.slaving is not None: # slaving
-            #     old_shape = KL.shape
-            #     KL = remap_on_new_mask(KL, dm.mask, dm.pupil_mask)
-            #     print(f'SLAVING: downsized KL from {old_shape} to {KL.shape}')
+                self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes, filt_modes = filt_modes,
+                oversampling=oversampling, if_max_condition_number=100, verbose=True, xp=xp, dtype=self.dtype)         
             hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
             myfits.save_fits(m2c_path, m2c, hdr_dict)
             myfits.save_fits(KL_path, KL, hdr_dict)
@@ -474,7 +467,7 @@ class HighLevelAO():
                 phi = atmo_phase[~self.cmask]
                 phi_atmo = phi*2*xp.pi/self.pyr.lambdaInM
                 input_field = field_amp * xp.exp(1j*atmo_phase*2*xp.pi/self.pyr.lambdaInM)
-                slopes = slope_computer.compute_slopes(input_field, lambdaOverD, None, method=method)
+                slopes = slope_computer.compute_slopes(input_field, lambdaOverD, None)
                 rec_modes = slope_computer.Rec @ slopes
                 rec_phi = MM[:slope_computer.nModes,:].T @ rec_modes
                 res_phi = phi_atmo - rec_phi

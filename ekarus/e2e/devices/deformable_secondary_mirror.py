@@ -180,9 +180,9 @@ class DSM(DeformableMirror):
 
         iff_path = os.path.join(dir_path,str(Npix)+'pixels_InfluenceFunctions.fits')
         try:
-            self.IFF = (myfits.read_fits(iff_path)).astype(xp.float)
+            self.IFF = myfits.read_fits(iff_path)
         except FileNotFoundError:
-            self.IFF = (dmutils.simulate_influence_functions(self.act_coords, self.mask)).astype(xp.float)
+            self.IFF = dmutils.simulate_influence_functions(self.act_coords, self.mask)
             myfits.save_fits(iff_path, self.IFF, hdr_dict)
 
 

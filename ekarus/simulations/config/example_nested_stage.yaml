@@ -18,11 +18,10 @@ CCD.out:
 
 SLOPE.COMPUTER.out:
   loopFrequencyInHz: 1000     
-  integratorGain: 0.9           # loop integrator gain
-  delay: 20                      # loop delay in steps
-  nModes2Correct: 415           # number of reconstructor modes
-  ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
-  modulationInLambdaOverD: 3.0  # modulation amplitude
+  integratorGain: [0.9]           # loop integrator gain
+  delay: 20                       # loop delay in steps
+  nModes2Correct: [415]           # number of reconstructor modes
+  modulationInLambdaOverD: 3.0    # modulation amplitude
 
 DM.in: 
   Nacts: 16
@@ -31,10 +30,10 @@ DM.in:
 
 PYR.in:
   oversampling: 4
-  lambdaInM: 1200e-9             # [m] sensor wavelength
+  lambdaInM: 1200e-9            # [m] sensor wavelength
   bandWidthInM: 0e-9            # [m] sensor band amplitude
   subapPixSize: 23.5            # subaperture diameter in pix
-  subapPixSep: 8               # pixel distance between subaps
+  subapPixSep: 8                # pixel distance between subaps
 
 CCD.in:
   detector_shape: [96,96]       # detector pixel size
@@ -44,9 +43,9 @@ CCD.in:
 
 SLOPE.COMPUTER.in:
   loopFrequencyInHz: 10000     
-  integratorGain: 0.3           # loop integrator gain
+  integratorGain: [0.3]           # loop integrator gain
   delay: 2                      # loop delay in steps
-  nModes2Correct: 175           # number of reconstructor modes
+  nModes2Correct: [175]           # number of reconstructor modes
   ttOffloadFrequencyInHz: 0     # if 0, no TT offloading
   modulationInLambdaOverD: 0.0  # modulation amplitude
 

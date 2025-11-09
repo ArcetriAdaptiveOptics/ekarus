@@ -154,12 +154,10 @@ class NestedStageAO(HighLevelAO):
             if save_prefix is not None:  
                 input_phases[i, :] = input_phase          
                 residual_phases[i, :] = residual_phase
-                dm1_phases[i, :] = self.dm1.surface
                 ccd1_images[i, :, :] = self.ccd1.last_frame
                 rec1_modes[i, :] = modes1
 
                 residual_in_phases[i, :] = residual_in_phase
-                dm2_phases[i, :] = self.dm2.surface
                 ccd2_images[i, :, :] = self.ccd2.last_frame
                 rec2_modes[i, :] = modes2
         
@@ -274,14 +272,14 @@ class NestedStageAO(HighLevelAO):
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res1_modes = xp.zeros([N,self.KL.shape[0]])
         res2_modes = xp.zeros([N,self.KL.shape[0]])
-        phase2modes = xp.linalg.pinv(self.KL.T)
+        phase2modes = xp.linalg.pinv(self.KL) #xp.linalg.pinv(self.KL.T)
         for frame in range(N):
             atmo_phase = xp.asarray(ma_atmo_phases[frame].data[~ma_atmo_phases[frame].mask])
-            atmo_modes[frame,:] = phase2modes @ atmo_phase
+            atmo_modes[frame,:] = xp.dot(atmo_phase,phase2modes) #phase2modes @ atmo_phase
             res1_phase = xp.asarray(res_in_phases[frame].data[~res_in_phases[frame].mask])
-            res1_modes[frame,:] = phase2modes @ res1_phase
+            res1_modes[frame,:] = xp.dot(res1_phase,phase2modes) #pphase2modes @ res1_phase
             res2_phase = xp.asarray(res_out_phases[frame].data[~res_out_phases[frame].mask])
-            res2_modes[frame,:] = phase2modes @ res2_phase
+            res2_modes[frame,:] = xp.dot(res2_phase,phase2modes) #p phase2modes @ res2_phase
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
         res1_mode_rms = xp.sqrt(xp.mean(res1_modes**2,axis=0))
         res2_mode_rms = xp.sqrt(xp.mean(res2_modes**2,axis=0))

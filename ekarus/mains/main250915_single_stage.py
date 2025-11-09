@@ -30,9 +30,10 @@ def main(tn:str='example_single_stage',
 
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence()
-    ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
+    ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)#max((1.0,ssao.sc.modulationAngleInLambdaOverD)))
     Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 
@@ -78,7 +79,7 @@ def main(tn:str='example_single_stage',
     # Post-processing and plotting
     print('Plotting results ...')
     if show:
-        subap_masks = xp.sum(ssao.sc._subaperture_masks,axis=0)
+        subap_masks = xp.sum(ssao.sc._roi_masks,axis=0)
         plt.figure()
         myimshow(subap_masks,title='Subaperture masks')
 
@@ -95,7 +96,7 @@ def main(tn:str='example_single_stage',
             plt.subplot(4,N,i+1+N*3)
             ssao.dm.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-N+i}')
 
-        IM = myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits'))
+        IM = xp.asarray(myfits.read_fits(op.join(ssao.savecalibpath,'IM.fits')))
         # IM_std = xp.std(IM,axis=0)
         _,Sim,_ = xp.linalg.svd(IM, full_matrices=False)
         plt.figure()
