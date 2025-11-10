@@ -160,7 +160,6 @@ class CascadingAO(HighLevelAO):
                 residual1_phases[i, :] = residual1_phase
                 ccd1_images[i, :, :] = self.ccd1.last_frame
                 rec1_modes[i, :] = modes1
-
                 residual2_phases[i, :] = residual2_phase
                 ccd2_images[i, :, :] = self.ccd2.last_frame
                 rec2_modes[i, :] = modes2
@@ -275,13 +274,14 @@ class CascadingAO(HighLevelAO):
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res1_modes = xp.zeros([N,self.KL.shape[0]])
         res2_modes = xp.zeros([N,self.KL.shape[0]])
-        phase2modes = xp.linalg.pinv(self.KL.T)
+        phase2modes =xp.linalg.pinv(self.KL)# xp.linalg.pinv(self.KL.T)
         for frame in range(N):
-            atmo_phase = xp.asarray(ma_atmo_phases[frame].data[~ma_atmo_phases[frame].mask])
+            mask = ma_atmo_phases[-N+frame].mask.copy()
+            atmo_phase = xp.asarray(ma_atmo_phases[-N+frame].data[~mask])
             atmo_modes[frame,:] = phase2modes @ atmo_phase
-            res1_phase = xp.asarray(res1_phases[frame].data[~res1_phases[frame].mask])
+            res1_phase = xp.asarray(res1_phases[-N+frame].data[~mask])
             res1_modes[frame,:] = phase2modes @ res1_phase
-            res2_phase = xp.asarray(res2_phases[frame].data[~res2_phases[frame].mask])
+            res2_phase = xp.asarray(res2_phases[-N+frame].data[~mask])
             res2_modes[frame,:] = phase2modes @ res2_phase
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
         res1_mode_rms = xp.sqrt(xp.mean(res1_modes**2,axis=0))

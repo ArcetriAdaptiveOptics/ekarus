@@ -53,7 +53,7 @@ class SingleStageAO(HighLevelAO):
         self.dm = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, method:str='slopes', save_prefix:str=None):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 
@@ -165,7 +165,7 @@ class SingleStageAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, ma_res_phases, det_frames, rec_modes, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, ma_dm_phases, ma_res_phases, det_frames, rec_modes, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
@@ -197,12 +197,13 @@ class SingleStageAO(HighLevelAO):
         N = 100 if 100 < self.Nits//2 else self.Nits//2
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res_modes = xp.zeros([N,self.KL.shape[0]])
-        phase2modes = xp.linalg.pinv(self.KL.T)
+        phase2modes = xp.linalg.pinv(self.KL) #xp.linalg.pinv(self.KL.T)
         for frame in range(N):
-            atmo_phase = xp.asarray(ma_atmo_phases[frame].data[~ma_atmo_phases[frame].mask])
-            atmo_modes[frame,:] = phase2modes @ atmo_phase
-            res_phase = xp.asarray(ma_res_phases[frame].data[~ma_res_phases[frame].mask])
-            res_modes[frame,:] = phase2modes @ res_phase
+            mask = ma_atmo_phases[-N+frame].mask.copy()
+            atmo_phase = xp.asarray(ma_atmo_phases[-N+frame].data[~mask])
+            atmo_modes[frame,:] = xp.dot(atmo_phase,phase2modes) #phase2modes @ atmo_phase
+            res_phase = xp.asarray(ma_res_phases[-N+frame].data[~mask])
+            res_modes[frame,:] = xp.dot(res_phase,phase2modes) #phase2modes @ res_phase
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
         res_mode_rms = xp.sqrt(xp.mean(res_modes**2,axis=0))
         rec_modes_rms = xp.sqrt(xp.mean(rec_modes[-N-1:-1,:]**2,axis=0))

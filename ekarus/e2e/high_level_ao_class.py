@@ -521,7 +521,7 @@ class HighLevelAO():
         slopes : array
             The computed slopes for each mode.
         """
-        Nmodes = min(slope_computer.nModes,xp.shape(MM)[0])
+        Nmodes = xp.shape(MM)[0] #min(slope_computer.nModes,xp.shape(MM)[0])
         slopes = None
         electric_field_amp = 1-self.cmask
         lambdaOverD = lambdaInM/self.pupilSizeInM

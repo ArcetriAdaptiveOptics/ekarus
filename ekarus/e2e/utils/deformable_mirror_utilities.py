@@ -66,7 +66,7 @@ def simulate_influence_functions(act_coords, local_mask):#, pix_scale:float=1.0)
         img = tps.transform(pix_coords[pix_ids,:])
         IFF[:,k] = img[:,0]
 
-    IFF = xp.asarray(IFF,dtype=xp.float)
+    IFF = xp.asarray(IFF)#,dtype=xp.float)
 
     return IFF
 

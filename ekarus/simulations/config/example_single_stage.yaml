@@ -18,15 +18,15 @@ CCD:
 
 SLOPE.COMPUTER:
   loopFrequencyInHz: 2000     
-  integratorGain: [1.1,0.9]          # loop integrator gain
+  integratorGain: [0.9]     # loop integrator gain
   delay: 2                      # loop delay in steps
-  nModes2Correct: [2,413]           # number of reconstructor modes
+  nModes2Correct: [415]       # number of reconstructor modes
   modulationInLambdaOverD: 3.0
 
 TELESCOPE:
   pupilSizeInM:       1.8    # [m] telescope diameter
   centerObscuration:  0.6    # [m] central obscuration diameter
-  pupilSizeInPixels:  160    # pixels across the pupil diameter
+  pupilSizeInPixels:  128    # pixels across the pupil diameter
   throughput:         0.11          
   spiders:
     angles:   [40,140,-40,-140] # [deg] CCW from East
@@ -40,7 +40,7 @@ ATMO:
   recompute: False
 
 LOOP:
-  nIterations: 1000
+  nIterations: 400
   starMagnitude: 1.0
   simFreqHz: 2000          # simulation frequency in Hz
   recompute: False         # if False, any calibration data saved from 

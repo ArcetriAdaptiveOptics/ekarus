@@ -274,11 +274,12 @@ class NestedStageAO(HighLevelAO):
         res2_modes = xp.zeros([N,self.KL.shape[0]])
         phase2modes = xp.linalg.pinv(self.KL) #xp.linalg.pinv(self.KL.T)
         for frame in range(N):
-            atmo_phase = xp.asarray(ma_atmo_phases[frame].data[~ma_atmo_phases[frame].mask])
+            mask = ma_atmo_phases[-N+frame].mask.copy()
+            atmo_phase = xp.asarray(ma_atmo_phases[-N+frame].data[~mask])
             atmo_modes[frame,:] = xp.dot(atmo_phase,phase2modes) #phase2modes @ atmo_phase
-            res1_phase = xp.asarray(res_in_phases[frame].data[~res_in_phases[frame].mask])
+            res1_phase = xp.asarray(res_in_phases[-N+frame].data[~mask])
             res1_modes[frame,:] = xp.dot(res1_phase,phase2modes) #pphase2modes @ res1_phase
-            res2_phase = xp.asarray(res_out_phases[frame].data[~res_out_phases[frame].mask])
+            res2_phase = xp.asarray(res_out_phases[-N+frame].data[~mask])
             res2_modes[frame,:] = xp.dot(res2_phase,phase2modes) #p phase2modes @ res2_phase
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
         res1_mode_rms = xp.sqrt(xp.mean(res1_modes**2,axis=0))

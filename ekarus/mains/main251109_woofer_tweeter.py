@@ -54,12 +54,12 @@ def main(tn:str='example_woofer_tweeter',
         if gain1_list is not None:
             gain1_vec = xp.array(gain1_list)
         else:
-            gain1_vec = xp.array([0.4,0.5,0.6,0.7,0.8,0.9])
+            gain1_vec = xp.arange(1,11)/10
 
         if gain2_list is not None:
             gain2_vec = xp.array(gain2_list)
         else:
-            gain2_vec = xp.array([0.4,0.5,0.6,0.7,0.8,0.9])
+            gain2_vec = xp.arange(1,11)/10
 
         best_gain1 = gain1_vec[0]
         best_gain2 = gain2_vec[0]
@@ -71,6 +71,8 @@ def main(tn:str='example_woofer_tweeter',
         for gain in gain1_vec:
             cascao = NestedStageAO(tn)
             cascao.initialize_turbulence()
+            cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+            cascao.sc1.load_reconstructor(IM1,m2c1)
             cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
             cascao.sc2.load_reconstructor(IM2,m2c2)
             cascao.sc2.intGain = gain
@@ -136,7 +138,7 @@ def main(tn:str='example_woofer_tweeter',
             plt.subplot(4,N,i+1+N*3)
             cascao.dm1.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
 
-        KL = myfits.read_fits(op.join(cascao.savecalibpath,'woof_KLmodes.fits'))
+        KL = KL1.copy()
         N=9
         plt.figure(figsize=(2*N,7))
         for i in range(N):
@@ -156,6 +158,8 @@ def main(tn:str='example_woofer_tweeter',
         plt.figure()
         plt.plot(xp.asnumpy(IM1_eig),'-o')
         plt.plot(xp.asnumpy(IM2_eig),'-o')
+        plt.xscale('log')
+        plt.yscale('log')
         plt.grid()
         plt.title('Interaction matrix singular values')
 

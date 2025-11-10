@@ -115,7 +115,7 @@ class DSM(DeformableMirror):
                 x, y = xp.meshgrid(xp.linspace(0, dim, n_act), xp.linspace(0, dim, n_act))
                 x, y = x.ravel(), y.ravel()
 
-        coords = xp.array([x,y])
+        coords = xp.vstack((x,y)) #xp.array([x,y])
         return coords
 
 
@@ -164,15 +164,14 @@ class DSM(DeformableMirror):
         try:
             self.act_coords = myfits.read_fits(coords_path)
         except FileNotFoundError:
-            coords = self._getDMcoordinates(n_act, max(pupil_mask.shape), geom=geom)
-            cx = xp.mean(coords[0])
-            cy = xp.mean(coords[1])
-            centered_coords = coords.copy()
-            centered_coords[0] -= cx
-            centered_coords[1] -= cy
+            D = max(pupil_mask.shape)
+            coords = self._getDMcoordinates(n_act, D, geom=geom)
+            centered_coords = xp.asarray(coords,dtype=float)
+            centered_coords[0] -= D/2
+            centered_coords[1] -= D/2
             centered_coords *= (1.0 - 40**2/100/n_act**2)
-            coords[0] = centered_coords[0] + cx
-            coords[1] = centered_coords[1] + cy
+            coords[0] = centered_coords[0] + D/2
+            coords[1] = centered_coords[1] + D/2
             self.act_coords = coords.copy()
             myfits.save_fits(coords_path, self.act_coords, hdr_dict)
 
