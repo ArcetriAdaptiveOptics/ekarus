@@ -24,7 +24,7 @@ class HighLevelAO():
         if not os.path.exists(self.savecalibpath):
             os.mkdir(self.savecalibpath)
 
-        self.dtype = np.float64 #xp.float
+        self.dtype = xp.float
         self.atmo_pars = None
 
         self._config = ConfigReader(tn)

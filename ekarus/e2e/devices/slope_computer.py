@@ -78,6 +78,7 @@ class SlopeComputer():
             iir -= xp.sum(ff,axis=0)
         return iir
 
+
     def calibrate_sensor(self, tn:str, prefix_str:str, recompute:bool, **kwargs):
         """
         Calibrates the sensor.
