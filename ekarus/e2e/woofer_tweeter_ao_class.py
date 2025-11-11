@@ -264,29 +264,28 @@ class WooferTweeterAO(HighLevelAO):
 
         N = 100 if 100 < self.Nits//2 else self.Nits//2
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
-        res1_modes = xp.zeros([N,self.KL.shape[0]])
-        res2_modes = xp.zeros([N,self.KL.shape[0]])
+        # res1_modes = xp.zeros([N,self.sc1.nModes])
+        res2_modes = xp.zeros([N,self.sc1.nModes+self.sc2.nModes])
         phase2modes = xp.linalg.pinv(self.KL) #xp.linalg.pinv(self.KL.T)
         for frame in range(N):
             mask = ma_atmo_phases[-N+frame].mask.copy()
             atmo_phase = xp.asarray(ma_atmo_phases[-N+frame].data[~mask])
             atmo_modes[frame,:] = xp.dot(atmo_phase,phase2modes) #phase2modes @ atmo_phase
-            res1_phase = xp.asarray(res_woofer_phases[-N+frame].data[~mask])
-            res1_modes[frame,:] = xp.dot(res1_phase,phase2modes) #pphase2modes @ res1_phase
+            # res1_phase = xp.asarray(res_woofer_phases[-N+frame].data[~mask])
+            # res1_modes[frame,:] = xp.dot(res1_phase,phase2modes[:,:self.sc1.nModes]) #pphase2modes @ res1_phase
             res2_phase = xp.asarray(res_tweeter_phases[-N+frame].data[~mask])
-            res2_modes[frame,:] = xp.dot(res2_phase,phase2modes) #p phase2modes @ res2_phase
+            res2_modes[frame,:] = xp.dot(res2_phase,phase2modes[:,:(self.sc2.nModes+self.sc1.nModes)]) #p phase2modes @ res2_phase
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
-        res1_mode_rms = xp.sqrt(xp.mean(res1_modes**2,axis=0))
         res2_mode_rms = xp.sqrt(xp.mean(res2_modes**2,axis=0))
         rec1_modes_rms = xp.sqrt(xp.mean(rec1_modes[-N-1:-1,:]**2,axis=0))
         rec2_modes_rms = xp.sqrt(xp.mean(rec2_modes[-N-1:-1,:]**2,axis=0))
 
         plt.figure()
         plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
-        plt.plot(xp.asnumpy(res1_mode_rms)*1e+9,label='residual after woofer (true)')
-        plt.plot(xp.asnumpy(rec1_modes_rms)*1e+9,'--',label='residual after woofer (reconstructed)')
-        plt.plot(xp.asnumpy(res2_mode_rms)*1e+9,label='residual (true)')
-        plt.plot(xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='residual (reconstructed)')
+        plt.plot(xp.asnumpy(rec1_modes_rms)*1e+9,'--',label='woofer measured modes')
+        plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes)+self.sc1.nModes),
+                 xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='tweeter measured modes')
+        plt.plot(xp.asnumpy(res2_mode_rms)*1e+9,label='residual')
         plt.legend()
         plt.xlabel('mode index')
         plt.ylabel('mode RMS amp [nm]')
@@ -298,7 +297,7 @@ class WooferTweeterAO(HighLevelAO):
 
 
 
-    def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=12):
+    def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=8):
         """
         Plots the telemetry data for a specific iteration/frame.
         
@@ -332,8 +331,8 @@ class WooferTweeterAO(HighLevelAO):
         _,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
 
         plt.figure()
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf2),label='After woofer')
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf1),label='After woofer-tweeter')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf1),label='After woofer')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf2),label='After woofer-tweeter')
         plt.legend()
         plt.grid()
         plt.yscale('log')

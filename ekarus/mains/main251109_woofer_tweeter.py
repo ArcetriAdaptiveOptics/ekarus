@@ -7,7 +7,8 @@ import ekarus.e2e.utils.my_fits_package as myfits
 import xupy as xp
 
 
-def main(tn:str='example_woofer_tweeter', 
+def main(tn:str, 
+         atmo_tn:str='paranal',
          show:bool=False, 
          show_contrast:bool=False,
          lambdaRef:float=750e-9,
@@ -20,7 +21,7 @@ def main(tn:str='example_woofer_tweeter',
 
     amp = 0.02
 
-    cascao.initialize_turbulence()
+    cascao.initialize_turbulence(tn=atmo_tn)
 
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='woof_')
 
@@ -47,7 +48,7 @@ def main(tn:str='example_woofer_tweeter',
         if gain1_list is not None:
             gain1_vec = xp.array(gain1_list)
         else:
-            gain1_vec = xp.arange(1,11)/10
+            gain1_vec = xp.arange(1,11)/10 + 0.1
 
         if gain2_list is not None:
             gain2_vec = xp.array(gain2_list)
@@ -63,13 +64,13 @@ def main(tn:str='example_woofer_tweeter',
         print('Finding the best gain for woofer (DM1)')
         for gain in gain1_vec:
             cascao = WooferTweeterAO(tn)
-            cascao.initialize_turbulence()
+            cascao.initialize_turbulence(tn=atmo_tn)
             cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
             cascao.sc1.load_reconstructor(IM1,m2c1)
             cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
             cascao.sc2.load_reconstructor(IM2,m2c2)
-            cascao.sc1.intGain = gain
-            cascao.sc2.intGain = 0.0
+            cascao.sc1.set_new_gain(gain)
+            cascao.sc2.set_new_gain(0.0)
             sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude, enable_tweeter=False)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'Woofer gain = {cascao.sc1.intGain:1.2f}, tweeter gain = {cascao.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
@@ -80,13 +81,13 @@ def main(tn:str='example_woofer_tweeter',
         print('Finding the best gain for tweeter (DM2)')
         for gain in gain2_vec:
             cascao = WooferTweeterAO(tn)
-            cascao.initialize_turbulence()
+            cascao.initialize_turbulence(tn=atmo_tn)
             cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
             cascao.sc1.load_reconstructor(IM1,m2c1)
             cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
             cascao.sc2.load_reconstructor(IM2,m2c2)
-            cascao.sc1.intGain = best_gain1
-            cascao.sc2.intGain = gain
+            cascao.sc1.set_new_gain(best_gain1)
+            cascao.sc2.set_new_gain(gain)
             sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'Woofer gain = {cascao.sc1.intGain:1.2f}, tweeter gain = {cascao.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
@@ -95,7 +96,7 @@ def main(tn:str='example_woofer_tweeter',
                 best_gain2 = gain.copy()
 
         cascao = WooferTweeterAO(tn)
-        cascao.initialize_turbulence()
+        cascao.initialize_turbulence(tn=atmo_tn)
         cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
         cascao.sc1.load_reconstructor(IM1,m2c1)
         cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
@@ -104,11 +105,11 @@ def main(tn:str='example_woofer_tweeter',
         cascao.tested_gains1 = gain1_vec        
         cascao.tested_gains2 = gain2_vec
 
-        cascao.sc1.intGain = best_gain1
-        cascao.sc2.intGain = best_gain2
+        cascao.sc1.set_new_gain(best_gain1)
+        cascao.sc2.set_new_gain(best_gain2)
         print(f'Selecting tweeter (DM2) gain = {cascao.sc2.intGain}, woofer (DM1) gain = {cascao.sc1.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
-    cascao.KL = KL1 if KL1.shape[0] > KL2.shape[0] else KL2
+    cascao.KL = KL1.copy()
     
     print('Running the loop ...')
     tweeter_sig2, woofer_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
@@ -118,7 +119,7 @@ def main(tn:str='example_woofer_tweeter',
     print('Plotting results ...')
     if show:
 
-        KL = KL1.copy() #myfits.read_fits(op.join(cascao.savecalibpath,'tweet_KLmodes.fits'))
+        KL = KL1[:cascao.sc1.nModes,:]
         N=9
         plt.figure(figsize=(2*N,7))
         for i in range(N):
@@ -131,7 +132,7 @@ def main(tn:str='example_woofer_tweeter',
             plt.subplot(4,N,i+1+N*3)
             cascao.dm1.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
 
-        KL = KL2.copy()
+        KL = KL2[:cascao.sc2.nModes,:]
         N=9
         plt.figure(figsize=(2*N,7))
         for i in range(N):

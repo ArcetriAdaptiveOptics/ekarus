@@ -159,7 +159,7 @@ class HighLevelAO():
         return Rec, IM
 
     
-    def initialize_turbulence(self, N:int=None, dt:float=None):
+    def initialize_turbulence(self, tn:str=None, N:int=None, dt:float=None):
         """
         Initializes the turbulence layers based on atmospheric parameters.
 
@@ -198,7 +198,11 @@ class HighLevelAO():
         N = int(np.max([20,N])) # set minimum N to 20
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
-        atmo_dir = os.path.join(atmopath,self._tn)
+        if tn is not None:
+            self.atmo_tn = tn
+        else:
+            self.atmo_tn = self._tn
+        atmo_dir = os.path.join(atmopath,self.atmo_tn)
         if not os.path.exists(atmo_dir):   
             os.mkdir(atmo_dir)
         atmo_path = os.path.join(atmo_dir,'atmospheric_phase_layers.fits')
@@ -237,7 +241,7 @@ class HighLevelAO():
 
         slopes = slope_computer.compute_slopes(input_field, lambdaOverD, Nphotons)
         modes = slope_computer.Rec @ slopes
-        modes *= slope_computer.intGain
+        modes *= slope_computer.modalGains
         cmd = slope_computer.m2c @ modes
         cmd /= m2rad # convert to meters
         modes /= m2rad  # convert to meters

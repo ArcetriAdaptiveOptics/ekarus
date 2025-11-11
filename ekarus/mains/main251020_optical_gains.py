@@ -12,7 +12,7 @@ def main(tn:str='optical_gains', gain:float=0.3):
     ssao.initialize_turbulence()
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
-    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 

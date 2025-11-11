@@ -30,7 +30,7 @@ class SlopeComputer():
         try:
             (
                 self.dt,
-                self.integratorGain,
+                self.gains,
                 self.delay,
                 self.nModes,
             ) = (
@@ -50,11 +50,12 @@ class SlopeComputer():
         except KeyError:
             self.iir_num, self.iir_den = xp.array([1.0]), xp.array([1.0,-1.0])
 
-        if len(self.integratorGain) != len(self.nModes):
-            raise ValueError(f'Integrator gains {self.integratorGain} are not compatible with length of number of modes to correct {self.nModes}')
+        if len(self.gains) != len(self.nModes):
+            raise ValueError(f'Integrator gains {self.gains} are not compatible with length of number of modes to correct {self.nModes}')
         
-        self.intGain = xp.hstack([xp.repeat(self.integratorGain[i],int(self.nModes[i])) for i in range(len(self.nModes))])
+        self.modalGains = xp.hstack([xp.repeat(self.gains[i],int(self.nModes[i])) for i in range(len(self.nModes))])
         self.nModes = int(xp.max(xp.cumsum(self.nModes)))
+        self.intGain = 1.0
 
         if hasattr(wfs,'apex_angle'):
             self.wfs_type = 'PWFS'
@@ -164,6 +165,11 @@ class SlopeComputer():
         self.m2c = m2c[:,:self.nModes]
         if method is not None:
             self._slope_method = method
+
+    def set_new_gain(self, intGain:float):
+        """ Scale all gains by a single scalar coefficient """
+        self.modalGains *= intGain/self.intGain
+        self.intGain = intGain
 
 
     def _compute_pyr_signal(self, detector_image):
