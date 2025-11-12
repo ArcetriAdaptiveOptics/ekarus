@@ -274,7 +274,7 @@ class CascadingAO(HighLevelAO):
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res1_modes = xp.zeros([N,self.KL.shape[0]])
         res2_modes = xp.zeros([N,self.KL.shape[0]])
-        phase2modes =xp.linalg.pinv(self.KL)# xp.linalg.pinv(self.KL.T)
+        phase2modes = xp.linalg.pinv(self.KL.T)
         for frame in range(N):
             mask = ma_atmo_phases[-N+frame].mask.copy()
             atmo_phase = xp.asarray(ma_atmo_phases[-N+frame].data[~mask])

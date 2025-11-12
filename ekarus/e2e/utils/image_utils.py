@@ -119,6 +119,19 @@ def remap_on_new_mask(data, old_mask, new_mask):
     Remaps the matrix data defined on valid values 
     of old_mask to valid values on new_mask.
 
+    Parameters
+    ----------
+    data : xp.ndarray
+        2D array of shape (sum(1-old_mask), N)
+    old_mask : xp.ndarray
+        2D boolean array defining the old mask
+    new_mask : xp.ndarray
+        2D boolean array defining the new mask
+    
+    Returns
+    -------
+    remapped_data : xp.ndarray
+        2D array of shape (sum(1-new_mask), N)
     """
     old_len = xp.sum(1-old_mask)
     new_len = xp.sum(1-new_mask)

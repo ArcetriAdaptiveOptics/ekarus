@@ -5,24 +5,34 @@ import matplotlib.pyplot as plt
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 
 
-def main(tn:str='optical_gains', gain:float=0.3):
-
+def main(tn:str='optical_gains', 
+         optimize_gain:bool=False,
+         gain_list = None):
+    
+    if optimize_gain is True and gain_list is None:
+        gain_list = xp.arange(1,10)/10
+        gain_list = gain_list.tolist()
 
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence()
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
-    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    r0 = (1/xp.sum(ssao.atmo_pars['r0']**(-5/3)))**(3/5)
+    saveprefix = f'mod{ssao.sc.modulationAngleInLambdaOverD:1.0f}_r0={r0*1e+2:1.0f}cm_'
+    amp = 0.02
+    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=amp, save_prefix=saveprefix)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 
     lambdaRef = ssao.pyr.lambdaInM
 
     print('Calibrating optical gains ...')
-    N = 4
-    ol_opt_gains, cl_opt_gains, pl_opt_gains = ssao.calibrate_optical_gains(N, slope_computer=ssao.sc, MM=KL, amps=0.2)
+    N = 3
+    cl_opt_gains, pl_opt_gains = ssao.calibrate_optical_gains(N, slope_computer=ssao.sc, MM=KL, 
+                                 save_prefix = saveprefix, amps=amp,
+                                 mode_offset = None)
     plt.figure()
-    plt.plot(xp.asnumpy(ol_opt_gains),'-.',label='open loop')
+    # plt.plot(xp.asnumpy(ol_opt_gains),'-.',label='open loop')
     plt.plot(xp.asnumpy(cl_opt_gains),'-.',label='closed loop')
     plt.plot(xp.asnumpy(pl_opt_gains),'-.',label='perfect loop')
     plt.legend()
@@ -32,67 +42,75 @@ def main(tn:str='optical_gains', gain:float=0.3):
     ogcl_ssao = SingleStageAO(tn)
     ogcl_ssao.initialize_turbulence()
     ogcl_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    ogcl_ssao.sc.load_reconstructor(IM,m2c,cl_opt_gains)
-    ogcl_ssao.sc.intGain = gain
+    ogcl_ssao.sc.load_reconstructor(IM,m2c)
+    ogcl_ssao.sc.modalGains /= pl_opt_gains
 
-    ogol_ssao = SingleStageAO(tn)
-    ogol_ssao.initialize_turbulence()
-    ogol_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    ogol_ssao.sc.load_reconstructor(IM,m2c,ol_opt_gains)
-    ogol_ssao.sc.intGain = gain
+    # ogol_ssao = SingleStageAO(tn)
+    # ogol_ssao.initialize_turbulence()
+    # ogol_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+    # ogol_ssao.sc.load_reconstructor(IM,m2c)
+    # ogol_ssao.sc.modalGains /= cl_opt_gains
+    # ogol_ssao.sc.set_new_gain(gain)
 
-    ogpl_ssao = SingleStageAO(tn)
-    ogpl_ssao.initialize_turbulence()
-    ogpl_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    ogpl_ssao.sc.load_reconstructor(IM,m2c,pl_opt_gains)
-    ogpl_ssao.sc.intGain = gain
+    # ogpl_ssao = SingleStageAO(tn)
+    # ogpl_ssao.initialize_turbulence()
+    # ogpl_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+    # ogpl_ssao.sc.load_reconstructor(IM,m2c)
+    # ogpl_ssao.sc.modalGains /= pl_opt_gains
+    # ogpl_ssao.sc.set_new_gain(gain)
 
-    # it_ss = 200
-    # if optimize_gain is True:
-    #     print('Finding best gains:')
-    #     N = len(gain_vec)
-    #     SR_vec = xp.zeros(N)
-    #     for jj in range(N):
-    #         g = gain_vec[jj]
-    #         ogc_ssao.sc.intGain = g
-    #         err2, _ = ogc_ssao.run_loop(lambdaRef, ssao.starMagnitude)
-    #         SR = xp.mean(xp.exp(-err2[-it_ss:]))
-    #         SR_vec[jj] = SR.copy()
-    #         print(f'Tested gain = {g:1.2f}, final SR = {SR*100:1.2f}%' )
+    it_ss = 200
+    if optimize_gain is True:
+        gain_list = xp.array(gain_list)
+        print('Finding best gains:')
+        N = len(gain_list)
+        SR_vec = xp.zeros(N)
+        for jj in range(N):
+            g = gain_list[jj]
+            ogcl_ssao = SingleStageAO(tn)
+            ogcl_ssao.initialize_turbulence()
+            ogcl_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+            ogcl_ssao.sc.load_reconstructor(IM,m2c)
+            ogcl_ssao.sc.modalGains /= pl_opt_gains
+            ogcl_ssao.sc.set_new_gain(g)
+            err2, _ = ogcl_ssao.run_loop(lambdaRef, ssao.starMagnitude)
+            SR = xp.mean(xp.exp(-err2[-it_ss:]))
+            SR_vec[jj] = SR.copy()
+            print(f'Tested gain = {g:1.2f}, final SR = {SR*100:1.2f}%' )
 
-    #     best_gain = gain_vec[xp.argmax(SR_vec)]
-    #     print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
-    #     ogc_ssao = SingleStageAO(tn)
-    #     ogc_ssao.initialize_turbulence()
-    #     ogc_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    #     ogc_ssao.sc.load_reconstructor(Rec,m2c)
-    #     ogc_ssao.sc.load_optical_gains(cl_opt_gains)
-    #     ogc_ssao.sc.intGain = best_gain
-    #     if xp.on_gpu:
-    #         gain_vec = gain_vec.get()
-    #         SR_vec = SR_vec.get()
-    #     plt.figure()
-    #     plt.plot(gain_vec,SR_vec*100,'-o')
-    #     plt.grid()
-    #     plt.xlabel('Integrator gain')
-    #     plt.ylabel('SR %')
-    #     plt.title('Strehl ratio vs integrator gain')
+        best_gain = gain_list[xp.argmax(SR_vec)]
+        print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
+        ogcl_ssao = SingleStageAO(tn)
+        ogcl_ssao.initialize_turbulence()
+        ogcl_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+        ogcl_ssao.sc.load_reconstructor(IM,m2c)
+        ogcl_ssao.sc.modalGains /= pl_opt_gains
+        ogcl_ssao.sc.set_new_gain(best_gain)
+        if xp.on_gpu:
+            gain_list = gain_list.get()
+            SR_vec = SR_vec.get()
+        plt.figure()
+        plt.plot(gain_list,SR_vec*100,'-o')
+        plt.grid()
+        plt.xlabel('Integrator gain')
+        plt.ylabel('SR %')
+        plt.title('Strehl ratio vs integrator gain')
 
     ssao.KL = KL
     ogcl_ssao.KL = KL
-    ogol_ssao.KL = KL
-    ogpl_ssao.KL = KL
+    # ogol_ssao.KL = KL
+    # ogpl_ssao.KL = KL
 
     sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
     ogcl_sig2, _ = ogcl_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogcl_')
-    ogol_sig2, _ = ogol_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogol_')
-    ogpl_sig2, _ = ogpl_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogpl_')
+    # ogol_sig2, _ = ogol_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogol_')
+    # ogpl_sig2, _ = ogpl_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogpl_')
 
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
     # psd,pix_dist=ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='')
     ogcl_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogcl_')
-    ogol_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogol_')
-    ogpl_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogpl_')
+    # ogol_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogol_')
+    # ogpl_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogpl_')
 
     # plt.figure()
     # plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(psd),'--',label='no OG compensation')
@@ -108,8 +126,8 @@ def main(tn:str='optical_gains', gain:float=0.3):
     plt.plot(xp.asnumpy(tvec),xp.asnumpy(input_sig2),'-.',label='open loop')
     plt.plot(xp.asnumpy(tvec),xp.asnumpy(sig2),'-.',label='no compensation')
     plt.plot(xp.asnumpy(tvec),xp.asnumpy(ogcl_sig2),'-.',label='OG (close loop) compensation')
-    plt.plot(xp.asnumpy(tvec),xp.asnumpy(ogol_sig2),'-.',label='OG (open loop) compensation')
-    plt.plot(xp.asnumpy(tvec),xp.asnumpy(ogpl_sig2),'-.',label='OG (perfect loop) compensation')
+    # plt.plot(xp.asnumpy(tvec),xp.asnumpy(ogol_sig2),'-.',label='OG (open loop) compensation')
+    # plt.plot(xp.asnumpy(tvec),xp.asnumpy(ogpl_sig2),'-.',label='OG (perfect loop) compensation')
     plt.legend()
     plt.grid()
     plt.xlim([0.0,tvec[-1]])

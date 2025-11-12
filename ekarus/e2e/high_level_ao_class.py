@@ -417,7 +417,8 @@ class HighLevelAO():
         return pyr, det, sc
     
 
-    def calibrate_optical_gains(self, N:int, slope_computer, MM, amps:float=0.02, save_prefix:str=''):
+    def calibrate_optical_gains(self, N:int, slope_computer, MM, mode_offset =None,
+                                amps:float=0.02, save_prefix:str=''):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
         
@@ -442,21 +443,21 @@ class HighLevelAO():
             The computed optical gains.
         """
         og_cl_path = os.path.join(self.savecalibpath,str(save_prefix)+'closed_lopp_OG.fits')
-        og_ol_path = os.path.join(self.savecalibpath,str(save_prefix)+'open_loop_OG.fits')
+        # og_ol_path = os.path.join(self.savecalibpath,str(save_prefix)+'open_loop_OG.fits')
         og_pl_path = os.path.join(self.savecalibpath,str(save_prefix)+'perfect_loop_OG.fits')
         try:
             if self.recompute is True:
                 raise FileNotFoundError('Recompute is True')
             cl_opt_gains = myfits.read_fits(og_cl_path)
-            ol_opt_gains = myfits.read_fits(og_ol_path)
+            # ol_opt_gains = myfits.read_fits(og_ol_path)
             pl_opt_gains = myfits.read_fits(og_pl_path)
         except FileNotFoundError:
             IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
             Nmodes = slope_computer.nModes
             cl_opt_gains = xp.zeros(Nmodes)
-            ol_opt_gains = xp.zeros(Nmodes)
+            # ol_opt_gains = xp.zeros(Nmodes)
             pl_opt_gains = xp.zeros(Nmodes)
-            phase2modes = xp.linalg.pinv(MM).T 
+            phase2modes = xp.linalg.pinv(MM.T) 
             field_amp = 1-self.cmask
             lambdaOverD = self.pyr.lambdaInM/self.pupilSizeInM
             r0s = self.atmo_pars['r0']
@@ -478,11 +479,15 @@ class HighLevelAO():
                 phi_modes = phase2modes @ phi_atmo
                 lo_phi = MM.T @ phi_modes
                 ho_phi = phi_atmo - lo_phi
-                ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo)
+                if mode_offset is not None:
+                    phi_atmo += mode_offset
+                    res_phi += mode_offset
+                    ho_phi += mode_offset
+                # ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo)
                 cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi)
                 pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi)
                 cl_gains = xp.zeros(Nmodes)
-                ol_gains = xp.zeros(Nmodes)
+                # ol_gains = xp.zeros(Nmodes)
                 pl_gains = xp.zeros(Nmodes)
                 for i in range(Nmodes):
                     # rec_modes = slope_computer.Rec @ ol_slopes[i,:]
@@ -491,16 +496,16 @@ class HighLevelAO():
                     # cl_gains[i] = rec_modes[i]
                     calib_slope = IM[:,i]
                     norm = xp.dot(calib_slope,calib_slope)
-                    ol_gains[i] = xp.dot(ol_slopes[i,:],calib_slope)/norm
+                    # ol_gains[i] = xp.dot(ol_slopes[i,:],calib_slope)/norm
                     cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
                     pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
                 cl_opt_gains += cl_gains/N
-                ol_opt_gains += ol_gains/N
+                # ol_opt_gains += ol_gains/N
                 pl_opt_gains += pl_gains/N
-            myfits.save_fits(og_ol_path,ol_opt_gains)
+            # myfits.save_fits(og_ol_path,ol_opt_gains)
             myfits.save_fits(og_cl_path,cl_opt_gains)
             myfits.save_fits(og_pl_path,pl_opt_gains)
-        return ol_opt_gains, cl_opt_gains, pl_opt_gains
+        return cl_opt_gains, pl_opt_gains #ol_opt_gains, 
     
 
     def _get_slopes(self, slope_computer, MM, lambdaInM, amps, phase_offset=None):

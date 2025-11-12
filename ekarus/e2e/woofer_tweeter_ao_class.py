@@ -107,6 +107,8 @@ class WooferTweeterAO(HighLevelAO):
             ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]], dtype=self.dtype)
             rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]], dtype=self.dtype)
 
+        # ttf_modes2phase = self.KL[:2,:].T
+        # ttf_phase2modes = xp.linalg.pinv(ttf_modes2phase)
 
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)
@@ -124,6 +126,9 @@ class WooferTweeterAO(HighLevelAO):
 
             residual_woofer_phase = input_phase - dm1_surf[self.dm1.visible_pix_ids]
             residual_phase = residual_woofer_phase - dm2_surf[self.dm2.visible_pix_ids]
+
+            # ttf_coeffs = ttf_phase2modes @ residual_phase
+            # residual_phase -= ttf_modes2phase @ ttf_coeffs
 
             if i % int(self.sc2.dt/self.dt) == 0 and enable_tweeter is True:
                 int2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, self.sc2, 

@@ -57,6 +57,8 @@ class SlopeComputer():
         self.nModes = int(xp.max(xp.cumsum(self.nModes)))
         self.intGain = 1.0
 
+        self.slope_null = None
+
         if hasattr(wfs,'apex_angle'):
             self.wfs_type = 'PWFS'
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
@@ -152,6 +154,9 @@ class SlopeComputer():
                 slopes = detector_image[~self._roi_masks]
             case _:
                 raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
+            
+        if self.slope_null is not None:
+            slopes -= self.slope_null
 
         return slopes
     
@@ -166,10 +171,15 @@ class SlopeComputer():
         if method is not None:
             self._slope_method = method
 
+
     def set_new_gain(self, intGain:float):
         """ Scale all gains by a single scalar coefficient """
         self.modalGains *= intGain/self.intGain
         self.intGain = intGain
+
+
+    def set_slope_null(self, slope_null):
+        self.slope_null = slope_null
 
 
     def _compute_pyr_signal(self, detector_image):
