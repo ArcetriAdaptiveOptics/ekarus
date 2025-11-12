@@ -107,8 +107,9 @@ class WooferTweeterAO(HighLevelAO):
             ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]], dtype=self.dtype)
             rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]], dtype=self.dtype)
 
-        # ttf_modes2phase = self.KL[:2,:].T
+        # ttf_modes2phase = self.KL[:5,:].T
         # ttf_phase2modes = xp.linalg.pinv(ttf_modes2phase)
+        # self.sc1.modalGains[:5] *= 0.0
 
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)

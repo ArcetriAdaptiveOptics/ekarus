@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 
+import os
+from ekarus.e2e.utils import my_fits_package as myfits
+
 
 def main(tn:str='optical_gains', 
          optimize_gain:bool=False,
@@ -25,12 +28,22 @@ def main(tn:str='optical_gains',
     ssao.KL = KL
 
     lambdaRef = ssao.pyr.lambdaInM
+    sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
+
+    ma_res_screens = myfits.read_fits(os.path.join(ssao.savepath,'residual_phases.fits'))
+    N = 100
+    loop_residual_phases = xp.zeros([N,xp.sum(1-ssao.cmask)])
+    step = (xp.shape(xp.asarray(ma_res_screens.data))[0]-100)//N
+    for j in range(N):
+        loop_residual_phases[j,:] = xp.asarray(ma_res_screens[j*step].data[~ma_res_screens[j*step].mask])
 
     print('Calibrating optical gains ...')
-    N = 3
-    cl_opt_gains, pl_opt_gains = ssao.calibrate_optical_gains(N, slope_computer=ssao.sc, MM=KL, 
-                                 save_prefix = saveprefix, amps=amp,
-                                 mode_offset = None)
+    cl_opt_gains, pl_opt_gains = ssao.calibrate_optical_gains_from_precorrected_screens(
+                                 loop_residual_phases,
+                                 slope_computer=ssao.sc, MM=KL, 
+                                 save_prefix = saveprefix, amps=amp)
+    # cl_opt_gains, pl_opt_gains = ssao.calibrate_optical_gains(N=3, slope_computer=ssao.sc, MM=KL, 
+    #                              save_prefix = saveprefix, amps=amp)
     plt.figure()
     # plt.plot(xp.asnumpy(ol_opt_gains),'-.',label='open loop')
     plt.plot(xp.asnumpy(cl_opt_gains),'-.',label='closed loop')
@@ -96,12 +109,10 @@ def main(tn:str='optical_gains',
         plt.ylabel('SR %')
         plt.title('Strehl ratio vs integrator gain')
 
-    ssao.KL = KL
     ogcl_ssao.KL = KL
     # ogol_ssao.KL = KL
     # ogpl_ssao.KL = KL
 
-    sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
     ogcl_sig2, _ = ogcl_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogcl_')
     # ogol_sig2, _ = ogol_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogol_')
     # ogpl_sig2, _ = ogpl_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogpl_')

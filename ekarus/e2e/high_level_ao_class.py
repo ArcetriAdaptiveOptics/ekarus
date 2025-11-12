@@ -417,6 +417,81 @@ class HighLevelAO():
         return pyr, det, sc
     
 
+    def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM, mode_offset =None,
+                                amps:float=0.02, save_prefix:str=''):
+        """
+        Calibrates the optical gains for each mode using a phase screen at a given time.
+        
+        Parameters
+        ----------
+        pre_corrected_screens : cube (Nframes,Npix,Npix)
+            The pre-corrected phase screens to use for the calibration.
+        slope_computer : SlopeComputer
+            The slope computer object.
+        MM : array
+            The mirror modes to calibrate/correct (e.g. KL Modes).
+        lambdaInM : float | array
+            The wavelength(s) at which calibration is performed.
+        amps : float or array
+            The amplitudes for each mode.
+        phase_offset : array, optional
+            Phase offset to be added to each mode, by default None.
+        
+        Returns 
+        -------
+        opt_gains : array
+            The computed optical gains.
+        """
+        og_cl_path = os.path.join(self.savecalibpath,str(save_prefix)+'closed_loop_OG.fits')
+        og_pl_path = os.path.join(self.savecalibpath,str(save_prefix)+'perfect_loop_OG.fits')
+        try:
+            if self.recompute is True:
+                raise FileNotFoundError('Recompute is True')
+            cl_opt_gains = myfits.read_fits(og_cl_path)
+            pl_opt_gains = myfits.read_fits(og_pl_path)
+        except FileNotFoundError:
+            IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
+            Nmodes = slope_computer.nModes
+            cl_opt_gains = xp.zeros(Nmodes)
+            pl_opt_gains = xp.zeros(Nmodes)
+            phase2modes = xp.linalg.pinv(MM.T) 
+            field_amp = 1-self.cmask
+            lambdaOverD = self.pyr.lambdaInM/self.pupilSizeInM
+            N = xp.shape(pre_corrected_screens)[0]
+            for i in range(N):
+                print(f'\rPhase realization {i+1}/{N}', end='\r', flush=True)
+                phi = pre_corrected_screens[int(i),:]
+                phi -= xp.mean(phi)
+                atmo_phase = reshape_on_mask(phi, self.cmask)
+                phi_atmo = phi*2*xp.pi/self.pyr.lambdaInM
+                input_field = field_amp * xp.exp(1j*atmo_phase*2*xp.pi/self.pyr.lambdaInM)
+                slopes = slope_computer.compute_slopes(input_field, lambdaOverD, None)
+                rec_modes = slope_computer.Rec @ slopes
+                rec_phi = MM[:slope_computer.nModes,:].T @ rec_modes
+                res_phi = phi_atmo - rec_phi
+                phi_modes = phase2modes @ phi_atmo
+                lo_phi = MM.T @ phi_modes
+                ho_phi = phi_atmo - lo_phi
+                if mode_offset is not None:
+                    phi_atmo += mode_offset
+                    res_phi += mode_offset
+                    ho_phi += mode_offset
+                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi)
+                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi)
+                cl_gains = xp.zeros(Nmodes)
+                pl_gains = xp.zeros(Nmodes)
+                for i in range(Nmodes):
+                    calib_slope = IM[:,i]
+                    norm = xp.dot(calib_slope,calib_slope)
+                    cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
+                    pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
+                cl_opt_gains += cl_gains/N
+                pl_opt_gains += pl_gains/N
+            myfits.save_fits(og_cl_path,cl_opt_gains)
+            myfits.save_fits(og_pl_path,pl_opt_gains)
+        return cl_opt_gains, pl_opt_gains #ol_opt_gains, 
+    
+
     def calibrate_optical_gains(self, N:int, slope_computer, MM, mode_offset =None,
                                 amps:float=0.02, save_prefix:str=''):
         """

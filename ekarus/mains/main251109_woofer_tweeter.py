@@ -38,7 +38,7 @@ def main(tn:str,
     wooftweet.sc2.load_reconstructor(IM2,m2c2)
 
     ####################### SN ###################################
-    in_ef = (1-wooftweet.cmask) #* xp.exp(1j*amp*(1-wooftweet.cmask))
+    in_ef = (1-wooftweet.cmask) #* xp.exp(1j*0.0*(1-wooftweet.cmask))
     lambdaOverD = wooftweet.pyr1.lambdaInM/wooftweet.pupilSizeInM
     slope_null = wooftweet.sc1.compute_slopes(in_ef, lambdaOverD, None)
     wooftweet.sc1.set_slope_null(slope_null)
