@@ -78,7 +78,7 @@ class HighLevelAO():
         dm : DeformableMirror
             The deformable mirror object.
         oversampling : int
-            The oversampling factor.
+            The oversampling factor. Default is 2.
         zern_modes : int, optional
             The number of Zernike modes to consider, by default 5.
         save_prefix : str, optional
@@ -417,7 +417,7 @@ class HighLevelAO():
         return pyr, det, sc
     
 
-    def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM, mode_offset =None,
+    def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM,
                                 amps:float=0.02, save_prefix:str=''):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
@@ -455,36 +455,27 @@ class HighLevelAO():
             cl_opt_gains = xp.zeros(Nmodes)
             pl_opt_gains = xp.zeros(Nmodes)
             phase2modes = xp.linalg.pinv(MM.T) 
-            field_amp = 1-self.cmask
-            lambdaOverD = self.pyr.lambdaInM/self.pupilSizeInM
             N = xp.shape(pre_corrected_screens)[0]
             for i in range(N):
                 print(f'\rPhase realization {i+1}/{N}', end='\r', flush=True)
                 phi = pre_corrected_screens[int(i),:]
                 phi -= xp.mean(phi)
-                atmo_phase = reshape_on_mask(phi, self.cmask)
-                phi_atmo = phi*2*xp.pi/self.pyr.lambdaInM
-                input_field = field_amp * xp.exp(1j*atmo_phase*2*xp.pi/self.pyr.lambdaInM)
-                slopes = slope_computer.compute_slopes(input_field, lambdaOverD, None)
-                rec_modes = slope_computer.Rec @ slopes
-                rec_phi = MM[:slope_computer.nModes,:].T @ rec_modes
-                res_phi = phi_atmo - rec_phi
-                phi_modes = phase2modes @ phi_atmo
+                res_phi = phi*2*xp.pi/self.pyr.lambdaInM
+                phi_modes = phase2modes @ res_phi
                 lo_phi = MM.T @ phi_modes
-                ho_phi = phi_atmo - lo_phi
-                if mode_offset is not None:
-                    phi_atmo += mode_offset
-                    res_phi += mode_offset
-                    ho_phi += mode_offset
+                ho_phi = res_phi - lo_phi
                 cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi)
                 pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi)
-                cl_gains = xp.zeros(Nmodes)
-                pl_gains = xp.zeros(Nmodes)
-                for i in range(Nmodes):
-                    calib_slope = IM[:,i]
-                    norm = xp.dot(calib_slope,calib_slope)
-                    cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
-                    pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
+                # cl_gains = xp.zeros(Nmodes)
+                # pl_gains = xp.zeros(Nmodes)
+                # for i in range(Nmodes):
+                #     calib_slope = IM[:,i].copy()
+                #     norm = xp.dot(calib_slope,calib_slope)
+                #     cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
+                #     pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
+                norm = xp.diag(IM.T @ IM)
+                cl_gains = xp.diag(cl_slopes @ IM) / norm
+                pl_gains = xp.diag(pl_slopes @ IM) / norm
                 cl_opt_gains += cl_gains/N
                 pl_opt_gains += pl_gains/N
             myfits.save_fits(og_cl_path,cl_opt_gains)
@@ -561,19 +552,22 @@ class HighLevelAO():
                 # ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo)
                 cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi)
                 pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi)
-                cl_gains = xp.zeros(Nmodes)
-                # ol_gains = xp.zeros(Nmodes)
-                pl_gains = xp.zeros(Nmodes)
-                for i in range(Nmodes):
+                # cl_gains = xp.zeros(Nmodes)
+                # # ol_gains = xp.zeros(Nmodes)
+                # pl_gains = xp.zeros(Nmodes)
+                # for i in range(Nmodes):
                     # rec_modes = slope_computer.Rec @ ol_slopes[i,:]
                     # ol_gains[i] = rec_modes[i]
                     # rec_modes = slope_computer.Rec @ cl_slopes[i,:]
                     # cl_gains[i] = rec_modes[i]
-                    calib_slope = IM[:,i]
-                    norm = xp.dot(calib_slope,calib_slope)
+                #     calib_slope = IM[:,i].copy()
+                #     norm = xp.dot(calib_slope,calib_slope)
+                #     cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
                     # ol_gains[i] = xp.dot(ol_slopes[i,:],calib_slope)/norm
-                    cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
-                    pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
+                #     pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
+                norm = xp.diag(IM.T @ IM)
+                cl_gains = xp.diag(cl_slopes @ IM) / norm
+                pl_gains = xp.diag(pl_slopes @ IM) / norm
                 cl_opt_gains += cl_gains/N
                 # ol_opt_gains += ol_gains/N
                 pl_opt_gains += pl_gains/N

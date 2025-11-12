@@ -130,7 +130,7 @@ def main(tn:str,
     wooftweet.KL = KL1.copy()
     
     print('Running the loop ...')
-    tweeter_sig2, woofer_sig2, input_sig2 = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, save_prefix='')
+    tweeter_sig2, woofer_sig2, input_sig2 = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, save_prefix=f'mag{wooftweet.starMagnitude:1.0f}_')
     wooftweet.sig2 = tweeter_sig2
 
     # Post-processing and plotting

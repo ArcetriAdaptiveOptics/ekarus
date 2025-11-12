@@ -28,14 +28,20 @@ def main(tn:str='optical_gains',
     ssao.KL = KL
 
     lambdaRef = ssao.pyr.lambdaInM
-    sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
 
-    ma_res_screens = myfits.read_fits(os.path.join(ssao.savepath,'residual_phases.fits'))
+    try:
+        ma_res_screens = myfits.read_fits(os.path.join(ssao.savepath,'residual_phases.fits'))
+    except FileNotFoundError:
+        sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
+        ma_res_screens = myfits.read_fits(os.path.join(ssao.savepath,'residual_phases.fits'))
+
     N = 100
-    loop_residual_phases = xp.zeros([N,xp.sum(1-ssao.cmask)])
-    step = (xp.shape(xp.asarray(ma_res_screens.data))[0]-100)//N
+    offset = 100
+    loop_residual_phases = xp.zeros([N,int(xp.sum(1-ssao.cmask))])
+    step = (xp.shape(xp.asarray(ma_res_screens.data))[0]-offset)//N
+    print(step)
     for j in range(N):
-        loop_residual_phases[j,:] = xp.asarray(ma_res_screens[j*step].data[~ma_res_screens[j*step].mask])
+        loop_residual_phases[j,:] = xp.asarray(ma_res_screens[j*step+offset].data[~ma_res_screens[j*step+offset].mask])
 
     print('Calibrating optical gains ...')
     cl_opt_gains, pl_opt_gains = ssao.calibrate_optical_gains_from_precorrected_screens(

@@ -12,6 +12,7 @@ from numpy.ma import masked_array
 
 
 def main(tn:str='example_cascading_stage', 
+         atmo_tn='paranal',
          lambdaRef=750e-9, 
          show:bool=False, 
          show_contrast:bool=True,
@@ -22,19 +23,19 @@ def main(tn:str='example_cascading_stage',
 
     print('Initializing devices ...')
     cascao = CascadingAO(tn)
-    cascao.initialize_turbulence()
+    cascao.initialize_turbulence(atmo_tn)
 
-    amp1 = 0.2
-    amp2 = 0.2
+    amp1 = 0.02#0.2
+    amp2 = 0.02#0.2
 
-    KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=2, save_prefix='DM1_')
+    KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(max((1.0,cascao.sc1.modulationAngleInLambdaOverD))) #cascao.sc1.modulationAngleInLambdaOverD)#
     Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(IM1,m2c1)
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
 
-    KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=2, save_prefix='DM2_')
-    cascao.pyr2.set_modulation_angle(max((1.0,cascao.sc2.modulationAngleInLambdaOverD))) #cascao.sc2.modulationAngleInLambdaOverD)#
+    KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
+    cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)#max((1.0,cascao.sc2.modulationAngleInLambdaOverD))) #
     Rec2, IM2 = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(IM2,m2c2)
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
@@ -73,7 +74,7 @@ def main(tn:str='example_cascading_stage',
         for i in range(Ni):
             for j in range(Nj):
                 cascao = CascadingAO(tn)
-                cascao.initialize_turbulence()
+                cascao.initialize_turbulence(atmo_tn)
                 cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
                 cascao.sc1.load_reconstructor(IM1,m2c1)
                 cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
@@ -102,7 +103,7 @@ def main(tn:str='example_cascading_stage',
                 plt.text(j,i, f'{SR_mat[i,j]*100:1.2f}', ha='center', va='center', color='w')
 
         cascao = CascadingAO(tn)
-        cascao.initialize_turbulence()
+        cascao.initialize_turbulence(atmo_tn)
         cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
         cascao.sc1.load_reconstructor(IM1,m2c1)
         cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
@@ -118,7 +119,7 @@ def main(tn:str='example_cascading_stage',
 
     cascao.KL = KL1 if KL1.shape[0] > KL2.shape[0] else KL2
     print('Running the loop ...')
-    dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix='')
+    dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix=f'mag{cascao.starMagnitude:1.0f}_')
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -178,9 +179,8 @@ def main(tn:str='example_cascading_stage',
     cascao.plot_iteration(lambdaRef, save_prefix='')
 
     if show_contrast:
-        hc_its = int(t_interval/cascao.dt)
         cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
-                                                    frame_ids=xp.arange(cascao.Nits-hc_its,cascao.Nits).tolist(), save_prefix='')
+                                                    frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), save_prefix='')
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))
