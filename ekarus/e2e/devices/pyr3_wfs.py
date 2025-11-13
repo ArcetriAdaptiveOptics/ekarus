@@ -125,7 +125,7 @@ class Pyr3WFS:
         return intensity
     
     
-    @lru_cache(maxsize=5)
+    # @lru_cache(maxsize=5)
     def pyr3_phase_delay(self, shape):
         """
         Computes the phase delay introduced by the pyramid wavefront sensor

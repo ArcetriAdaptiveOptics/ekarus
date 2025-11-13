@@ -144,7 +144,7 @@ class PyramidWFS:
         return phi
     
 
-    @lru_cache(maxsize=5)
+    # @lru_cache(maxsize=5)
     def _get_XY_tilt_planes(self, input_shape):
         tiltX,tiltY = image_grid(input_shape, recenter=True)
         L = max(input_shape)
