@@ -2,7 +2,7 @@ import xupy as xp
 # import numpy as np
 
 from ekarus.e2e.utils.image_utils import image_grid
-from functools import lru_cache
+# from functools import lru_cache
 
 class PyramidWFS:
     """
@@ -127,7 +127,7 @@ class PyramidWFS:
         return intensity
     
     
-    @lru_cache(maxsize=5)
+    # @lru_cache(maxsize=5)
     def pyramid_phase_delay(self, shape):
         """
         Computes the phase delay introduced by the pyramid wavefront sensor

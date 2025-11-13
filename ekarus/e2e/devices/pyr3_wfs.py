@@ -2,7 +2,7 @@ import xupy as xp
 # import numpy as np
 
 from ekarus.e2e.utils.image_utils import image_grid
-from functools import lru_cache
+# from functools import lru_cache
 
 class Pyr3WFS:
     """
@@ -144,7 +144,7 @@ class Pyr3WFS:
         return phi
     
 
-    @lru_cache(maxsize=5)
+    # @lru_cache(maxsize=5)
     def _get_XY_tilt_planes(self, input_shape):
         tiltX,tiltY = image_grid(input_shape, recenter=True)
         L = max(input_shape)

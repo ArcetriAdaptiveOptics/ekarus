@@ -43,7 +43,7 @@ def Nphot(T,mag,D,thrp=1.0):
 
 class ErrorBudget():
 
-    def __init__(self,r0s,L0,V,D,delays,camera,IM,wfs_frame,subaperture_masks):
+    def __init__(self,r0s,L0,V,D,delays,camera,IM,wfs_frame,subaperture_masks,Npix:int=8):
 
         self.D = D
 
@@ -55,8 +55,11 @@ class ErrorBudget():
         self.RON,self.dark,self.F,self.thrp = camera
 
         DtD = IM.T @ IM
-        self.p = 1/xp.diag(DtD)# xp.diag(xp.linalg.inv(DtD))
+        self.p = xp.diag(xp.linalg.inv(DtD)) #1/xp.diag(DtD)#
         self.IM = IM.copy()
+
+        self.Npix = Npix # number of pixels fro slope computation
+        # 2 slopes on the 4PWFS require 8 pixels
 
         self._define_pixel_intensities(wfs_frame,subaperture_masks)
 
@@ -141,8 +144,8 @@ class ErrorBudget():
 
     def _sigma_meas_i(self,T,i,mag):
         N = self.get_total_intensity(mag,T)
-        sig2_I = self.F**2*(self.dark+self.get_pix_intensities(mag,T,i))+self.RON**2
-        sig2_s = xp.sum(4*sig2_I)/N**2
+        sig2_I = self.F**2*(self.dark+self.get_pix_intensities(mag,T))+self.RON**2
+        sig2_s = xp.sum(self.Npix*sig2_I)/N**2
         sig2_w = self.p[i] * sig2_s
         NTF2 = xp.abs(self.NTF(T,i))**2
         sigma2_rad = sig2_w*xp.trapz(NTF2,self.om) #xp.sum(xp.dot(sig2_w,NTF2))
@@ -187,9 +190,9 @@ class ErrorBudget():
         self.sig2_alias = aliasing**2
 
     def get_total_intensity(self,mag,T):
-        return Nphot(T,mag,self.D,self.thrp)*self.diffraction_loss
+        return Nphot(T,mag,self.D,self.thrp)#*self.diffraction_loss
     
-    def get_pix_intensities(self,mag,T,i):
+    def get_pix_intensities(self,mag,T):
         I = self._ref_pix_intensities.copy()
         I *= self.get_total_intensity(mag,T)/xp.sum(abs(I))
         return I
