@@ -66,7 +66,7 @@ class WooferTweeterAO(HighLevelAO):
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, 
-                enable_tweeter:bool = True, save_prefix:str=None):
+                enable_tweeter:bool=True, save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 

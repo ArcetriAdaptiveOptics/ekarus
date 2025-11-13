@@ -25,6 +25,7 @@ class HighLevelAO():
             os.mkdir(self.savecalibpath)
 
         self.dtype = xp.float
+        self.cdtype = xp.cfloat
         self.atmo_pars = None
 
         self._config = ConfigReader(tn)
@@ -299,7 +300,8 @@ class HighLevelAO():
         return loaded_data
     
     
-    def get_contrast(self, residual_phases_in_rad, oversampling:int=10):
+    def get_contrast(self, residual_phases_in_rad, oversampling:int=10, 
+                     use_avg_field:bool=True, normalize_to_perfect_psf:bool=True):
         """
         Computes the PSF and contrast from the residual phase
         using the formula for a perfect idealized coronograph.
@@ -311,17 +313,27 @@ class HighLevelAO():
         psf_stack = []
         # psf_stack = xp.zeros([N,self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling])
         field_amp = 1-pup_mask
+        if normalize_to_perfect_psf:
+            psf = abs(xp.fft.fftshift(xp.fft.fft2(field_amp)))**2
+            max_psf = xp.max(psf)
         for k,res_phase in enumerate(res_phases):
             print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
             phase_2d = reshape_on_mask(res_phase, pup_mask)
-            # phase_var = xp.sum((res_phase-xp.mean(res_phase))**2) 
-            phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
-            perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d))
+            if use_avg_field:
+                input_field = field_amp * xp.exp(1j*phase_2d, dtype=self.cdtype)
+                avg_electric_field = xp.sum(input_field * field_amp) / xp.sum(field_amp)
+                perfect_coro_field = input_field - avg_electric_field * field_amp
+            else:
+                # phase_var = xp.sum((res_phase-xp.mean(res_phase))**2) 
+                phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
+                perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d, dtype=self.cdtype))
             coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
             coro_psf = abs(coro_focal_plane_ef)**2
-            input_field = field_amp * xp.exp(1j*phase_2d)
-            psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
-            coro_psf /= xp.max(psf)
+            if normalize_to_perfect_psf is False:
+                input_field = field_amp * xp.exp(1j*phase_2d)
+                psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
+                max_psf = xp.max(psf)
+            coro_psf /= max_psf
             # psf_stack[k] = coro_psf
             psf_stack.append(coro_psf)
             # psf_rms += coro_psf**2
@@ -452,6 +464,7 @@ class HighLevelAO():
         except FileNotFoundError:
             IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
             Nmodes = slope_computer.nModes
+            IMc = IM[:,:Nmodes]
             cl_opt_gains = xp.zeros(Nmodes)
             pl_opt_gains = xp.zeros(Nmodes)
             phase2modes = xp.linalg.pinv(MM.T) 
@@ -473,9 +486,9 @@ class HighLevelAO():
                 #     norm = xp.dot(calib_slope,calib_slope)
                 #     cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
                 #     pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
-                norm = xp.diag(IM.T @ IM)
-                cl_gains = xp.diag(cl_slopes @ IM) / norm
-                pl_gains = xp.diag(pl_slopes @ IM) / norm
+                norm = xp.diag(IMc.T @ IMc)
+                cl_gains = xp.diag(cl_slopes @ IMc) / norm
+                pl_gains = xp.diag(pl_slopes @ IMc) / norm
                 cl_opt_gains += cl_gains/N
                 pl_opt_gains += pl_gains/N
             myfits.save_fits(og_cl_path,cl_opt_gains)
@@ -520,6 +533,7 @@ class HighLevelAO():
         except FileNotFoundError:
             IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
             Nmodes = slope_computer.nModes
+            IMc = IM[:,:Nmodes]
             cl_opt_gains = xp.zeros(Nmodes)
             # ol_opt_gains = xp.zeros(Nmodes)
             pl_opt_gains = xp.zeros(Nmodes)
@@ -565,9 +579,9 @@ class HighLevelAO():
                 #     cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
                     # ol_gains[i] = xp.dot(ol_slopes[i,:],calib_slope)/norm
                 #     pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
-                norm = xp.diag(IM.T @ IM)
-                cl_gains = xp.diag(cl_slopes @ IM) / norm
-                pl_gains = xp.diag(pl_slopes @ IM) / norm
+                norm = xp.diag(IMc.T @ IMc)
+                cl_gains = xp.diag(cl_slopes @ IMc) / norm
+                pl_gains = xp.diag(pl_slopes @ IMc) / norm
                 cl_opt_gains += cl_gains/N
                 # ol_opt_gains += ol_gains/N
                 pl_opt_gains += pl_gains/N

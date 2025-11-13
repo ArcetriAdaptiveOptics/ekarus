@@ -35,7 +35,7 @@ def main(tn:str='optical_gains',
         sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
         ma_res_screens = myfits.read_fits(os.path.join(ssao.savepath,'residual_phases.fits'))
 
-    N = 100
+    N = 4
     offset = 100
     loop_residual_phases = xp.zeros([N,int(xp.sum(1-ssao.cmask))])
     step = (xp.shape(xp.asarray(ma_res_screens.data))[0]-offset)//N

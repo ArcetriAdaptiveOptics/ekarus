@@ -55,7 +55,7 @@ class ErrorBudget():
         self.RON,self.dark,self.F,self.thrp = camera
 
         DtD = IM.T @ IM
-        self.p = xp.diag(xp.linalg.inv(DtD))
+        self.p = 1/xp.diag(DtD)# xp.diag(xp.linalg.inv(DtD))
         self.IM = IM.copy()
 
         self._define_pixel_intensities(wfs_frame,subaperture_masks)
@@ -142,7 +142,7 @@ class ErrorBudget():
     def _sigma_meas_i(self,T,i,mag):
         N = self.get_total_intensity(mag,T)
         sig2_I = self.F**2*(self.dark+self.get_pix_intensities(mag,T,i))+self.RON**2
-        sig2_s = xp.sum(self.IM[:,i]*sig2_I)/N**2
+        sig2_s = xp.sum(4*sig2_I)/N**2
         sig2_w = self.p[i] * sig2_s
         NTF2 = xp.abs(self.NTF(T,i))**2
         sigma2_rad = sig2_w*xp.trapz(NTF2,self.om) #xp.sum(xp.dot(sig2_w,NTF2))
@@ -202,9 +202,9 @@ class ErrorBudget():
         mean_intensity = xp.mean(xp.hstack((A,B,C,D)))
         self.diffraction_loss = mean_intensity/xp.sum(wfs_frame) #
         self._ref_pix_intensities = xp.mean(xp.vstack((A,B,C,D)),axis=0)
-        up_down_slope = (A+B)-(C+D)
-        left_right_slope = (A+C)-(B+D)
-        self._ref_pix_intensities = xp.hstack((up_down_slope, left_right_slope))/mean_intensity
+        # up_down_slope = (A+B)-(C+D)
+        # left_right_slope = (A+C)-(B+D)
+        # self._ref_pix_intensities = xp.hstack((up_down_slope, left_right_slope))/mean_intensity
         
 
     # @staticmethod
