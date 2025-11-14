@@ -18,8 +18,8 @@ def main(tn:str='example_cascading_stage',
          show_contrast:bool=True,
          optimize_gain:bool=False, 
          gain1_list:list=None, 
-         gain2_list:list=None,
-         t_interval:float=0.02):
+         gain2_list:list=None):
+        #  t_interval:float=0.02):
 
     print('Initializing devices ...')
     cascao = CascadingAO(tn)
@@ -73,14 +73,8 @@ def main(tn:str='example_cascading_stage',
         print('Finding the best gain')
         for i in range(Ni):
             for j in range(Nj):
-                cascao = CascadingAO(tn)
-                cascao.initialize_turbulence(atmo_tn)
-                cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-                cascao.sc1.load_reconstructor(IM1,m2c1)
-                cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-                cascao.sc2.load_reconstructor(IM2,m2c2)
-                cascao.sc1.intGain = gain1_vec[i]
-                cascao.sc2.intGain = gain2_vec[j]
+                cascao.sc1.set_new_gain(gain1_vec[i])
+                cascao.sc2.set_new_gain(gain2_vec[j])
                 sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
                 SR = xp.mean(xp.exp(-sig2[-ss_it:]))
                 SR_mat[i,j] = SR.copy()
@@ -102,12 +96,12 @@ def main(tn:str='example_cascading_stage',
             for j in range(Nj):
                 plt.text(j,i, f'{SR_mat[i,j]*100:1.2f}', ha='center', va='center', color='w')
 
-        cascao = CascadingAO(tn)
-        cascao.initialize_turbulence(atmo_tn)
-        cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-        cascao.sc1.load_reconstructor(IM1,m2c1)
-        cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-        cascao.sc2.load_reconstructor(IM2,m2c2)
+        # cascao = CascadingAO(tn)
+        # cascao.initialize_turbulence(atmo_tn)
+        # cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+        # cascao.sc1.load_reconstructor(IM1,m2c1)
+        # cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
+        # cascao.sc2.load_reconstructor(IM2,m2c2)
         cascao.tested_gains1 = gain1_vec        
         cascao.tested_gains2 = gain2_vec
         cascao.SR_mat = SR_mat
@@ -176,11 +170,12 @@ def main(tn:str='example_cascading_stage',
     cascao.dm1_sig2 = dm1_sig2
     cascao.dm2_sig2 = dm2_sig2
 
-    cascao.plot_iteration(lambdaRef, save_prefix='')
+    cascao.plot_iteration(lambdaRef, save_prefix=f'mag{cascao.starMagnitude:1.0f}_')
 
     if show_contrast:
         cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
-                                                    frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), save_prefix='')
+                                                    frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), 
+                                                    save_prefix=f'mag{cascao.starMagnitude:1.0f}_')
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))

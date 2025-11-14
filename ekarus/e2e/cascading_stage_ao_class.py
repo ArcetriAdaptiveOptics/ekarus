@@ -389,6 +389,7 @@ class CascadingAO(HighLevelAO):
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
+        plt.ylim([1e-10,1e-2])
         plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
         return rms_psf1, rms_psf2, pix_dist

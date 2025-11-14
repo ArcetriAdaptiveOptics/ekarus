@@ -17,6 +17,7 @@ def main(tn:str='example_single_stage',
          show_contrast:bool =False,
          optimize_gain:bool=False, 
          starMagnitudes=None, 
+         atmo_tn='example_single_stage',
          lambdaRef:float=750e-9):
     
     if gain_list is not None:
@@ -29,13 +30,15 @@ def main(tn:str='example_single_stage',
             gain_vec = xp.arange(1,11)/10
 
     ssao = SingleStageAO(tn)
-    ssao.initialize_turbulence()
-    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
+    ssao.initialize_turbulence(tn=atmo_tn)
+    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)#max((1.0,ssao.sc.modulationAngleInLambdaOverD)))
     Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
+
+    save_prefix = f'mag{ssao.starMagnitude}_'
 
     it_ss = 200
 
@@ -45,7 +48,7 @@ def main(tn:str='example_single_stage',
         SR_vec = xp.zeros(N)
         for jj in range(N):
             g = gain_vec[jj]
-            ssao.sc.intGain = g
+            ssao.sc.set_new_gain(g)
             err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
             SR = xp.mean(xp.exp(-err2[-it_ss:]))
             SR_vec[jj] = SR.copy()
@@ -53,7 +56,7 @@ def main(tn:str='example_single_stage',
 
         best_gain = gain_vec[xp.argmax(SR_vec)]
         print(f'Selecting best integrator gain: {best_gain:1.1f}, yielding SR={xp.max(SR_vec):1.2f} @{lambdaRef*1e+9:1.0f}[nm]')   
-        ssao.sc.intGain = best_gain
+        ssao.sc.set_new_gain(best_gain)
         if xp.on_gpu:
             gain_vec = gain_vec.get()
             SR_vec = SR_vec.get()
@@ -64,7 +67,7 @@ def main(tn:str='example_single_stage',
         plt.ylabel('SR %')
         plt.title('Strehl ratio vs integrator gain')
 
-    sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='')
+    sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix=save_prefix)
     # ssao.SR_in = xp.exp(-input_sig2)
     # ssao.SR_out = xp.exp(-sig2)
     
@@ -110,10 +113,10 @@ def main(tn:str='example_single_stage',
         plt.figure()
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
-    ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
+    ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
 
     if show_contrast:
-        ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='')
+        ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix=save_prefix)
 
     ssao.sig2 = sig2
     if starMagnitudes is not None:
