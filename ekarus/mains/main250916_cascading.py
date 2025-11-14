@@ -68,7 +68,7 @@ def main(tn:str='example_cascading_stage',
         best_gain1 = gain1_vec[0]
         best_gain2 = gain2_vec[0]
         best_SR = 0.0
-        ss_it = 100
+        ss_it = max(200,int(cascao.Nits//2))
 
         print('Finding the best gain')
         for i in range(Ni):
@@ -106,8 +106,8 @@ def main(tn:str='example_cascading_stage',
         cascao.tested_gains2 = gain2_vec
         cascao.SR_mat = SR_mat
 
-        cascao.sc1.intGain = best_gain1
-        cascao.sc2.intGain = best_gain2
+        cascao.sc1.set_new_gain(best_gain1)
+        cascao.sc2.set_new_gain(best_gain2)
         print(f'Selecting first loop gain = {cascao.sc1.intGain}, second loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
 

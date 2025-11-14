@@ -77,7 +77,7 @@ def main(tn:str='example_nested_stage',
             cascao.sc1.load_reconstructor(IM1,m2c1)
             cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
             cascao.sc2.load_reconstructor(IM2,m2c2)
-            cascao.sc1.intGain = gain
+            cascao.sc1.set_new_gain(gain)
             sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'Inner loop gain = {cascao.sc1.intGain:1.2f}, outer loop gain = {cascao.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
@@ -94,8 +94,8 @@ def main(tn:str='example_nested_stage',
             cascao.sc1.load_reconstructor(IM1,m2c1)
             cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
             cascao.sc2.load_reconstructor(IM2,m2c2)
-            cascao.sc1.intGain = best_gain1
-            cascao.sc2.intGain = gain
+            cascao.sc1.set_new_gain(best_gain1)
+            cascao.sc2.set_new_gain(gain)
             sig2, _, _ = cascao.run_loop(lambdaRef, cascao.starMagnitude)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'Inner loop gain = {cascao.sc1.intGain:1.2f}, outer loop gain = {cascao.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
@@ -114,8 +114,8 @@ def main(tn:str='example_nested_stage',
         cascao.tested_gains2 = gain2_vec
         cascao.SR_mat = SR_mat
 
-        cascao.sc1.intGain = best_gain1
-        cascao.sc2.intGain = best_gain2
+        cascao.sc1.set_new_gain(best_gain1)
+        cascao.sc2.set_new_gain(best_gain2)
         print(f'Selecting inner loop gain = {cascao.sc1.intGain}, outer loop gain = {cascao.sc2.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
     cascao.KL = KL1 if KL1.shape[0] > KL2.shape[0] else KL2

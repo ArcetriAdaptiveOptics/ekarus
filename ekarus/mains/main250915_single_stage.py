@@ -40,7 +40,8 @@ def main(tn:str='example_single_stage',
 
     save_prefix = f'mag{ssao.starMagnitude}_'
 
-    it_ss = 200
+    it_ss = max(200,int(ssao.Nits//2))
+
 
     if optimize_gain is True:
         print('Finding best gains:')
