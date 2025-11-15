@@ -239,7 +239,7 @@ def find_master_acts(mask, coords, d_thr:float=xp.sqrt(2.0)):#, pix_scale:float 
     master_ids = []
     for i in range(nActs):
         min_pix_dist = xp.min(dist(act_pix_coords[:,i]))
-        if min_pix_dist <= d_thr:# 1.0:
+        if min_pix_dist <= d_thr:
             master_ids.append(i)
     
     master_ids = xp.array(master_ids)

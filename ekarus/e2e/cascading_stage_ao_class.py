@@ -289,8 +289,6 @@ class CascadingAO(HighLevelAO):
         rec1_modes_rms = xp.sqrt(xp.mean(rec1_modes[-N-1:-1,:]**2,axis=0))
         rec2_modes_rms = xp.sqrt(xp.mean(rec2_modes[-N-1:-1,:]**2,axis=0))
 
-        print(xp.sum(atmo_mode_rms),xp.sum(res1_mode_rms),xp.sum(rec1_modes_rms),xp.sum(res2_mode_rms),xp.sum(rec2_modes_rms))
-
         plt.figure()
         plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
         plt.plot(xp.asnumpy(res1_mode_rms)*1e+9,label='1st stage residual (true)')

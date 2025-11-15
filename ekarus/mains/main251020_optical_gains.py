@@ -22,8 +22,8 @@ def main(tn:str='optical_gains',
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     r0 = (1/xp.sum(ssao.atmo_pars['r0']**(-5/3)))**(3/5)
     saveprefix = f'mod{ssao.sc.modulationAngleInLambdaOverD:1.0f}_r0={r0*1e+2:1.0f}cm_'
-    amp = 0.02
-    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=amp, save_prefix=saveprefix)
+    amp = 50e-9
+    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp, save_prefix=saveprefix)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 

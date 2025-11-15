@@ -1,8 +1,10 @@
 IMPORTANT:
 
-Slope null removal
-PWFS error budget (aliasing vs noise vs subaperture size)
-Slaving update (IMm.T @ IMm + LAMBDA) @ IMm.T
+PWFS error budget (aliasing & noise vs: Nsubap, slopes method, sensor, rMod)
+
+Slaving update: Tichonov regularisation (IMm.T @ IMm + LAMBDA) @ IMm.T
+
+Unmodulated calibration
 
 
 

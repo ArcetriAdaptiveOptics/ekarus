@@ -20,7 +20,7 @@ def main(tn:str='example_pupil_shift', pupilShiftsInPixel:list=[0.2], shiftAngle
     ssao.initialize_turbulence()
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=50e-9)
     ssao.sc.load_reconstructor(IM,m2c)
 
     print('Running the loop ...')

@@ -18,7 +18,8 @@ def main(tn:str='example_single_stage',
          optimize_gain:bool=False, 
          starMagnitudes=None, 
          atmo_tn='example_single_stage',
-         lambdaRef:float=750e-9):
+         lambdaRef:float=750e-9,
+         save_prefix:str=None):
     
     if gain_list is not None:
         optimize_gain = True
@@ -33,12 +34,14 @@ def main(tn:str='example_single_stage',
     ssao.initialize_turbulence(tn=atmo_tn)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)#max((1.0,ssao.sc.modulationAngleInLambdaOverD)))
-    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsinM=50e-9)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 
-    save_prefix = f'mag{ssao.starMagnitude}_'
+    
+    if save_prefix is None:
+        save_prefix = f'mag{ssao.starMagnitude:1.0f}_'
 
     it_ss = max(200,int(ssao.Nits//2))
 
@@ -122,6 +125,18 @@ def main(tn:str='example_single_stage',
     ssao.sig2 = sig2
     if starMagnitudes is not None:
         ssao.sig = sig
+
+    if ssao.sc.slope_null is not None:
+        modes_null = Rec @ ssao.sc.slope_null
+        modes_null *= lambdaRef/(2*xp.pi)
+        plt.figure()
+        plt.plot(xp.asnumpy(xp.abs(modes_null))*1e+9,'-o')
+        plt.grid()
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel('Mode #')
+        plt.ylabel('[nm]')
+        plt.title('Slope null modes')
 
     tvec = xp.asnumpy(xp.arange(ssao.Nits)*ssao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))

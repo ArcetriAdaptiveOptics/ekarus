@@ -119,7 +119,7 @@ class HighLevelAO():
         return KL, m2c
     
 
-    def compute_reconstructor(self, slope_computer, MM, lambdaInM, amps, save_prefix:str=''):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, ampsInM, save_prefix:str=''):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
         
@@ -131,7 +131,7 @@ class HighLevelAO():
             The mirror modes to calibrate/correct (e.g. KL Modes).
         lambdaInM : float | array
             The wavelength(s) at which calibration is performed.
-        amps : float or array
+        ampsInM : float or array
             The amplitudes for each mode.
         save_prefix : str, optional
             Prefix for saving the reconstructor files, by default ''.
@@ -151,7 +151,7 @@ class HighLevelAO():
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
-            slopes = self._get_slopes(slope_computer, MM, lambdaInM, amps)
+            slopes = self._get_slopes(slope_computer, MM, lambdaInM, ampsInM)
             IM = slopes.T
             U,S,Vt = xp.linalg.svd(IM, full_matrices=False)
             Rec = xp.array((Vt.T*1/S) @ U.T,dtype=self.dtype)
@@ -430,7 +430,7 @@ class HighLevelAO():
     
 
     def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM,
-                                amps:float=0.02, save_prefix:str=''):
+                                ampsInM:float=50e-9, save_prefix:str=''):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
         
@@ -444,7 +444,7 @@ class HighLevelAO():
             The mirror modes to calibrate/correct (e.g. KL Modes).
         lambdaInM : float | array
             The wavelength(s) at which calibration is performed.
-        amps : float or array
+        ampsInM : float or array
             The amplitudes for each mode.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
@@ -477,15 +477,8 @@ class HighLevelAO():
                 phi_modes = phase2modes @ res_phi
                 lo_phi = MM.T @ phi_modes
                 ho_phi = res_phi - lo_phi
-                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi)
-                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi)
-                # cl_gains = xp.zeros(Nmodes)
-                # pl_gains = xp.zeros(Nmodes)
-                # for i in range(Nmodes):
-                #     calib_slope = IM[:,i].copy()
-                #     norm = xp.dot(calib_slope,calib_slope)
-                #     cl_gains[i] = xp.dot(cl_slopes[i,:],calib_slope)/norm
-                #     pl_gains[i] = xp.dot(pl_slopes[i,:],calib_slope)/norm
+                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, ampsInM, phase_offset=res_phi)
+                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, ampsInM, phase_offset=ho_phi)
                 norm = xp.diag(IMc.T @ IMc)
                 cl_gains = xp.diag(cl_slopes @ IMc) / norm
                 pl_gains = xp.diag(pl_slopes @ IMc) / norm
@@ -497,7 +490,7 @@ class HighLevelAO():
     
 
     def calibrate_optical_gains(self, N:int, slope_computer, MM, mode_offset =None,
-                                amps:float=0.02, save_prefix:str=''):
+                                ampsInM:float=50e-9, save_prefix:str=''):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
         
@@ -511,7 +504,7 @@ class HighLevelAO():
             The mirror modes to calibrate/correct (e.g. KL Modes).
         lambdaInM : float | array
             The wavelength(s) at which calibration is performed.
-        amps : float or array
+        ampsInM : float or array
             The amplitudes for each mode.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
@@ -564,8 +557,8 @@ class HighLevelAO():
                     res_phi += mode_offset
                     ho_phi += mode_offset
                 # ol_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=phi_atmo)
-                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=res_phi)
-                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, amps, phase_offset=ho_phi)
+                cl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, ampsInM, phase_offset=res_phi)
+                pl_slopes = self._get_slopes(slope_computer, MM, self.pyr.lambdaInM, ampsInM, phase_offset=ho_phi)
                 # cl_gains = xp.zeros(Nmodes)
                 # # ol_gains = xp.zeros(Nmodes)
                 # pl_gains = xp.zeros(Nmodes)
@@ -591,7 +584,7 @@ class HighLevelAO():
         return cl_opt_gains, pl_opt_gains #ol_opt_gains, 
     
 
-    def _get_slopes(self, slope_computer, MM, lambdaInM, amps, phase_offset=None):
+    def _get_slopes(self, slope_computer, MM, lambdaInM, ampInM, phase_offset=None):
         """ 
         Computes the slopes for the given mode matrix MM using push-pull method.
 
@@ -603,7 +596,7 @@ class HighLevelAO():
             The mirror modes to calibrate/correct (e.g. KL Modes).
         lambdaInM : float | array
             The wavelength(s) at which calibration is performed.
-        amps : float or array
+        ampInM : float or array
             The amplitudes for each mode.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
@@ -621,10 +614,13 @@ class HighLevelAO():
         offset = reshape_on_mask(xp.zeros(int(xp.sum(1-self.cmask))), self.cmask)
         if phase_offset is not None:
             offset = reshape_on_mask(phase_offset, self.cmask)
-        if isinstance(amps, float):
-            amps *= xp.ones(Nmodes)
-            rad_orders = xp.sqrt(xp.arange(Nmodes)+1)
-            amps /= xp.sqrt(rad_orders)
+        if isinstance(ampInM, float):
+            ampInM *= xp.ones(Nmodes)
+            rad_orders = self.radial_order(xp.arange(Nmodes)) #xp.sqrt(xp.arange(Nmodes)+1)
+            ampInM /= xp.sqrt(rad_orders)
+        print(ampInM)
+        amps = ampInM*(2*xp.pi)/lambdaInM
+        print(f'Calibration amplitudes: {xp.max(ampInM)*1e+9:1.1f}-{xp.min(ampInM)*1e+9:1.1f} [nm] or {xp.max(amps):1.3f}-{xp.min(amps):1.3f} [rad]')
         for i in range(Nmodes):
             if phase_offset is None:
                 print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)
@@ -690,7 +686,7 @@ class HighLevelAO():
         for angle in spiderAngles:
             dist = lambda x,y: xp.asarray(y-cy)-xp.asarray(x-cx)*xp.tan(angle) if abs(abs(angle)-xp.pi/2) > 1e-10 else xp.asarray(x-cx)
             spider_mask = xp.fromfunction(lambda j,i: abs(dist(i,j))<spiderWidth, cmask.shape)
-            dist_grid = xp.fromfunction(lambda j,i: dist(i,j), cmask.shape)
+            # dist_grid = xp.fromfunction(lambda j,i: dist(i,j), cmask.shape)
             if xp.sin(angle) >= 0:
                 spider_mask *= top
             else:
@@ -701,6 +697,12 @@ class HighLevelAO():
                 spider_mask *= (1-right).astype(bool)
             cmask = xp.logical_or(cmask, (spider_mask).astype(bool))
         self.cmask = cmask.copy()
+
+
+    @staticmethod
+    def radial_order(i_mode):
+        noll = i_mode + 2
+        return xp.ceil(-3.0/2.0+xp.sqrt(1+8*noll)/2.0)
         
 
     @staticmethod

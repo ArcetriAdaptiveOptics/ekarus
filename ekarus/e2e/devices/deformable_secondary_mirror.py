@@ -48,7 +48,7 @@ class DSM(DeformableMirror):
         self.max_stroke = kwargs['max_stroke'] if 'max_stroke' in kwargs else None
 
         valid_ids = xp.arange(xp.sum(1-self.mask))
-        master_ids = dmutils.find_master_acts(self.pupil_mask, self.act_coords, d_thr = xp.sqrt(8))
+        master_ids = dmutils.find_master_acts(self.pupil_mask, self.act_coords, d_thr = xp.sqrt(2*self.pitch))
         if len(master_ids) < self.Nacts: # slaving
             self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, slaving_method='wmean', p=2, d_thr=2*self.pupil_size/self.Nacts)
             self.master_ids = master_ids
@@ -159,6 +159,7 @@ class DSM(DeformableMirror):
 
         self.pupil_size = pupilDiamInPixels
         Npix = xp.sum(1-self.mask)
+        self.pitch = self.pupil_size/n_act
 
         coords_path = os.path.join(dir_path,str(Npix)+'pixels_ActuatorCoordinates.fits')
         try:
@@ -207,8 +208,6 @@ class DSM(DeformableMirror):
         except FileNotFoundError:
             self.CMat = xp.eye(self.Nacts, dtype=xp.float)
 
-        dms = self.config[f'DM{self.Nacts}']
-        pupil_size = eval(dms['opt_diameter'])*1e-3  # in meters
 
         dm_mask = xp.sum(abs(IM),axis=2)
         dm_mask = (dm_mask).astype(bool)
@@ -220,7 +219,6 @@ class DSM(DeformableMirror):
         mask_diameter = xp.sqrt(xx**2+yy**2)*2
         if mask is not None and self.mask != mask:
             raise NotImplementedError('Mask should be re-centered, cropped and rescaled!')
-        self.pixel_scale = mask_diameter/pupil_size
 
         # Derive IFFs
         cube_mask = xp.tile(dm_mask,self.Nacts)

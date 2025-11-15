@@ -16,21 +16,21 @@ def main(tn:str='example_pyr_diag'):
     ssao.initialize_turbulence()
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=50e-9)
     ssao.sc.load_reconstructor(IM,m2c)
 
     diag_ssao = SingleStageAO(tn)
     diag_ssao.initialize_turbulence()
     diag_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     Rec_diag, IM_diag = diag_ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM,
-                                             method='diagonal_slopes', amps=0.2, save_prefix='diag_')
+                                             method='diagonal_slopes', ampsInM=50e-9, save_prefix='diag_')
     diag_ssao.sc.load_reconstructor(IM_diag,m2c)
 
     raw_ssao = SingleStageAO(tn)
     raw_ssao.initialize_turbulence()
     raw_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     Rec_raw, IM_raw = raw_ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM,
-                                             method='raw_intensity', amps=0.2, save_prefix='raw_')
+                                             method='raw_intensity', ampsInM=50e-9, save_prefix='raw_')
     raw_ssao.sc.load_reconstructor(IM_raw,m2c)
 
     print('Running the loop ...')

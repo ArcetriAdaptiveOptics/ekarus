@@ -22,22 +22,22 @@ def main(tn:str='example_nested_stage',
     print('Initializing devices ...')
     cascao = NestedStageAO(tn)
 
-    amp1 = 0.2
-    amp2 = 0.2
+    amp1 = 50e-9
+    amp2 = 50e-9
     if cascao.sc1.modulationAngleInLambdaOverD < 1.0:
-        amp1 = 0.02
+        amp1 = 10e-9
     if cascao.sc2.modulationAngleInLambdaOverD < 1.0:
-        amp2 = 0.02
+        amp2 = 10e-9
 
     cascao.initialize_turbulence()
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
     cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-    Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
+    Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, ampsInM=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(IM1,m2c1)
 
     KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-    Rec2, IM2 = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
+    Rec2, IM2 = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, ampsInM=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(IM2,m2c2)
 
     cascao.get_photons_per_subap(cascao.starMagnitude)

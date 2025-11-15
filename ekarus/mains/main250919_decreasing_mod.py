@@ -18,14 +18,14 @@ def main(tn:str='example_decreasing_mod'):
     ssao.initialize_turbulence()
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, amps=0.2)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=50e-9)
     ssao.sc.load_reconstructor(IM,m2c)
     sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
 
     unmod_ssao = SingleStageAO(tn)
     unmod_ssao.initialize_turbulence()
     unmod_ssao.pyr.set_modulation_angle(0.0)
-    mod0_Rec, mod0_IM = unmod_ssao.compute_reconstructor(unmod_ssao.sc, KL, unmod_ssao.pyr.lambdaInM, amps=0.002, save_prefix='mod0_')
+    mod0_Rec, mod0_IM = unmod_ssao.compute_reconstructor(unmod_ssao.sc, KL, unmod_ssao.pyr.lambdaInM, ampsInM=10e-9, save_prefix='mod0_')
     unmod_ssao.sc.load_reconstructor(mod0_IM,m2c)
     mod0_sig2, _ = unmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='mod0_')
 

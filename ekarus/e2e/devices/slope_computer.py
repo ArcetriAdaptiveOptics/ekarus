@@ -55,7 +55,11 @@ class SlopeComputer():
         
         self.modalGains = xp.hstack([xp.repeat(self.gains[i],int(self.nModes[i])) for i in range(len(self.nModes))])
         self.nModes = int(xp.max(xp.cumsum(self.nModes)))
-        self.intGain = 1.0
+
+        if len(self.gains) == 1:
+            self.intGain = xp.max(self.gains) # intGain is the single integrator gain
+        else:
+            self.intGain = 1.0 # intGain is a scalar rescaling fro modal gains
 
         self.slope_null = None
 
@@ -71,6 +75,7 @@ class SlopeComputer():
             self.wfs_type = 'ZWFS'
         else:
             raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
+        
 
     def iir_filter(self, x, y):
         L = xp.shape(x)[0]
@@ -93,7 +98,7 @@ class SlopeComputer():
         roi_path = join(calibpath, tn, prefix_str+'ROI-Masks.fits')    
         match self.wfs_type:
             case 'PWFS':
-                piston, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
+                self._piston, self._lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
                     if recompute is True:
                         raise FileNotFoundError('Recompute is True')
@@ -102,13 +107,13 @@ class SlopeComputer():
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
-                    modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
+                    modulated_intensity = self._wfs.get_intensity(self._piston, self._lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     self._define_pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
-                    hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
+                    hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': self._lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case '3PWFS':
-                piston, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
+                self._piston, self._lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
                     if recompute is True:
                         raise FileNotFoundError('Recompute is True')
@@ -117,10 +122,10 @@ class SlopeComputer():
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
-                    modulated_intensity = self._wfs.get_intensity(piston, lambdaOverD)
+                    modulated_intensity = self._wfs.get_intensity(self._piston, self._lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     self._define_3pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
-                    hdr_dict = {'APEX_ANG': self._wfs.vertex3_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
+                    hdr_dict = {'APEX_ANG': self._wfs.vertex3_angle, 'RAD2PIX': self._lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case 'ZWFS':
                 try:
@@ -161,15 +166,20 @@ class SlopeComputer():
         return slopes
     
     
-    def load_reconstructor(self, IM, m2c, method:str=None):
+    def load_reconstructor(self, IM, m2c, method:str=None, remove_slope_null:bool=True):
         """
         Load the reconstructor and the mode-to-command matrix
         """
         Rec = xp.linalg.pinv(IM[:,:self.nModes])
         self.Rec = Rec
         self.m2c = m2c[:,:self.nModes]
+
         if method is not None:
             self._slope_method = method
+
+        if remove_slope_null is True and self.slope_null is None and self.wfs_type != 'ZWFS':
+            print(f'Computing slope null...')
+            self.slope_null = self.compute_slopes(self._piston, self._lambdaOverD, None)
 
 
     def set_new_gain(self, intGain:float):

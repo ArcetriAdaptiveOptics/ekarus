@@ -18,29 +18,37 @@ def main(tn:str='example_cascading_stage',
          show_contrast:bool=True,
          optimize_gain:bool=False, 
          gain1_list:list=None, 
-         gain2_list:list=None):
+         gain2_list:list=None,
+         save_prefix:str=None):
         #  t_interval:float=0.02):
 
     print('Initializing devices ...')
     cascao = CascadingAO(tn)
     cascao.initialize_turbulence(atmo_tn)
 
-    amp1 = 0.02#0.2
-    amp2 = 0.02#0.2
+    amp1 = 50e-9
+    amp2 = 50e-9
+    if cascao.sc1.modulationAngleInLambdaOverD < 1.0:
+        amp1 = 10e-9
+    if cascao.sc2.modulationAngleInLambdaOverD < 1.0:
+        amp2 = 10e-9
 
-    KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=5, save_prefix='DM1_')
-    cascao.pyr1.set_modulation_angle(max((1.0,cascao.sc1.modulationAngleInLambdaOverD))) #cascao.sc1.modulationAngleInLambdaOverD)#
-    Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, amps=amp1, save_prefix='SC1_')
+    KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=2, save_prefix='DM1_')
+    cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)#max((1.0,cascao.sc1.modulationAngleInLambdaOverD))) #
+    Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, ampsInM=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(IM1,m2c1)
-    cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
+    # cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
 
-    KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=5, save_prefix='DM2_')
+    KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=2, save_prefix='DM2_')
     cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)#max((1.0,cascao.sc2.modulationAngleInLambdaOverD))) #
-    Rec2, IM2 = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, amps=amp2, save_prefix='SC2_')
+    Rec2, IM2 = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, ampsInM=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(IM2,m2c2)
-    cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
+    # cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
 
     cascao.get_photons_per_subap(starMagnitude=cascao.starMagnitude)
+
+    if save_prefix is None:
+        save_prefix = f'mag{cascao.starMagnitude:1.0f}_'
 
     if gain1_list is not None or gain2_list is not None:
         optimize_gain = True
@@ -96,12 +104,6 @@ def main(tn:str='example_cascading_stage',
             for j in range(Nj):
                 plt.text(j,i, f'{SR_mat[i,j]*100:1.2f}', ha='center', va='center', color='w')
 
-        # cascao = CascadingAO(tn)
-        # cascao.initialize_turbulence(atmo_tn)
-        # cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
-        # cascao.sc1.load_reconstructor(IM1,m2c1)
-        # cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
-        # cascao.sc2.load_reconstructor(IM2,m2c2)
         cascao.tested_gains1 = gain1_vec        
         cascao.tested_gains2 = gain2_vec
         cascao.SR_mat = SR_mat
@@ -113,7 +115,7 @@ def main(tn:str='example_cascading_stage',
 
     cascao.KL = KL1 if KL1.shape[0] > KL2.shape[0] else KL2
     print('Running the loop ...')
-    dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix=f'mag{cascao.starMagnitude:1.0f}_')
+    dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix=save_prefix)
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -170,12 +172,28 @@ def main(tn:str='example_cascading_stage',
     cascao.dm1_sig2 = dm1_sig2
     cascao.dm2_sig2 = dm2_sig2
 
-    cascao.plot_iteration(lambdaRef, save_prefix=f'mag{cascao.starMagnitude:1.0f}_')
+    cascao.plot_iteration(lambdaRef, save_prefix=save_prefix)
+
+    if cascao.sc1.slope_null is not None:
+        modes_null1 = Rec1 @ cascao.sc1.slope_null
+        modes_null1 *= lambdaRef/(2*xp.pi)
+        modes_null2 = Rec2 @ cascao.sc2.slope_null
+        modes_null2 *= lambdaRef/(2*xp.pi)
+        plt.figure()
+        plt.plot(xp.asnumpy(xp.abs(modes_null1))*1e+9,'-o')
+        plt.plot(xp.asnumpy(xp.abs(modes_null2))*1e+9,'-o')
+        plt.legend(('First stage slope null','Second stage slope null'))
+        plt.grid()
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel('Mode #')
+        plt.ylabel('[nm]')
+        plt.title('Slope null modes')
 
     if show_contrast:
         cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
                                                     frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), 
-                                                    save_prefix=f'mag{cascao.starMagnitude:1.0f}_')
+                                                    save_prefix=save_prefix)
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))

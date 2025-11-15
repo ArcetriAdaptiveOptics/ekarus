@@ -19,7 +19,7 @@ def main(tn:str,
     print('Initializing devices ...')
     wooftweet = WooferTweeterAO(tn)
 
-    amp = 0.02
+    amp = 50e-9
 
     wooftweet.initialize_turbulence(tn=atmo_tn)
 
@@ -30,19 +30,15 @@ def main(tn:str,
     m2c2 = m2c1[:,wooftweet.sc1.nModes:]
 
     wooftweet.pyr1.set_modulation_angle(wooftweet.sc1.modulationAngleInLambdaOverD)
-    Rec1, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL1[:wooftweet.sc1.nModes,:], wooftweet.pyr1.lambdaInM, amps=amp, save_prefix='woof_')
+    Rec1, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL1[:wooftweet.sc1.nModes,:], wooftweet.pyr1.lambdaInM, ampsInM=amp, save_prefix='woof_')
     wooftweet.sc1.load_reconstructor(IM1,m2c1)
 
     wooftweet.pyr2.set_modulation_angle(wooftweet.sc2.modulationAngleInLambdaOverD)
-    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL2, wooftweet.pyr2.lambdaInM, amps=amp, save_prefix='tweet_')
+    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL2, wooftweet.pyr2.lambdaInM, ampsInM=amp, save_prefix='tweet_')
     wooftweet.sc2.load_reconstructor(IM2,m2c2)
 
-    # ####################### SN ###################################
-    in_ef = (1-wooftweet.cmask) #* xp.exp(1j*0.0*(1-wooftweet.cmask))
-    lambdaOverD = wooftweet.pyr1.lambdaInM/wooftweet.pupilSizeInM
-    slope_null = wooftweet.sc1.compute_slopes(in_ef, lambdaOverD, None)
-    wooftweet.sc1.set_slope_null(slope_null)
-    modes_null = Rec1 @ slope_null
+    # Slope null
+    modes_null = Rec1 @ wooftweet.sc1.slope_null
     modes_null *= wooftweet.pyr1.lambdaInM/(2*xp.pi)
     plt.figure()
     plt.plot(xp.asnumpy(xp.abs(modes_null)),'-o')
@@ -51,7 +47,6 @@ def main(tn:str,
     plt.yscale('log')
     plt.title('Slope null modes')
     # slope_null = None
-    # ####################### SN ###################################
 
     wooftweet.get_photons_per_subap(wooftweet.starMagnitude)
 
@@ -79,15 +74,7 @@ def main(tn:str,
 
         print('Finding the best gain for woofer (DM1)')
         for gain in gain1_vec:
-            # wooftweet = WooferTweeterAO(tn)
-            # wooftweet.initialize_turbulence(tn=atmo_tn)
-            # wooftweet.pyr1.set_modulation_angle(wooftweet.sc1.modulationAngleInLambdaOverD)
-            # wooftweet.sc1.load_reconstructor(IM1,m2c1)
-            # wooftweet.sc1.set_slope_null(slope_null)
-            # wooftweet.pyr2.set_modulation_angle(wooftweet.sc2.modulationAngleInLambdaOverD)
-            # wooftweet.sc2.load_reconstructor(IM2,m2c2)
             wooftweet.sc1.set_new_gain(gain)
-            wooftweet.sc2.set_new_gain(0.0)
             sig2, _, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, enable_tweeter=False)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'Woofer gain = {wooftweet.sc1.intGain:1.2f}, tweeter gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
@@ -97,13 +84,6 @@ def main(tn:str,
 
         print('Finding the best gain for tweeter (DM2)')
         for gain in gain2_vec:
-            # wooftweet = WooferTweeterAO(tn)
-            # wooftweet.initialize_turbulence(tn=atmo_tn)
-            # wooftweet.pyr1.set_modulation_angle(wooftweet.sc1.modulationAngleInLambdaOverD)
-            # wooftweet.sc1.load_reconstructor(IM1,m2c1)
-            # wooftweet.sc1.set_slope_null(slope_null)
-            # wooftweet.pyr2.set_modulation_angle(wooftweet.sc2.modulationAngleInLambdaOverD)
-            # wooftweet.sc2.load_reconstructor(IM2,m2c2)
             wooftweet.sc1.set_new_gain(best_gain1)
             wooftweet.sc2.set_new_gain(gain)
             sig2, _, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude)
@@ -112,14 +92,6 @@ def main(tn:str,
             if SR > best_SR:
                 best_SR = SR.copy()
                 best_gain2 = gain.copy()
-
-        # wooftweet = WooferTweeterAO(tn)
-        # wooftweet.initialize_turbulence(tn=atmo_tn)
-        # wooftweet.pyr1.set_modulation_angle(wooftweet.sc1.modulationAngleInLambdaOverD)
-        # wooftweet.sc1.load_reconstructor(IM1,m2c1)
-        # wooftweet.sc1.set_slope_null(slope_null)
-        # wooftweet.pyr2.set_modulation_angle(wooftweet.sc2.modulationAngleInLambdaOverD)
-        # wooftweet.sc2.load_reconstructor(IM2,m2c2)
 
         wooftweet.tested_gains1 = gain1_vec        
         wooftweet.tested_gains2 = gain2_vec
