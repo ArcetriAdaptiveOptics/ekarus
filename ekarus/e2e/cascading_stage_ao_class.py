@@ -296,12 +296,24 @@ class CascadingAO(HighLevelAO):
         plt.plot(xp.asnumpy(res2_mode_rms)*1e+9,label='2nd stage residual (true)')
         plt.plot(xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='2nd stage residual (reconstructed)')
         plt.legend()
-        plt.xlabel('mode index')
+        plt.xlabel('mode #')
         plt.ylabel('mode RMS amp [nm]')
         plt.title('KL modes')
         plt.grid()
         plt.xscale('log')
         plt.yscale('log')
+
+        opt1_gains = rec1_modes_rms/res1_mode_rms[:self.sc1.nModes]
+        opt2_gains = rec1_modes_rms/res2_mode_rms[:self.sc2.nModes]
+
+        plt.figure()
+        plt.plot(xp.asnumpy(opt1_gains),label='1st stage')
+        plt.plot(xp.asnumpy(opt2_gains),'--',label='2nd stage')
+        plt.legend()
+        plt.xlabel('mode #')
+        plt.title('Optical gains')
+        plt.grid()
+        plt.xscale('log')
 
     
     def show_psf(self, frame_id:int=-1, save_prefix:str=None, oversampling:int=12):

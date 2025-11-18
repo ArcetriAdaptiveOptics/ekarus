@@ -48,6 +48,7 @@ class ConfigReader():
         """ Read atmosphere parameters from the configuration file."""
         try:
             cn2 = xp.array(self._cfile['ATMO']['cn2'])/100
+            assert xp.sum(cn2) == 1.0
             r0 = eval(self._cfile['ATMO']['r0'])
             self._cfile['ATMO']['r0'] = r0*cn2**(-3/5)
         except KeyError:

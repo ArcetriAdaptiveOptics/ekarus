@@ -66,15 +66,23 @@ class SlopeComputer():
         if hasattr(wfs,'apex_angle'):
             self.wfs_type = 'PWFS'
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
-            self._slope_method = 'slopes'
+            try:
+                self._slope_method = sc_pars['slope_method']
+            except KeyError:
+                self._slope_method = 'slopes'
         elif hasattr(wfs,'vertex3_angle'):
             self.wfs_type = '3PWFS'
             self.modulationAngleInLambdaOverD = sc_pars["modulationInLambdaOverD"]
-            self._slope_method = 'slopes'
+            try:
+                self._slope_method = sc_pars['slope_method']
+            except KeyError:
+                self._slope_method = 'slopes'
         elif hasattr(wfs,'dot_radius'):
             self.wfs_type = 'ZWFS'
         else:
             raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
+        
+
         
 
     def iir_filter(self, x, y):

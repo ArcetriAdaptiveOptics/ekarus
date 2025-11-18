@@ -165,7 +165,7 @@ class SingleStageAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, ma_dm_phases, ma_res_phases, det_frames, rec_modes, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, ma_res_phases, det_frames, rec_modes, dm_cmds, _ = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_in_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_in_rad = ma_res_phases[frame_id].data[~ma_res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
@@ -219,6 +219,15 @@ class SingleStageAO(HighLevelAO):
         plt.grid()
         plt.xscale('log')
         plt.yscale('log')
+
+        # opt_gains = rec_modes_rms/res_mode_rms[:self.sc.nModes]
+
+        # plt.figure()
+        # plt.plot(xp.asnumpy(opt_gains),label='1st stage')
+        # plt.xlabel('mode #')
+        # plt.title('Optical gains')
+        # plt.grid()
+        # plt.xscale('log')
 
 
     # def plot_rec_modes(self, save_prefix:str=''):

@@ -92,19 +92,22 @@ class HighLevelAO():
         m2c : array
             The mode-to-command matrix.
         """
-        KL_path = os.path.join(self.savecalibpath,str(save_prefix)+'KLmodes.fits')
-        m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+'m2c.fits')
+        L0 = self.layers._L0
+        r0 = self.layers._r0
+        self.atmo_pars_str = f'L0{L0:1.0f}m_r0{r0*1e+2:1.1f}cm_'
+        KL_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'KL.fits')
+        m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'m2c.fits')
         try:
             if self.recompute is True:
                 raise FileNotFoundError('Recompute is True')
             KL = myfits.read_fits(KL_path)
             m2c = myfits.read_fits(m2c_path)
         except FileNotFoundError:
-            if self.atmo_pars is None:
-                self.atmo_pars = self._config.read_atmo_pars()
-            r0s = self.atmo_pars['r0']
-            L0 = self.atmo_pars['outerScaleInM']
-            r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
+            # if self.atmo_pars is None:
+            #     self.atmo_pars = self._config.read_atmo_pars()
+            # r0s = self.atmo_pars['r0']
+            # L0 = self.atmo_pars['outerScaleInM']
+            # r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
             IFFs = dm.IFF.copy()
             if dm.slaving is not None: # slaving
                 IFFs = remap_on_new_mask(dm.IFF, dm.mask, dm.pupil_mask)
@@ -143,8 +146,8 @@ class HighLevelAO():
         IM : array
             The interaction matrix.
         """
-        IM_path = os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits')
-        Rec_path = os.path.join(self.savecalibpath,str(save_prefix)+'Rec.fits')
+        IM_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'IM.fits')
+        Rec_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'Rec.fits')
         try:
             if self.recompute is True:
                 raise FileNotFoundError('Recompute is True')
@@ -172,7 +175,7 @@ class HighLevelAO():
             The number of pupil lengths for the generated phase screens. 
         dt : float, optional
             Maximum time step, screen length is computed using the maximum wind speeds and simulation time.
-        The minimum length for the screen is 20 pupil diameters.
+        The minimum length for the screen is 24 pupil diameters.
         """
         r0s = self.atmo_pars['r0']
         L0 = self.atmo_pars['outerScaleInM']
@@ -195,8 +198,8 @@ class HighLevelAO():
                 maxLen = maxSpeed*maxTime
                 N = int(np.ceil(maxLen/self.pupilSizeInM))
             else:
-                N = 20
-        N = int(np.max([20,N])) # set minimum N to 20
+                N = 24
+        N = int(np.max([24,N])) # set minimum N to 24
         screenPixels = N*self.pupilSizeInPixels
         screenMeters = N*self.pupilSizeInM 
         if tn is not None:
@@ -211,6 +214,8 @@ class HighLevelAO():
         self.layers.generate_phase_screens(screenPixels, screenMeters, recompute_atmo_screens)
         self.layers.rescale_phasescreens() # rescale in meters
         self.layers.update_mask(self.cmask)
+        self.layers._r0 = r0
+        self.layers._L0 = L0
 
     
     
@@ -618,9 +623,9 @@ class HighLevelAO():
             ampInM *= xp.ones(Nmodes)
             rad_orders = self.radial_order(xp.arange(Nmodes)) #xp.sqrt(xp.arange(Nmodes)+1)
             ampInM /= xp.sqrt(rad_orders)
-        print(ampInM)
+        # print(ampInM)
         amps = ampInM*(2*xp.pi)/lambdaInM
-        print(f'Calibration amplitudes: {xp.max(ampInM)*1e+9:1.1f}-{xp.min(ampInM)*1e+9:1.1f} [nm] or {xp.max(amps):1.3f}-{xp.min(amps):1.3f} [rad]')
+        print(f'Calibration amplitudes: {xp.max(ampInM)*1e+9:1.0f}-{xp.min(ampInM)*1e+9:1.1f} [nm] ({xp.max(amps)*1e+3:1.0f}-{xp.min(amps)*1e+3:1.0f} [mrad])')
         for i in range(Nmodes):
             if phase_offset is None:
                 print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)

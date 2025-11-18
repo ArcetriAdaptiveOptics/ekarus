@@ -34,14 +34,12 @@ def main(tn:str='example_single_stage',
     ssao.initialize_turbulence(tn=atmo_tn)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
     ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)#max((1.0,ssao.sc.modulationAngleInLambdaOverD)))
-    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsinM=50e-9)
-    ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
+    Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=50e-9)
+    # ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 
-    
-    if save_prefix is None:
-        save_prefix = f'mag{ssao.starMagnitude:1.0f}_'
+    print(ssao.sc._slope_method)
 
     it_ss = max(200,int(ssao.Nits//2))
 
@@ -71,17 +69,24 @@ def main(tn:str='example_single_stage',
         plt.ylabel('SR %')
         plt.title('Strehl ratio vs integrator gain')
 
-    sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix=save_prefix)
-    # ssao.SR_in = xp.exp(-input_sig2)
-    # ssao.SR_out = xp.exp(-sig2)
     
     if starMagnitudes is not None:
         sig = xp.zeros([len(starMagnitudes),ssao.Nits])
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
+            save_prefix = f'magV{starMag:1.0f}_'+ssao.atmo_pars_str
             print(f'Now simulating for magnitude: {starMag:1.1f}')
-            sig[k,:],_ = ssao.run_loop(lambdaRef, starMag, save_prefix=f'magV{starMag:1.0f}_')
+            sig[k,:],_ = ssao.run_loop(lambdaRef, starMag, save_prefix=save_prefix)
         ssao.SR = xp.mean(xp.exp(-sig[:,-it_ss:]),axis=1)
+        ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
+    else:
+        if save_prefix is None:
+            save_prefix = f'mag{ssao.starMagnitude:1.0f}_'+ssao.atmo_pars_str
+        sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix=save_prefix)
+        ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
+        # ssao.SR_in = xp.exp(-input_sig2)
+        # ssao.SR_out = xp.exp(-sig2)
+
 
     # Post-processing and plotting
     print('Plotting results ...')
@@ -117,37 +122,27 @@ def main(tn:str='example_single_stage',
         plt.figure()
         myimshow(masked_array(screen,ssao.cmask), title='Atmo screen [m]', cmap='RdBu')
 
-    ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
+        if ssao.sc.slope_null is not None:
+            modes_null = Rec @ ssao.sc.slope_null
+            modes_null *= lambdaRef/(2*xp.pi)
+            plt.figure()
+            plt.plot(xp.asnumpy(xp.abs(modes_null))*1e+9,'-o')
+            plt.grid()
+            plt.xscale('log')
+            plt.yscale('log')
+            plt.xlabel('Mode #')
+            plt.ylabel('[nm]')
+            plt.title('Slope null modes')
 
     if show_contrast:
         ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix=save_prefix)
 
-    ssao.sig2 = sig2
     if starMagnitudes is not None:
-        ssao.sig = sig
-
-    if ssao.sc.slope_null is not None:
-        modes_null = Rec @ ssao.sc.slope_null
-        modes_null *= lambdaRef/(2*xp.pi)
-        plt.figure()
-        plt.plot(xp.asnumpy(xp.abs(modes_null))*1e+9,'-o')
-        plt.grid()
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.xlabel('Mode #')
-        plt.ylabel('[nm]')
-        plt.title('Slope null modes')
+        ssao.sig2 = sig
+    else:
+        ssao.sig2 = sig2
 
     tvec = xp.asnumpy(xp.arange(ssao.Nits)*ssao.dt*1e+3)
-    plt.figure()#figsize=(1.7*Nits/10,3))
-    plt.plot(tvec,xp.asnumpy(input_sig2),'-.',label='open loop')
-    plt.plot(tvec,xp.asnumpy(sig2),'-.',label='closed loop')
-    plt.legend()
-    plt.grid()
-    plt.xlim([0.0,tvec[-1]])
-    plt.xlabel('Time [ms]')
-    plt.ylabel(r'$\sigma^2 [rad^2]$')
-    plt.gca().set_yscale('log')
 
     if starMagnitudes is not None:
         plt.figure()
@@ -163,14 +158,25 @@ def main(tn:str='example_single_stage',
         plt.gca().set_yscale('log')
         plt.title(f'Strehl @ {lambdaRef*1e+9:1.0f} [nm] vs star magnitude')
 
-        plt.figure()
-        plt.plot(np.array(starMagnitudes),xp.asnumpy(SR_stars)*100,'-o')
-        # plt.errorbar(np.array(starMagnitudes),SR_stars*100,yerr=0.12,fmt='-o',capsize=4.0)
+        # plt.figure()
+        # plt.plot(np.array(starMagnitudes),xp.asnumpy(SR_stars)*100,'-o')
+        # # plt.errorbar(np.array(starMagnitudes),SR_stars*100,yerr=0.12,fmt='-o',capsize=4.0)
+        # plt.grid()
+        # plt.xlabel('magV')
+        # plt.ylabel('SR %')
+        # plt.title('Strehl ratio vs star magnitude')
+        # plt.xticks(np.array(starMagnitudes))
+    else:
+        plt.figure()#figsize=(1.7*Nits/10,3))
+        plt.plot(tvec,xp.asnumpy(input_sig2),'-.',label='open loop')
+        plt.plot(tvec,xp.asnumpy(sig2),'-.',label='closed loop')
+        plt.legend()
         plt.grid()
-        plt.xlabel('magV')
-        plt.ylabel('SR %')
-        plt.title('Strehl ratio vs star magnitude')
-        plt.xticks(np.array(starMagnitudes))
+        plt.xlim([0.0,tvec[-1]])
+        plt.xlabel('Time [ms]')
+        plt.ylabel(r'$\sigma^2 [rad^2]$')
+        plt.gca().set_yscale('log')
+
     
     plt.show()
 

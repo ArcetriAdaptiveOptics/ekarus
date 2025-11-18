@@ -53,7 +53,7 @@ class PupilShift(HighLevelAO):
     @override
     def perform_loop_iteration(self, input_phase, dm_cmds, int_cmds, dm_surf, slope_computer, 
                                tilt_before_DM:tuple=(0.0,0.0), tilt_after_DM:tuple=(0.0,0.0),
-                               starMagnitude:float=None, method:str='slopes'):
+                               starMagnitude:float=None):
         """
         Performs a single iteration of the AO loop.
 
@@ -100,7 +100,7 @@ class PupilShift(HighLevelAO):
         intensity = self.pyr._intensity_from_field(residual_field, lambdaOverD)
 
         detector_image = self.ccd.image_on_detector(intensity, photon_flux=Nphotons)
-        slopes = slope_computer._compute_pyr_signal(detector_image, method)
+        slopes = slope_computer._compute_pyr_signal(detector_image)
         modes = slope_computer.Rec @ slopes
         modes = modes * slope_computer.intGain
         cmd = slope_computer.m2c @ modes
@@ -182,7 +182,6 @@ class PupilShift(HighLevelAO):
             if save_prefix is not None:            
                 residual_phases[i, :] = residual_phase
                 input_phases[i, :] = input_phase
-                dm_phases[i, :] = self.dm.surface
                 detector_images[i, :, :] = self.ccd.last_frame
                 rec_modes[i, :] = modes
         
