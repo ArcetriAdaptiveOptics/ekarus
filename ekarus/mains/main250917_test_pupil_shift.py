@@ -33,7 +33,7 @@ def main(tn:str='example_pupil_shift',
     # wedgeAmp = pupilPixelShift * pyr2det
     subap_masks = xp.sum(pup_ssao.sc._roi_masks,axis=0)
 
-    ss_it = xp.max((pup_ssao.Nits,200))
+    ss_it = max(200,int(pup_ssao.Nits//2))
 
     print('Testing pupil shifts before DM')
     sig2_beforeDM = xp.zeros([len(shiftAngles),len(pupilShiftsInPixel),pup_ssao.Nits])

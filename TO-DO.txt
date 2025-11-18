@@ -1,10 +1,25 @@
 IMPORTANT:
 
-PWFS error budget (aliasing & noise vs: Nsubap, slopes method, sensor, rMod)
+PWFS ERROR BUDGET (aliasing & noise vs: Nsubap, slopes method, sensor, rMod)
 
-Slaving update: Tichonov regularisation (IMm.T @ IMm + LAMBDA) @ IMm.T
+SLAVING update: Tichonov regularisation (IMm.T @ IMm + LAMBDA) @ IMm.T
 
-Unmodulated calibration
+UNMODULATED calibration & ROOFTOP sensitivity
+
+PUPIL SHIFT sensitivity
+
+TT offload frequency & stroke saturation
+
+Add NCPA & vibrations
+
+OPTICAL GAINS
+
+PETALING sensitivity
+
+REPORT (push for 1.5 kHz)
+
+
+
 
 
 

@@ -1,29 +1,22 @@
 import matplotlib.pyplot as plt
-import os.path as op
 
-from ekarus.e2e.utils.image_utils import myimshow#, showZoomCenter,  reshape_on_mask
-from ekarus.e2e.cascading_stage_ao_class import CascadingAO
-
-import ekarus.e2e.utils.my_fits_package as myfits   
+from ekarus.e2e.cascading_stiles_class import CascadingBench
 
 import xupy as xp
 import numpy as np
-from numpy.ma import masked_array
 
 
-def main(tn:str='example_cascading_stage', 
+def main(tn:str='cascading_stiles', 
          atmo_tn='paranal',
-         lambdaRef=750e-9, 
-         show:bool=False, 
+         lambdaRef=800e-9, 
          show_contrast:bool=True,
          optimize_gain:bool=False, 
          gain1_list:list=None, 
          gain2_list:list=None,
          save_prefix:str=None):
-        #  t_interval:float=0.02):
 
     print('Initializing devices ...')
-    cascao = CascadingAO(tn)
+    cascao = CascadingBench(tn)
     cascao.initialize_turbulence(atmo_tn)
 
     amp1 = 50e-9
@@ -34,16 +27,14 @@ def main(tn:str='example_cascading_stage',
         amp2 = 20e-9
 
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=2, save_prefix='DM1_')
-    cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)#max((1.0,cascao.sc1.modulationAngleInLambdaOverD))) #
+    cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
     Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, ampsInM=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(IM1,m2c1)
-    # cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
 
     KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=2, save_prefix='DM2_')
-    cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)#max((1.0,cascao.sc2.modulationAngleInLambdaOverD))) #
+    cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
     Rec2, IM2 = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, ampsInM=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(IM2,m2c2)
-    # cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
 
     cascao.get_photons_per_subap(starMagnitude=cascao.starMagnitude)
 
@@ -117,78 +108,10 @@ def main(tn:str='example_cascading_stage',
     print('Running the loop ...')
     dm2_sig2, dm1_sig2, input_sig2 = cascao.run_loop(lambdaRef, cascao.starMagnitude, save_prefix=save_prefix)
 
-    # Post-processing and plotting
-    print('Plotting results ...')
-    if show:
-        subap1_masks = xp.sum(cascao.sc1._subaperture_masks,axis=0)
-        plt.figure()
-        myimshow(subap1_masks,title='Subaperture masks CCD1')
-        subap2_masks = xp.sum(cascao.sc2._subaperture_masks,axis=0)
-        plt.figure()
-        myimshow(subap2_masks,title='Subaperture masks CCD2')
-
-        KL = myfits.read_fits(op.join(cascao.savecalibpath,'DM1_KLmodes.fits'))
-        N=9
-        plt.figure(figsize=(2*N,7))
-        for i in range(N):
-            plt.subplot(4,N,i+1)
-            cascao.dm1.plot_surface(KL[i,:],title=f'KL Mode {i}')
-            plt.subplot(4,N,i+1+N)
-            cascao.dm1.plot_surface(KL[i+N,:],title=f'KL Mode {i+N}')
-            plt.subplot(4,N,i+1+N*2)
-            cascao.dm1.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-i-1-N}')
-            plt.subplot(4,N,i+1+N*3)
-            cascao.dm1.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
-
-        KL = myfits.read_fits(op.join(cascao.savecalibpath,'DM2_KLmodes.fits'))
-        N=9
-        plt.figure(figsize=(2*N,7))
-        for i in range(N):
-            plt.subplot(4,N,i+1)
-            cascao.dm2.plot_surface(KL[i,:],title=f'KL Mode {i}')
-            plt.subplot(4,N,i+1+N)
-            cascao.dm2.plot_surface(KL[i+N,:],title=f'KL Mode {i+N}')
-            plt.subplot(4,N,i+1+N*2)
-            cascao.dm2.plot_surface(KL[-i-1-N,:],title=f'KL Mode {xp.shape(KL)[0]-i-1-N}')
-            plt.subplot(4,N,i+1+N*3)
-            cascao.dm2.plot_surface(KL[-i-1,:],title=f'KL Mode {xp.shape(KL)[0]-i-1}')
-
-        IM1 = myfits.read_fits(op.join(cascao.savecalibpath,'SC1_IM.fits'))
-        _,IM1_eig,_ = xp.asnumpy(xp.linalg.svd(IM1,full_matrices=False))
-        IM2 = myfits.read_fits(op.join(cascao.savecalibpath,'SC2_IM.fits'))
-        _,IM2_eig,_ = xp.asnumpy(xp.linalg.svd(IM2,full_matrices=False))
-        plt.figure()
-        plt.plot(IM1_eig,'-o')
-        plt.plot(IM2_eig,'-o')
-        plt.grid()
-        plt.title('Interaction matrix singular values')
-
-        screen = cascao.get_phasescreen_at_time(0.5)
-        if xp.on_gpu:
-            screen = screen.get()
-        plt.figure()
-        myimshow(masked_array(screen,cascao.cmask), title='Atmo screen [m]', cmap='RdBu')
-
     cascao.dm1_sig2 = dm1_sig2
     cascao.dm2_sig2 = dm2_sig2
 
     cascao.plot_iteration(lambdaRef, save_prefix=save_prefix)
-
-    if cascao.sc1.slope_null is not None and show is True:
-        modes_null1 = Rec1 @ cascao.sc1.slope_null
-        modes_null1 *= lambdaRef/(2*xp.pi)
-        modes_null2 = Rec2 @ cascao.sc2.slope_null
-        modes_null2 *= lambdaRef/(2*xp.pi)
-        plt.figure()
-        plt.plot(xp.asnumpy(xp.abs(modes_null1))*1e+9,'-o')
-        plt.plot(xp.asnumpy(xp.abs(modes_null2))*1e+9,'-o')
-        plt.legend(('First stage slope null','Second stage slope null'))
-        plt.grid()
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.xlabel('Mode #')
-        plt.ylabel('[nm]')
-        plt.title('Slope null modes')
 
     if show_contrast:
         cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,

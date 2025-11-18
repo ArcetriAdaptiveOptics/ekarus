@@ -38,7 +38,7 @@ ATMO:
   windAngle: [-12, 44, 0, 123, -132]  # [deg] CCW from East
 
 LOOP:
-  nIterations: 2000
+  nIterations: 200
   starMagnitude: 1.0
   simFreqHz: 1500          # simulation frequency in Hz
   recompute: False         # if False, any calibration data saved from 

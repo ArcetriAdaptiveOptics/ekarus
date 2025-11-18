@@ -303,17 +303,17 @@ class CascadingAO(HighLevelAO):
         plt.xscale('log')
         plt.yscale('log')
 
-        opt1_gains = rec1_modes_rms/res1_mode_rms[:self.sc1.nModes]
-        opt2_gains = rec1_modes_rms/res2_mode_rms[:self.sc2.nModes]
+        # opt1_gains = rec1_modes_rms/res1_mode_rms[:self.sc1.nModes]
+        # opt2_gains = rec2_modes_rms/res2_mode_rms[:self.sc2.nModes]
 
-        plt.figure()
-        plt.plot(xp.asnumpy(opt1_gains),label='1st stage')
-        plt.plot(xp.asnumpy(opt2_gains),'--',label='2nd stage')
-        plt.legend()
-        plt.xlabel('mode #')
-        plt.title('Optical gains')
-        plt.grid()
-        plt.xscale('log')
+        # plt.figure()
+        # plt.plot(xp.asnumpy(opt1_gains),label='1st stage')
+        # plt.plot(xp.asnumpy(opt2_gains),'--',label='2nd stage')
+        # plt.legend()
+        # plt.xlabel('mode #')
+        # plt.title('Optical gains')
+        # plt.grid()
+        # plt.xscale('log')
 
     
     def show_psf(self, frame_id:int=-1, save_prefix:str=None, oversampling:int=12):
@@ -343,16 +343,16 @@ class CascadingAO(HighLevelAO):
 
         plt.figure()#figsize=(9,9))
         sz = psf1.shape
-        plt.imshow(xp.asnumpy(xp.log(psf1)), extent=[-sz[0]/2*pixToArcsec1, sz[0]/2*pixToArcsec1,
-                                -sz[1]/2*pixToArcsec1, sz[1]/2*pixToArcsec1], vmin = 6, origin='lower')
+        plt.imshow(xp.asnumpy(xp.log(psf1/xp.max(psf1))), extent=[-sz[0]//2.8*pixToArcsec1, sz[0]//2.8*pixToArcsec1,
+                                -sz[1]//2.8*pixToArcsec1, sz[1]//2.8*pixToArcsec1], vmin = -10.5, origin='lower')#, cmap='winter')
         plt.title(f'First stage PSF @ {lambdaRef1*1e+9:1.0f} nm')
         plt.xlabel('[arcsec]')
         plt.ylabel('[arcsec]')
 
         plt.figure()
         sz = psf2.shape
-        plt.imshow(xp.asnumpy(xp.log(psf2)), extent=[-sz[0]/2*pixToArcsec2, sz[0]/2*pixToArcsec2,
-                                -sz[1]/2*pixToArcsec2, sz[1]/2*pixToArcsec2], vmin = 6, origin='lower')
+        plt.imshow(xp.asnumpy(xp.log(psf2/xp.max(psf2))), extent=[-sz[0]//2.8*pixToArcsec2, sz[0]//2.8*pixToArcsec2,
+                                -sz[1]//2.8*pixToArcsec2, sz[1]//2.8*pixToArcsec2], vmin = -10.5, origin='lower', cmap='RdGy')
         plt.xlabel('[arcsec]')
         plt.ylabel('[arcsec]')
         plt.title(f'Second stage PSF @ {lambdaRef2*1e+9:1.0f} nm')

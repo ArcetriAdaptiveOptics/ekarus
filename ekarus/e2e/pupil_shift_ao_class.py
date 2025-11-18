@@ -102,15 +102,13 @@ class PupilShift(HighLevelAO):
         detector_image = self.ccd.image_on_detector(intensity, photon_flux=Nphotons)
         slopes = slope_computer._compute_pyr_signal(detector_image)
         modes = slope_computer.Rec @ slopes
-        modes = modes * slope_computer.intGain
+        modes = modes * slope_computer.modalGains
         cmd = slope_computer.m2c @ modes
         cmd /= m2rad
         modes /= m2rad  # convert to meters
 
         if self.dm.slaving is not None:
             cmd = self.dm.slaving @ cmd
-
-        dm_cmd = self.sc.iir_filter(int_cmds, dm_cmds)
 
         # Recover the residual phase     
         if xp.max(abs(xp.angle(residual_field))) >= 0.99*xp.pi:
@@ -120,7 +118,7 @@ class PupilShift(HighLevelAO):
         residual_phase = residual_phase_2d[~padded_mask]
         residual_phase /= m2rad  # in meters
 
-        return residual_phase, dm_cmd, modes
+        return residual_phase, cmd, modes
     
 
     def run_loop(self, lambdaInM:float, starMagnitude:float, 
@@ -171,8 +169,9 @@ class PupilShift(HighLevelAO):
                 dm_surf = IF @ dm_cmds[i - self.sc.delay, :]
 
             if i % int(self.sc.dt/self.dt) == 0:
-                residual_phase, dm_cmds[i,:], modes = self.perform_loop_iteration(input_phase, dm_cmds[:i+1,:], int_cmds[:i+1,:], dm_surf, self.sc,
+                residual_phase, int_cmds[i,:], modes = self.perform_loop_iteration(input_phase, dm_cmds[:i+1,:], int_cmds[:i+1,:], dm_surf, self.sc,
                                                                 tilt_before_DM, tilt_after_DM, starMagnitude)
+                dm_cmds[i,:] = self.sc.iir_filter(int_cmds[:i+1,:], dm_cmds[:i+1,:])
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 
