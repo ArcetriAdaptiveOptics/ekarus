@@ -14,7 +14,8 @@ from ekarus.e2e.pupil_shift_ao_class import PupilShift
 def main(tn:str='example_pupil_shift', 
         pupilShiftsInPixel:list=[0.1,0.2,0.3], 
         shiftAnglesInDegrees:list=[0.0,15,30,45,60,90],
-        atmo_tn='ekarus_5cm'):
+        atmo_tn='ekarus_5cm',
+        it_ss:int = 1000):
 
     pupilShiftsInPixel = xp.array(pupilShiftsInPixel)
     shiftAngles = xp.array(shiftAnglesInDegrees)*xp.pi/180
@@ -22,7 +23,6 @@ def main(tn:str='example_pupil_shift',
     pup_ssao = PupilShift(tn)
     pup_ssao.initialize_turbulence(atmo_tn)
     KL, m2c = pup_ssao.define_KL_modes(pup_ssao.dm, zern_modes=2)
-    pup_ssao.pyr.set_modulation_angle(pup_ssao.sc.modulationAngleInLambdaOverD)
     Rec, IM = pup_ssao.compute_reconstructor(pup_ssao.sc, KL, pup_ssao.pyr.lambdaInM, ampsInM=50e-9)
     pup_ssao.sc.load_reconstructor(IM,m2c)
 
@@ -75,10 +75,15 @@ def main(tn:str='example_pupil_shift',
     pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
     pup_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_str)
 
+    if it_ss is not None:
+        ss_it = it_ss
 
     SR_ref = xp.mean(xp.exp(-sig2[-ss_it:]))
     SR_beforeDM = xp.mean(xp.exp(-sig2_beforeDM[:,:,-ss_it:]),axis=-1)
     SR_afterDM = xp.mean(xp.exp(-sig2_afterDM[:,:,-ss_it:]),axis=-1)
+
+    pup_ssao.SRr_beforeDM = SR_beforeDM/SR_ref
+    pup_ssao.SRr_afterDM = SR_afterDM/SR_ref
 
     # Convert to numpy for plotting
     input_sig2 = xp.asnumpy(input_sig2)
@@ -120,10 +125,6 @@ def main(tn:str='example_pupil_shift',
         plt.gca().set_yscale('log')
         plt.title(f'{shiftAmp:1.2f} subaperture tilt after DM\nSR @ {lambdaRef*1e+9:1.0f} [nm]')
 
-
-    pup_ssao.sig2 = sig2
-    pup_ssao.sig2_beforeDM = sig2_beforeDM
-    pup_ssao.sig2_afterDM = sig2_afterDM
     # plt.figure()
     # plt.plot(tvec,rec_modes[:,:10],'-o')
     # plt.grid()

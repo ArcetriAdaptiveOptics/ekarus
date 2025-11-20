@@ -301,7 +301,8 @@ class SingleStageAO(HighLevelAO):
             frame_ids = xp.array(frame_ids)
         frame_ids = xp.asnumpy(frame_ids)
 
-        _, _, ma_res_phases, _, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
+        data_load = self.load_telemetry_data(data_keys=['residual_phases'], save_prefix=save_prefix)
+        ma_res_phases = data_load[0]
 
         N = len(frame_ids)
         res_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
@@ -319,3 +320,40 @@ class SingleStageAO(HighLevelAO):
         plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
         return rms_psf, pix_dist
+    
+
+    def get_tt_spectrum(self, save_prefix:str=None, show:bool=False):
+
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        data_load = self.load_telemetry_data(data_keys=['dm_commands'], save_prefix=save_prefix)
+        dm_cmds = xp.array(data_load[0])
+
+        max_cmd = xp.max(xp.abs(dm_cmds),axis=1)
+        # if self.dm.slaving is not None:
+        #     dm_cmds = (xp.linalg.pinv(self.dm.slaving) @ dm_cmds.T).T
+        # dm_modes = xp.linalg.pinv(self.sc.m2c) @ dm_cmds.T
+        # TT = dm_modes[:2,:]
+
+        TT = xp.linalg.pinv(self.dm.act_coords.T) @ dm_cmds.T
+
+        spe = xp.fft.rfft(TT, norm="ortho", axis=-1)
+        nn = xp.sqrt(spe.shape[-1])
+        spe_tt = (xp.abs(spe)) / nn
+        spe_tt[:,0] = 0 # remove DC component
+        freq = xp.fft.rfftfreq(TT.shape[-1], d=self.dt)
+
+        if show:
+            plt.figure()
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(spe_tt[0])*1e+9, label='tip')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(spe_tt[1])*1e+9, label='tilt')
+            plt.grid()
+            plt.legend()
+            plt.xlabel('Frequency [Hz]')
+            plt.ylabel('WF RMS [nm]')
+            plt.xscale('log')
+            plt.yscale('log')
+
+        return spe_tt, freq, max_cmd
+

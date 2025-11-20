@@ -34,16 +34,12 @@ def main(tn:str='example_cascading_stage',
         amp2 = 20e-9
 
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=2, save_prefix='DM1_')
-    cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)#max((1.0,cascao.sc1.modulationAngleInLambdaOverD))) #
     Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, ampsInM=amp1, save_prefix='SC1_')
     cascao.sc1.load_reconstructor(IM1,m2c1)
-    # cascao.pyr1.set_modulation_angle(cascao.sc1.modulationAngleInLambdaOverD)
 
     KL2, m2c2 = cascao.define_KL_modes(cascao.dm2, zern_modes=2, save_prefix='DM2_')
-    cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)#max((1.0,cascao.sc2.modulationAngleInLambdaOverD))) #
     Rec2, IM2 = cascao.compute_reconstructor(cascao.sc2, KL2, cascao.pyr2.lambdaInM, ampsInM=amp2, save_prefix='SC2_')
     cascao.sc2.load_reconstructor(IM2,m2c2)
-    # cascao.pyr2.set_modulation_angle(cascao.sc2.modulationAngleInLambdaOverD)
 
     cascao.get_photons_per_subap(starMagnitude=cascao.starMagnitude)
 

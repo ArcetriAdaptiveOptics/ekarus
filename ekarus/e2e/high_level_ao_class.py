@@ -92,8 +92,9 @@ class HighLevelAO():
         m2c : array
             The mode-to-command matrix.
         """
-        L0 = self.layers._L0
-        r0 = self.layers._r0
+        r0s = self.atmo_pars['r0']
+        L0 = self.atmo_pars['outerScaleInM']
+        r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
         self.atmo_pars_str = f'L0{L0:1.0f}m_r0{r0*1e+2:1.1f}cm_'
         KL_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'KL.fits')
         m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'m2c.fits')
@@ -419,20 +420,23 @@ class HighLevelAO():
         if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
             raise ValueError(f'Pupil center in the subquadrant is {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
 
+        zero_phase = 1-self.cmask
+        lambdaOverD = sensorLambda/self.pupilSizeInM
         sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
         sc = SlopeComputer(pyr, det, sc_pars)
         sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_', 
                         recompute=self.recompute,
-                        piston=1-self.cmask, 
-                        lambdaOverD = sensorLambda/self.pupilSizeInM,
+                        zero_phase=zero_phase, 
+                        lambdaOverD=lambdaOverD,
                         Npix = subapertureSize,
                         centerObscurationInPixels = 
                         # self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
                         xp.floor(subapertureSize+1.0)*self.centerObscurationInM/self.pupilSizeInM
         ) 
+        pyr.set_modulation_angle(sc.modulationAngleInLambdaOverD)
+        sc.compute_slope_null(zero_phase, lambdaOverD)
         
         return pyr, det, sc
-    
 
     def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM,
                                 ampsInM:float=50e-9, save_prefix:str=''):

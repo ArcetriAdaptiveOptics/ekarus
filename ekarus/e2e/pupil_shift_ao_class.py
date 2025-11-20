@@ -90,7 +90,7 @@ class PupilShift(HighLevelAO):
         if abs(max(tilt_before_DM)) > 0.0:
             input_field = self._tilt_field(input_field, tilt_before_DM[0], tilt_before_DM[1])
 
-        dm_phase_in_rad = reshape_on_mask(dm_surf[self.dm.visible_pix_ids] * m2rad, padded_dm_mask)
+        dm_phase_in_rad = reshape_on_mask(dm_surf * m2rad, padded_dm_mask) #[self.dm.visible_pix_ids]
         dm_field = (1-padded_dm_mask) * xp.exp(1j * dm_phase_in_rad)#, dtype=self.pyr.cdtype)
         residual_field = input_field * dm_field.conj()
 

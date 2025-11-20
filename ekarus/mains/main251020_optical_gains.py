@@ -18,8 +18,7 @@ def main(tn:str='optical_gains',
 
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence()
-    ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=5)
+    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
     r0 = (1/xp.sum(ssao.atmo_pars['r0']**(-5/3)))**(3/5)
     saveprefix = f'mod{ssao.sc.modulationAngleInLambdaOverD:1.0f}_r0={r0*1e+2:1.0f}cm_'
     amp = 50e-9

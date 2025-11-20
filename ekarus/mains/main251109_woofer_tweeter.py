@@ -23,17 +23,15 @@ def main(tn:str,
 
     wooftweet.initialize_turbulence(tn=atmo_tn)
 
-    KL1, m2c1 = wooftweet.define_KL_modes(wooftweet.dm1, zern_modes=5, save_prefix='woof_')
+    KL1, m2c1 = wooftweet.define_KL_modes(wooftweet.dm1, zern_modes=2, save_prefix='woof_')
 
     # KL2, m2c2 = wooftweet.define_KL_modes(wooftweet.dm2, filt_modes=KL1[:wooftweet.sc1.nModes,:], save_prefix='tweet_')
     KL2 = KL1[wooftweet.sc1.nModes:,:]
     m2c2 = m2c1[:,wooftweet.sc1.nModes:]
 
-    wooftweet.pyr1.set_modulation_angle(wooftweet.sc1.modulationAngleInLambdaOverD)
     Rec1, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL1[:wooftweet.sc1.nModes,:], wooftweet.pyr1.lambdaInM, ampsInM=amp, save_prefix='woof_')
     wooftweet.sc1.load_reconstructor(IM1,m2c1)
 
-    wooftweet.pyr2.set_modulation_angle(wooftweet.sc2.modulationAngleInLambdaOverD)
     _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL2, wooftweet.pyr2.lambdaInM, ampsInM=amp, save_prefix='tweet_')
     wooftweet.sc2.load_reconstructor(IM2,m2c2)
 

@@ -39,6 +39,16 @@ class SlopeComputer():
                 sc_pars["delay"],
                 sc_pars["nModes2Correct"],
             )
+            if len(self.gains) != len(self.nModes):
+                raise ValueError(f'Integrator gains {self.gains} are not compatible with length of number of modes to correct {self.nModes}')
+            
+            self.modalGains = xp.hstack([xp.repeat(self.gains[i],int(self.nModes[i])) for i in range(len(self.nModes))])
+            self.nModes = int(xp.max(xp.cumsum(self.nModes)))
+
+            if len(self.gains) == 1:
+                self.intGain = xp.max(self.gains) # intGain is the single integrator gain
+            else:
+                self.intGain = 1.0 # intGain is a scalar rescaling fro modal gains
         except KeyError:
             pass
 
@@ -50,16 +60,6 @@ class SlopeComputer():
         except KeyError:
             self.iir_num, self.iir_den = xp.array([1.0]), xp.array([1.0,-1.0])
 
-        if len(self.gains) != len(self.nModes):
-            raise ValueError(f'Integrator gains {self.gains} are not compatible with length of number of modes to correct {self.nModes}')
-        
-        self.modalGains = xp.hstack([xp.repeat(self.gains[i],int(self.nModes[i])) for i in range(len(self.nModes))])
-        self.nModes = int(xp.max(xp.cumsum(self.nModes)))
-
-        if len(self.gains) == 1:
-            self.intGain = xp.max(self.gains) # intGain is the single integrator gain
-        else:
-            self.intGain = 1.0 # intGain is a scalar rescaling fro modal gains
 
         self.slope_null = None
 
@@ -106,7 +106,7 @@ class SlopeComputer():
         roi_path = join(calibpath, tn, prefix_str+'ROI-Masks.fits')    
         match self.wfs_type:
             case 'PWFS':
-                self._piston, self._lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
+                zero_phase, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['zero_phase'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
                     if recompute is True:
                         raise FileNotFoundError('Recompute is True')
@@ -115,13 +115,13 @@ class SlopeComputer():
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
-                    modulated_intensity = self._wfs.get_intensity(self._piston, self._lambdaOverD)
+                    modulated_intensity = self._wfs.get_intensity(zero_phase, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     self._define_pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
-                    hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': self._lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
+                    hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case '3PWFS':
-                self._piston, self._lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['piston'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
+                zero_phase, lambdaOverD, subaperturePixelSize, centerObscPixelSize = kwargs['zero_phase'], kwargs['lambdaOverD'], kwargs['Npix'], kwargs['centerObscurationInPixels']
                 try:
                     if recompute is True:
                         raise FileNotFoundError('Recompute is True')
@@ -130,10 +130,10 @@ class SlopeComputer():
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
-                    modulated_intensity = self._wfs.get_intensity(self._piston, self._lambdaOverD)
+                    modulated_intensity = self._wfs.get_intensity(zero_phase, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     self._define_3pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
-                    hdr_dict = {'APEX_ANG': self._wfs.vertex3_angle, 'RAD2PIX': self._lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
+                    hdr_dict = {'APEX_ANG': self._wfs.vertex3_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case 'ZWFS':
                 try:
@@ -174,20 +174,18 @@ class SlopeComputer():
         return slopes
     
     
-    def load_reconstructor(self, IM, m2c, method:str=None, remove_slope_null:bool=True):
+    def load_reconstructor(self, IM, m2c, method:str=None):
         """
         Load the reconstructor and the mode-to-command matrix
         """
-        Rec = xp.linalg.pinv(IM[:,:self.nModes])
+        IMn = IM[:,:self.nModes]
+        U,D,V = xp.linalg.svd(IMn)
+        Rec = (V.T * 1/D) @ U.T
         self.Rec = Rec
         self.m2c = m2c[:,:self.nModes]
 
         if method is not None:
             self._slope_method = method
-
-        if remove_slope_null is True and self.slope_null is None and self.wfs_type != 'ZWFS':
-            print(f'Computing slope null...')
-            self.slope_null = self.compute_slopes(self._piston, self._lambdaOverD, None)
 
 
     def set_new_gain(self, intGain:float):
@@ -196,8 +194,12 @@ class SlopeComputer():
         self.intGain = intGain
 
 
-    def set_slope_null(self, slope_null):
-        self.slope_null = slope_null
+    def compute_slope_null(self, zero_phase, lambdaOverD):
+        """ Set the slope null value """
+        self.slope_null = self.compute_slopes(zero_phase,lambdaOverD,nPhotons=None)
+        detector_image = self._detector.last_frame
+        frame = xp.vstack([detector_image[~self._roi_masks[j]] for j in range(xp.shape(self._roi_masks)[0])])
+        self._ref_slope = xp.mean(frame,axis=1)
 
 
     def _compute_pyr_signal(self, detector_image):
@@ -215,8 +217,8 @@ class SlopeComputer():
             case 'diagonal_slopes':
                 up_down = (A+B) - (C+D)
                 left_right = (A+C) - (B+D)
-                # diag = (A+D) - (B+C)
-                diag = xp.sqrt(2)*(A+D) - xp.sqrt(2)*(B+C)
+                diag = (A+D) - (B+C)
+                # diag = xp.sqrt(2)*(A+D) - xp.sqrt(2)*(B+C) # this is probably worse in noise propagation
                 slopes = xp.hstack((up_down, left_right, diag))
                 
             case 'raw_intensity':
@@ -225,7 +227,7 @@ class SlopeComputer():
             case _:
                 raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'diagonal_slopes'")
             
-        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))#/4
+        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))/4
         slopes *= 1/mean_intensity
         return slopes
     
@@ -243,9 +245,9 @@ class SlopeComputer():
 
             case 'all_slopes':
                 ab = (A+B)/2-C
-                ac = (A+C)/2-B
+                # ac = (A+C)/2-B # note that ab+bc = -ac, so it is redundant
                 bc = (C+B)/2-A
-                slopes = xp.hstack((ab,ac,bc))
+                slopes = xp.hstack((ab,bc))
                 
             case 'raw_intensity':
                 slopes = xp.hstack((A,B,C))
@@ -253,7 +255,7 @@ class SlopeComputer():
             case _:
                 raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'all_slopes'")
             
-        mean_intensity = xp.mean(xp.hstack((A,B,C)))
+        mean_intensity = xp.mean(xp.hstack((A,B,C)))/3
         slopes *= 1/mean_intensity
         return slopes
     
@@ -327,3 +329,10 @@ class SlopeComputer():
             return xp.round(qy), xp.round(qx)
         else:
             return xp.round(qx-0.5), xp.round(qy-0.5)
+        
+    @staticmethod
+    def define_cramer_rao_matrix(ref_intensity, nPhotons, RON, Npupils):
+        pix_intensity = ref_intensity/xp.sum(ref_intensity)*nPhotons
+        Cn_diag = pix_intensity/nPhotons**2 + Npupils*RON**2/nPhotons**2
+        Cn = xp.diag(Cn_diag)
+        return Cn

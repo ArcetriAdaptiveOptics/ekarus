@@ -103,12 +103,12 @@ class ErrorBudget():
         sig_rad = xp.sqrt(sig2_rad)
         return rad2nm(sig_rad,lambdaInM)
     
-    def sigma_alias(self,T,N,lambdaInM):
-        sig2_rad = 0.0
-        for i in range(len(self.gain)):
-            sig2_rad += self._sigma_alias_i(T,i,N)
-        sig_rad = xp.sqrt(sig2_rad)
-        return rad2nm(sig_rad,lambdaInM)
+    # def sigma_alias(self,T,N,lambdaInM):
+    #     sig2_rad = 0.0
+    #     for i in range(len(self.gain)):
+    #         sig2_rad += self._sigma_alias_i(T,i,N)
+    #     sig_rad = xp.sqrt(sig2_rad)
+    #     return rad2nm(sig_rad,lambdaInM)
     
     def sigma_meas(self,T,mag,lambdaInM):
         sig2_rad = 0.0
@@ -120,10 +120,10 @@ class ErrorBudget():
     def sigma_tot(self,lambdaInM,N,T,mag):
         sig_fit = self.sigma_fit(N,lambdaInM)
         sig_meas = self.sigma_meas(T,mag,lambdaInM)
-        sig_alias = self.sigma_alias(T,N,lambdaInM)
+        # sig_alias = self.sigma_alias(T,N,lambdaInM)
         sig_temp = self.sigma_temp(T,lambdaInM)
-        sig_tot = xp.sqrt(sig_fit**2 + sig_meas**2 + sig_temp**2 + sig_alias**2)
-        return sig_tot, sig_alias, sig_fit, sig_meas, sig_temp
+        sig_tot = xp.sqrt(sig_fit**2 + sig_meas**2 + sig_temp**2)# + sig_alias**2)
+        return sig_tot, sig_fit, sig_meas, sig_temp#, sig_alias
     
 
     def get_SR(self,lambdaInM,N,T,mag):
@@ -151,43 +151,43 @@ class ErrorBudget():
         sigma2_rad = sig2_w*xp.trapz(NTF2,self.om) #xp.sum(xp.dot(sig2_w,NTF2))
         return sigma2_rad
 
-    def _sigma_alias_i(self,T,i,N):
-        sig2_alias = self.sig2_alias[i]
-        NTF2 = xp.abs(self.NTF(T,i))**2
-        n = radial_order(N)*2 # estimated cut-off at double the highest spatial frequency
-        PSD = temporal_psd(self.freq, n, 1.0, self.D, self.V)
-        sigma2_rad = sig2_alias*xp.trapz(PSD*NTF2,self.om) #xp.sum(xp.dot(PSD,NTF2))
-        return sigma2_rad
+    # def _sigma_alias_i(self,T,i,N):
+    #     sig2_alias = self.sig2_alias[i]
+    #     NTF2 = xp.abs(self.NTF(T,i))**2
+    #     n = radial_order(N)*2 # estimated cut-off at double the highest spatial frequency
+    #     PSD = temporal_psd(self.freq, n, 1.0, self.D, self.V)
+    #     sigma2_rad = sig2_alias*xp.trapz(PSD*NTF2,self.om) #xp.sum(xp.dot(PSD,NTF2))
+    #     return sigma2_rad
 
 
-    def define_aliasing_variance(self,r0s,cmask,slope_computer,lambdaInM,pixSize,KL,N,Nmodes):
-        aliasing = None
-        phase2modes = xp.linalg.pinv(KL.T) 
-        Rec = xp.linalg.pinv(self.IM[:,:Nmodes])
-        field_amp = 1-cmask
-        lambdaOverD = lambdaInM/self.D
-        m2rad = (2*xp.pi)/lambdaInM
-        turbulence = TurbulenceLayers(r0s,self.L0)
-        for i in range(N):
-            turbulence.generate_phase_screens(screenSizeInMeters=self.D,screenSizeInPixels=pixSize)
-            turbulence.rescale_phasescreens()
-            atmo_screen = xp.sum(turbulence.phase_screens,axis=0)
-            atmo_phase = atmo_screen[~cmask]
-            atmo_phase -= xp.mean(atmo_phase)
-            atmo_modes = phase2modes @ atmo_phase
-            rec_phase = KL.T @ atmo_modes
-            res_phase = atmo_phase - rec_phase
+    # def define_aliasing_variance(self,r0s,cmask,slope_computer,lambdaInM,pixSize,KL,N,Nmodes):
+    #     aliasing = None
+    #     phase2modes = xp.linalg.pinv(KL.T) 
+    #     Rec = xp.linalg.pinv(self.IM[:,:Nmodes])
+    #     field_amp = 1-cmask
+    #     lambdaOverD = lambdaInM/self.D
+    #     m2rad = (2*xp.pi)/lambdaInM
+    #     turbulence = TurbulenceLayers(r0s,self.L0)
+    #     for i in range(N):
+    #         turbulence.generate_phase_screens(screenSizeInMeters=self.D,screenSizeInPixels=pixSize)
+    #         turbulence.rescale_phasescreens()
+    #         atmo_screen = xp.sum(turbulence.phase_screens,axis=0)
+    #         atmo_phase = atmo_screen[~cmask]
+    #         atmo_phase -= xp.mean(atmo_phase)
+    #         atmo_modes = phase2modes @ atmo_phase
+    #         rec_phase = KL.T @ atmo_modes
+    #         res_phase = atmo_phase - rec_phase
 
-            phase_in_rad = reshape_on_mask(res_phase*m2rad, cmask)
-            input_field = field_amp * xp.exp(1j*phase_in_rad)
-            slope = slope_computer.compute_slopes(input_field, lambdaOverD, None)
-            wfs_modes_in_rad = Rec @ slope
-            if aliasing is None:
-                aliasing = wfs_modes_in_rad**2
-            else:
-                aliasing += wfs_modes_in_rad**2
-        aliasing = xp.sqrt(aliasing/N)
-        self.sig2_alias = aliasing**2
+    #         phase_in_rad = reshape_on_mask(res_phase*m2rad, cmask)
+    #         input_field = field_amp * xp.exp(1j*phase_in_rad)
+    #         slope = slope_computer.compute_slopes(input_field, lambdaOverD, None)
+    #         wfs_modes_in_rad = Rec @ slope
+    #         if aliasing is None:
+    #             aliasing = wfs_modes_in_rad**2
+    #         else:
+    #             aliasing += wfs_modes_in_rad**2
+    #     aliasing = xp.sqrt(aliasing/N)
+    #     self.sig2_alias = aliasing**2
 
     def get_total_intensity(self,mag,T):
         return Nphot(T,mag,self.D,self.thrp)#*self.diffraction_loss
@@ -202,8 +202,8 @@ class ErrorBudget():
         B = wfs_frame[~subaperture_masks[1]]
         C = wfs_frame[~subaperture_masks[2]]
         D = wfs_frame[~subaperture_masks[3]]
-        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))
-        self.diffraction_loss = mean_intensity/xp.sum(wfs_frame) #
+        # mean_intensity = xp.mean(xp.hstack((A,B,C,D)))
+        # self.diffraction_loss = mean_intensity/xp.sum(wfs_frame) #
         self._ref_pix_intensities = xp.mean(xp.vstack((A,B,C,D)),axis=0)
         # up_down_slope = (A+B)-(C+D)
         # left_right_slope = (A+C)-(B+D)

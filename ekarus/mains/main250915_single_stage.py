@@ -33,9 +33,7 @@ def main(tn:str='example_single_stage',
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence(tn=atmo_tn)
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
-    ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)#max((1.0,ssao.sc.modulationAngleInLambdaOverD)))
     Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=50e-9)
-    # ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 

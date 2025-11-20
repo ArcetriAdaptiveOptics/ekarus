@@ -10,13 +10,9 @@ PUPIL SHIFT sensitivity
 
 TT offload frequency & stroke saturation
 
-Add NCPA & vibrations
-
 OPTICAL GAINS
 
 PETALING sensitivity
-
-REPORT (push for 1.5 kHz)
 
 
 
