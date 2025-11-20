@@ -179,7 +179,7 @@ class SlopeComputer():
         Load the reconstructor and the mode-to-command matrix
         """
         IMn = IM[:,:self.nModes]
-        U,D,V = xp.linalg.svd(IMn)
+        U,D,V = xp.linalg.svd(IMn, full_matrices=False)
         Rec = (V.T * 1/D) @ U.T
         self.Rec = Rec
         self.m2c = m2c[:,:self.nModes]
@@ -197,9 +197,9 @@ class SlopeComputer():
     def compute_slope_null(self, zero_phase, lambdaOverD):
         """ Set the slope null value """
         self.slope_null = self.compute_slopes(zero_phase,lambdaOverD,nPhotons=None)
-        detector_image = self._detector.last_frame
-        frame = xp.vstack([detector_image[~self._roi_masks[j]] for j in range(xp.shape(self._roi_masks)[0])])
-        self._ref_slope = xp.mean(frame,axis=1)
+        # detector_image = self._detector.last_frame
+        # frame = xp.vstack([detector_image[~self._roi_masks[j]] for j in range(xp.shape(self._roi_masks)[0])])
+        # self._ref_slope = xp.mean(frame,axis=0)
 
 
     def _compute_pyr_signal(self, detector_image):
@@ -328,11 +328,12 @@ class SlopeComputer():
         if mode == 'quadrant':
             return xp.round(qy), xp.round(qx)
         else:
-            return xp.round(qx-0.5), xp.round(qy-0.5)
+            return xp.round(qx-0.5), xp.round(qy-0.5)#xp.round(qx), xp.round(qy)#
         
     @staticmethod
     def define_cramer_rao_matrix(ref_intensity, nPhotons, RON, Npupils):
         pix_intensity = ref_intensity/xp.sum(ref_intensity)*nPhotons
-        Cn_diag = pix_intensity/nPhotons**2 + Npupils*RON**2/nPhotons**2
+        N = nPhotons/len(pix_intensity)
+        Cn_diag = pix_intensity/N**2 + Npupils*RON**2/N**2
         Cn = xp.diag(Cn_diag)
         return Cn

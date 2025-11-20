@@ -13,15 +13,20 @@ class PyramidWFS:
     where the phase shift depends on the distance from the apex.
     """
 
-    def __init__(self, apex_angle, oversampling, sensorLambda, sensorBandwidth=0.0):
+    def __init__(self, apex_angle, oversampling, sensorLambda, sensorBandwidth=0.0, roofSize=0.0):
         """
         Pyramid wavefront sensor constructor.
 
-        :param apex_angle: pyramid vertex angle in radians
+        :param apex_angle: pyramid vertex angle in radians     
+        :param roof: integer number of pixels separating the first from the third
+                     quadrant along the main diagonal. A non-zero roof moves Q1
+                     and Q3 away from the center along the (1,1) diagonal and
+                     creates a diagonal 'roof' gap
         """
         self.apex_angle = apex_angle
         self.oversampling = oversampling
         self.lambdaInM = sensorLambda
+        self.roof = roofSize
 
         self._lambdaRange = None
         if sensorBandwidth >= 100e-9:
@@ -115,7 +120,7 @@ class PyramidWFS:
         alpha_pix = self.modulationAngleInLambdaOverD*self.oversampling*(2*xp.pi)
         phi_vec = (2*xp.pi)*xp.arange(self._modNsteps)/self._modNsteps
 
-        intensity = xp.zeros(input_field.shape,dtype = self.dtype)
+        intensity = xp.zeros(input_field.shape,dtype=self.dtype)
 
         for phi in phi_vec:
             tilt = tiltX * xp.cos(phi) + tiltY * xp.sin(phi)
@@ -126,25 +131,31 @@ class PyramidWFS:
 
         return intensity
     
-    
-    # @lru_cache(maxsize=5)
     def pyramid_phase_delay(self, shape):
         """
         Computes the phase delay introduced by the pyramid wavefront sensor
         in the focal plane.
 
-        :param shape: tuple (ny, nx) electric field dimensions
+        :param shape: tuple (ny, nx) electric field dimensions  
         :return: array numpy 2D float (phase delay in pixels)
         """
         X,Y = image_grid(shape, recenter=True)
         D = max(shape)
-        phi = self.apex_angle*(1 - 1/D*(abs(X)+abs(Y)))
+        if self.roof == 0:
+            phi = self.apex_angle*(1 - 1/D*(abs(X)+abs(Y)))
+        else:
+            dist1 = abs(X+Y)/xp.sqrt(2) #  distance from \ diagonal
+            dist2 = abs(X-Y)/xp.sqrt(2) #  distance from / diagonal
+            half = self.roof/2 * self.oversampling
+            sign_xy = 1-2*((X+Y)/xp.sqrt(2)>=half)
+            phi = self.apex_angle * (1 - (abs(X+half/xp.sqrt(2)*sign_xy)+
+                                          abs(Y+half/xp.sqrt(2)*sign_xy))/D*(dist1>=half)
+                                            - dist2*xp.sqrt(2)/D*(dist1<half))
         phi = xp.asarray(phi,dtype=self.dtype)
-
         return phi
     
-
-    # @lru_cache(maxsize=5)
+    
+    
     def _get_XY_tilt_planes(self, input_shape):
         tiltX,tiltY = image_grid(input_shape, recenter=True)
         L = max(input_shape)
