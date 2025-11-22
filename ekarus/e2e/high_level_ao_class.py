@@ -95,9 +95,9 @@ class HighLevelAO():
         r0s = self.atmo_pars['r0']
         L0 = self.atmo_pars['outerScaleInM']
         r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
-        self.atmo_pars_str = f'L0{L0:1.0f}m_r0{r0*1e+2:1.1f}cm_'
-        KL_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'KL.fits')
-        m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'m2c.fits')
+        # self.atmo_pars_str = f'L0{L0:1.0f}m_r0{r0*1e+2:1.1f}cm_'
+        KL_path = os.path.join(self.savecalibpath,str(save_prefix)+'KL.fits')#+self.atmo_pars_str+'KL.fits')
+        m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+'m2c.fits')#+self.atmo_pars_str+'m2c.fits')
         try:
             if self.recompute is True:
                 raise FileNotFoundError('Recompute is True')
@@ -147,8 +147,8 @@ class HighLevelAO():
         IM : array
             The interaction matrix.
         """
-        IM_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'IM.fits')
-        Rec_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'Rec.fits')
+        IM_path = os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits')#+self.atmo_pars_str
+        Rec_path = os.path.join(self.savecalibpath,str(save_prefix)+'Rec.fits')#+self.atmo_pars_str
         try:
             if self.recompute is True:
                 raise FileNotFoundError('Recompute is True')
@@ -364,6 +364,10 @@ class HighLevelAO():
             self.recompute = loop_pars['recompute']
         except KeyError:
             self.recompute = False
+        try:
+            self.tt_offload = self._config.read_tip_tilt_offloading_pars()
+        except KeyError:
+            self.tt_offload = None
 
 
     def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):

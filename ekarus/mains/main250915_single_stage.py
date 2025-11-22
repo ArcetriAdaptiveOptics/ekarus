@@ -84,7 +84,7 @@ def main(tn:str='example_single_stage',
         ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
     else:
         if save_prefix is None:
-            save_prefix = f'mag{ssao.starMagnitude:1.0f}_'+ssao.atmo_pars_str
+            save_prefix = f'mag{ssao.starMagnitude:1.0f}_'#+ssao.atmo_pars_str
         sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix=save_prefix)
         ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
         # ssao.SR_in = xp.exp(-input_sig2)

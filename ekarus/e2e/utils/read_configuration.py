@@ -62,6 +62,9 @@ class ConfigReader():
         self._cfile[slope_computer_name]['integratorGain'] = xp.array(self._cfile[slope_computer_name]['integratorGain'])
         self._cfile[slope_computer_name]['nModes2Correct'] = xp.array(self._cfile[slope_computer_name]['nModes2Correct'])
         return self._cfile[slope_computer_name]
+    
+    def read_tip_tilt_offloading_pars(self):
+        return self._cfile['TT.OFFLOADING']
 
     def read_loop_pars(self):
         """ Read loop parameters from the configuration file."""

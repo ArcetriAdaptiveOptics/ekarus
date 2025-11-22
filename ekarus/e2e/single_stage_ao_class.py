@@ -81,6 +81,14 @@ class SingleStageAO(HighLevelAO):
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
+        if self.tt_offload is not None:
+            tt_coeffs = xp.zeros([self.Nits,2],dtype=self.dtype)
+            tt_offload_dt = 1/self.tt_offload['frequencyInHz']
+            tt_gain = self.tt_offload['gain']
+            c2tt = xp.linalg.pinv(self.dm.act_coords.T)
+            tt2surf = IF @ self.dm.act_coords.T
+            
+
         if save_prefix is not None:
             residual_phases = xp.zeros([self.Nits, mask_len],dtype=self.dtype)
             input_phases = xp.zeros([self.Nits, mask_len],dtype=self.dtype)
@@ -97,7 +105,16 @@ class SingleStageAO(HighLevelAO):
                 
             if i >= self.sc.delay:
                 dm_surf = IF @ dm_cmds[i - self.sc.delay, :]
+                if self.tt_offload is not None:
+                    dm_surf += tt2surf @ tt_coeffs[i,:]
             residual_phase = input_phase - dm_surf[self.dm.visible_pix_ids]
+
+            if self.tt_offload is not None and i > 0:
+                tt_coeffs[i,:] = tt_coeffs[i-1,:].copy()
+                if i % int(tt_offload_dt/self.dt) == 0:
+                    tt = c2tt @ dm_cmds[i-self.sc.delay,:]
+                    tt_coeffs[i,:] += tt_gain * tt
+
 
             if i % int(self.sc.dt/self.dt) == 0:
                 int_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, self.sc, 
@@ -106,6 +123,7 @@ class SingleStageAO(HighLevelAO):
                 dm_cmds[i,:] = self.sc.iir_filter(int_cmds[:i+1,:], dm_cmds[:i+1,:])
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
+
 
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2 #[xp.abs(residual_phase)>0.0]
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
@@ -123,6 +141,8 @@ class SingleStageAO(HighLevelAO):
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
             dm_phases = xp.stack([reshape_on_mask(IF @ dm_cmds[i, :], self.dm.mask)for i in range(self.Nits)])
+            if self.tt_offload is not None:
+                tt_dm_phases = xp.stack([reshape_on_mask(tt2surf @ tt_coeffs[i, :], self.dm.mask)for i in range(self.Nits)])
             res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
@@ -145,6 +165,8 @@ class SingleStageAO(HighLevelAO):
                 data_dict[key] = value
 
             self.save_telemetry_data(data_dict, save_prefix)
+            if self.tt_offload is not None:
+                self.save_telemetry_data({'tt_dm_phases':tt_dm_phases},save_prefix)
 
         return res_phase_rad2, atmo_phase_rad2
     
@@ -228,55 +250,6 @@ class SingleStageAO(HighLevelAO):
         # plt.title('Optical gains')
         # plt.grid()
         # plt.xscale('log')
-
-
-    # def plot_rec_modes(self, save_prefix:str=''):
-    #     """
-    #     Plots the reconstruced modes.
-        
-    #     Parameters
-    #     ----------
-    #     save_prefix : str, optional
-    #         The prefix used when saving telemetry data, by default ''.
-    #     """
-    #     if save_prefix is None:
-    #         save_prefix = self.save_prefix
-
-    #     _, _, _, _, rec_modes, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
-
-    #     zern_modes = rec_modes[:,:5]
-    #     max_mode = xp.max(xp.abs(rec_modes[:,5:]),axis=1)
-    #     m2rad = 2*xp.pi/self.pyr.lambdaInM
-
-    #     n_its = 100
-
-    #     plt.figure()
-    #     plt.plot(xp.asnumpy(xp.abs(zern_modes)*m2rad),'-o')
-    #     plt.plot(xp.asnumpy(max_mode*m2rad),'-o')
-    #     # plt.yscale('log')
-    #     plt.xlabel('# iteration')
-    #     plt.ylabel(f'[rad] @ {self.pyr.lambdaInM*1e+9:1.0f}nm')
-    #     plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY','Max'))
-    #     plt.xlim([0, n_its])
-    #     plt.grid()
-    #     plt.title('Reconstructed modes amplitude')
-
-    #     it_vec = xp.arange(self.Nits)
-    #     plt.figure()
-    #     plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(zern_modes[-n_its:,:]),'-o')
-    #     plt.xlabel('# iteration')
-    #     plt.ylabel('[m]')
-    #     plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY'))
-    #     plt.grid()
-    #     plt.title(f'Reconstructed Zernike modes amplitude\nLast {n_its} iterations')
-
-    #     last_modes = rec_modes[:,-5:]
-    #     plt.figure()
-    #     plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(last_modes[-n_its:,:]),'-o')
-    #     plt.xlabel('# iteration')
-    #     plt.ylabel('[m]')
-    #     plt.grid()
-    #     plt.title(f'Last 5 modes amplitude\nLast {n_its} iterations')
     
 
     def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=12):
@@ -357,3 +330,52 @@ class SingleStageAO(HighLevelAO):
 
         return spe_tt, freq, max_cmd
 
+
+
+    # def plot_rec_modes(self, save_prefix:str=''):
+    #     """
+    #     Plots the reconstruced modes.
+        
+    #     Parameters
+    #     ----------
+    #     save_prefix : str, optional
+    #         The prefix used when saving telemetry data, by default ''.
+    #     """
+    #     if save_prefix is None:
+    #         save_prefix = self.save_prefix
+
+    #     _, _, _, _, rec_modes, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
+
+    #     zern_modes = rec_modes[:,:5]
+    #     max_mode = xp.max(xp.abs(rec_modes[:,5:]),axis=1)
+    #     m2rad = 2*xp.pi/self.pyr.lambdaInM
+
+    #     n_its = 100
+
+    #     plt.figure()
+    #     plt.plot(xp.asnumpy(xp.abs(zern_modes)*m2rad),'-o')
+    #     plt.plot(xp.asnumpy(max_mode*m2rad),'-o')
+    #     # plt.yscale('log')
+    #     plt.xlabel('# iteration')
+    #     plt.ylabel(f'[rad] @ {self.pyr.lambdaInM*1e+9:1.0f}nm')
+    #     plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY','Max'))
+    #     plt.xlim([0, n_its])
+    #     plt.grid()
+    #     plt.title('Reconstructed modes amplitude')
+
+    #     it_vec = xp.arange(self.Nits)
+    #     plt.figure()
+    #     plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(zern_modes[-n_its:,:]),'-o')
+    #     plt.xlabel('# iteration')
+    #     plt.ylabel('[m]')
+    #     plt.legend(('Tip','Tilt','Defocus','AstigX','AstigY'))
+    #     plt.grid()
+    #     plt.title(f'Reconstructed Zernike modes amplitude\nLast {n_its} iterations')
+
+    #     last_modes = rec_modes[:,-5:]
+    #     plt.figure()
+    #     plt.plot(xp.asnumpy(it_vec[-n_its:]),xp.asnumpy(last_modes[-n_its:,:]),'-o')
+    #     plt.xlabel('# iteration')
+    #     plt.ylabel('[m]')
+    #     plt.grid()
+    #     plt.title(f'Last 5 modes amplitude\nLast {n_its} iterations')

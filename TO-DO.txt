@@ -1,22 +1,16 @@
 IMPORTANT:
 
 PWFS ERROR BUDGET (aliasing & noise vs: Nsubap, slopes method, sensor, rMod)
-
-SLAVING update: Tichonov regularisation (IMm.T @ IMm + LAMBDA) @ IMm.T
-
-UNMODULATED calibration & ROOFTOP sensitivity
-
-PUPIL SHIFT sensitivity
-
-TT offload frequency & stroke saturation
-
-OPTICAL GAINS
-
 PETALING sensitivity
+Specula slaving algorithm update
 
 
 
+FUTURE IMPROVEMENTS:
 
+Optimal slaving algorithm
+Differential Piston Kalman Filter
+NCPA calibration
 
 
 COSMETIC CHANGES:

@@ -25,6 +25,11 @@ SLOPE.COMPUTER:
   # zeros: [0.45, 0.85]
   # poles: [1.0, 0.995]
 
+# TT.OFFLOADING:
+#   gain: 0.9
+#   frequencyInHz: 100
+
+
 TELESCOPE:
   pupilSizeInM:       1.8    # [m] telescope diameter
   centerObscuration:  0.6    # [m] central obscuration diameter
