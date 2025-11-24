@@ -116,7 +116,7 @@ class HighLevelAO():
                 print(f'SLAVING: downsized IFFs from {dm.IFF.shape} to {IFFs.shape}')
             KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes, filt_modes = filt_modes,
-                oversampling=oversampling, if_max_condition_number=100, verbose=True, xp=xp, dtype=self.dtype)         
+                oversampling=oversampling, if_max_condition_number=1e+3, verbose=True, xp=xp, dtype=self.dtype)         
             hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
             myfits.save_fits(m2c_path, m2c, hdr_dict)
             myfits.save_fits(KL_path, KL, hdr_dict)

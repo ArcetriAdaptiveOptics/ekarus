@@ -18,16 +18,16 @@ CCD:
 
 SLOPE.COMPUTER:
   loopFrequencyInHz: 2000     
-  integratorGain: [1.0]     # loop integrator gain
-  delay: 2                      # loop delay in steps
-  nModes2Correct: [430]       # number of reconstructor modes
+  integratorGain: [1.3,1.2,0.98,0.975]  # loop integrator gain
+  delay: 2                              # loop delay in steps
+  nModes2Correct: [2,28,100,300]        # number of reconstructor modes
   modulationInLambdaOverD: 3.0
-  # zeros: [0.45, 0.85]
-  # poles: [1.0, 0.995]
+  zeros: [0.45, 0.55]
+  poles: [1.0, 0.95]
 
 # TT.OFFLOADING:
-#   gain: 0.9
-#   frequencyInHz: 100
+#   gain: 0.1
+#   frequencyInHz: 200
 
 
 TELESCOPE:
@@ -41,7 +41,7 @@ TELESCOPE:
 
 ATMO:
   outerScaleInM: 25                   # [m]
-  r0: 5e-2                            # [m]
+  r0: 5e-2                          # [m]
   cn2: [55, 20, 10, 10, 5]
   windSpeed: [10, 10, 12, 12, 16]      # [m/s]
   windAngle: [-12, 44, 0, 123, -132]  # [deg] CCW from East

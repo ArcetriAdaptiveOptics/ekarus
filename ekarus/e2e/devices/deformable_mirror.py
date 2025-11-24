@@ -124,7 +124,7 @@ class DeformableMirror():
     
         
 
-    def plot_position(self, pos=None, shrink=1.0):
+    def plot_position(self, pos=None, shrink=1.0, transpose:bool=True):
         """
         Plots pos on the actuator coordinates.
         Defaults to current actuator position
@@ -139,7 +139,11 @@ class DeformableMirror():
         
         if pos is None:
             pos = self.act_pos.copy()
-        x,y = self.act_coords[1,:], self.act_coords[0,:] 
+        
+        if transpose:
+            x,y = self.act_coords[1,:], self.act_coords[0,:] 
+        else:
+            x,y = self.act_coords[0,:], self.act_coords[1,:]
         
         act_pix_size = 12 if self.Nacts < 100 else 3
         

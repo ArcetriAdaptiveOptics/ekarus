@@ -54,7 +54,9 @@ class TurbulenceLayers():
             if recompute is True:
                 raise FileNotFoundError('Recompute is True!')
             self._phs = self._phs.load_normalized_phase_screens(self.savepath)
-        except:
+            if self._phs._outerScaleInM != self.L0:
+                raise FileNotFoundError('No saved screen with the correct outer scale found!')
+        except FileNotFoundError:
             N, Npix = self.nLayers, screenSizeInPixels
             if N*Npix > 1000:
                 if N > 1:

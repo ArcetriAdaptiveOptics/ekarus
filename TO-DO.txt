@@ -3,12 +3,14 @@ IMPORTANT:
 PWFS ERROR BUDGET (aliasing & noise vs: Nsubap, slopes method, sensor, rMod)
 PETALING sensitivity
 Specula slaving algorithm update
-
+Modal IIR filter
 
 
 FUTURE IMPROVEMENTS:
 
+Controller class
 Optimal slaving algorithm
+Simplified DM class
 Differential Piston Kalman Filter
 NCPA calibration
 

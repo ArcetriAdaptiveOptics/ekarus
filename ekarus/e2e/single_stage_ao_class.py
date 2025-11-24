@@ -85,6 +85,7 @@ class SingleStageAO(HighLevelAO):
             tt_coeffs = xp.zeros([self.Nits,2],dtype=self.dtype)
             tt_offload_dt = 1/self.tt_offload['frequencyInHz']
             tt_gain = self.tt_offload['gain']
+            tt_amps = xp.zeros(2)
             c2tt = xp.linalg.pinv(self.dm.act_coords.T)
             tt2surf = IF @ self.dm.act_coords.T
             
@@ -105,15 +106,15 @@ class SingleStageAO(HighLevelAO):
                 
             if i >= self.sc.delay:
                 dm_surf = IF @ dm_cmds[i - self.sc.delay, :]
-                if self.tt_offload is not None:
-                    dm_surf += tt2surf @ tt_coeffs[i,:]
-            residual_phase = input_phase - dm_surf[self.dm.visible_pix_ids]
 
-            if self.tt_offload is not None and i > 0:
-                tt_coeffs[i,:] = tt_coeffs[i-1,:].copy()
-                if i % int(tt_offload_dt/self.dt) == 0:
-                    tt = c2tt @ dm_cmds[i-self.sc.delay,:]
-                    tt_coeffs[i,:] += tt_gain * tt
+            if self.tt_offload is not None and  i >= self.sc.delay:
+                tt_coeffs[i,:] = c2tt @ dm_cmds[i-self.sc.delay,:] #tt_coeffs[i-1,:].copy()
+                N = int(max(0,i-tt_offload_dt/self.dt))
+                tt = xp.mean(tt_coeffs[N:i,:],axis=0)
+                tt_amps += tt_gain * tt
+                dm_surf += tt2surf @ tt_amps
+                
+            residual_phase = input_phase - dm_surf[self.dm.visible_pix_ids]
 
 
             if i % int(self.sc.dt/self.dt) == 0:
@@ -328,7 +329,7 @@ class SingleStageAO(HighLevelAO):
             plt.xscale('log')
             plt.yscale('log')
 
-        return spe_tt, freq, max_cmd
+        return TT, spe_tt, freq, max_cmd
 
 
 

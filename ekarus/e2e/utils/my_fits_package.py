@@ -5,7 +5,7 @@ import xupy as xp
 import numpy as np
 
 
-def read_fits(filename, isBool:bool=False):
+def read_fits(filename, isBool:bool=False, return_header:bool=False):
     """
     Loads a FITS file.
 
@@ -34,7 +34,10 @@ def read_fits(filename, isBool:bool=False):
     else:
         data_out = xp.asarray(data_out)
     
-    return data_out
+    if return_header:
+        return data_out, hdu[0].header
+    else:
+        return data_out
 
 
 def save_fits(filename, datain, overwrite:bool=True, header_dict=None):
