@@ -269,9 +269,10 @@ class SlopeComputer():
         ny,nx = subaperture_image.shape
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
         for i in range(4):
-            # qy,qx = self.find_subaperture_center(subaperture_image, quad_n=i+1, xp=self._xp, dtype=xp.float)
-            qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
+            # qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
+            qy,qx = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
+            print(qx,qy)
             if centerObscPixDiam > 0.0:
                 obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
                 subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)
@@ -325,10 +326,10 @@ class SlopeComputer():
         intensity = detector_image * roi_mask
         qx,qy = get_photocenter(intensity)
         
-        if mode == 'quadrant':
-            return xp.round(qy), xp.round(qx)
-        else:
-            return xp.round(qx-0.5), xp.round(qy-0.5)#xp.round(qx), xp.round(qy)#
+        # if mode == 'quadrant':
+        #     return xp.round(qy), xp.round(qx)
+        # else:
+        return xp.round(qx-0.5), xp.round(qy-0.5)#xp.round(qx), xp.round(qy)#
         
     @staticmethod
     def define_cramer_rao_matrix(ref_intensity, nPhotons, RON, Npupils):

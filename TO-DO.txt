@@ -9,8 +9,8 @@ Modal IIR filter
 FUTURE IMPROVEMENTS:
 
 Controller class
-Optimal slaving algorithm
 Simplified DM class
+Aliasing function (matrix product)
 Differential Piston Kalman Filter
 NCPA calibration
 

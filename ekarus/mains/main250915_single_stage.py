@@ -98,7 +98,7 @@ def main(tn:str='example_single_stage',
         plt.figure()
         myimshow(subap_masks,title='Subaperture masks')
 
-        KL = myfits.read_fits(op.join(ssao.savecalibpath,'KLmodes.fits'))
+        KL = myfits.read_fits(op.join(ssao.savecalibpath,'KL.fits'))
         N=9
         plt.figure(figsize=(2*N,7))
         for i in range(N):
@@ -180,6 +180,11 @@ def main(tn:str='example_single_stage',
         plt.ylabel(r'$\sigma^2 [rad^2]$')
         plt.gca().set_yscale('log')
 
+
+    subap_masks = xp.sum(ssao.sc._roi_masks,axis=0)
+    ccd_frame = ssao.ccd.last_frame
+    plt.figure()
+    myimshow(ccd_frame/xp.max(ccd_frame)-subap_masks,cmap='twilight')
     
     plt.show()
 

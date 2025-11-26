@@ -49,13 +49,13 @@ class TurbulenceLayers():
         """  
         self.pixelsPerMeter = screenSizeInPixels/screenSizeInMeters
         self._phs = PhaseScreenGenerator(screenSizeInPixels, screenSizeInMeters, \
-                            outerScaleInMeters=self.L0, seed=42)
+                            outerScaleInMeters=self.L0, seed=int(xp.random.randint(1)))
         try:
             if recompute is True:
                 raise FileNotFoundError('Recompute is True!')
             self._phs = self._phs.load_normalized_phase_screens(self.savepath)
-            if self._phs._outerScaleInM != self.L0:
-                raise FileNotFoundError('No saved screen with the correct outer scale found!')
+            # if self._phs._outerScaleInM != self.L0:
+            #     raise FileNotFoundError('No saved screen with the correct outer scale found!')
         except FileNotFoundError:
             N, Npix = self.nLayers, screenSizeInPixels
             if N*Npix > 1000:

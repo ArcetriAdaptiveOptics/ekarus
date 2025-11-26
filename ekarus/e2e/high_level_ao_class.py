@@ -70,7 +70,8 @@ class HighLevelAO():
             pass
     
 
-    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2, filt_modes=None, save_prefix:str=''):
+    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2, 
+                        filt_modes=None, save_prefix:str='', return_sv:bool=False):
         """
         Defines the Karhunen-Loève (KL) modes for the given DM and oversampling.
         
@@ -84,6 +85,8 @@ class HighLevelAO():
             The number of Zernike modes to consider, by default 5.
         save_prefix : str, optional
             Prefix for saving the KL modes files, by default ''.
+        return_sv : bool, optional
+            Boolean to return IFs and KL modes singular values.
             
         Returns
         -------
@@ -95,32 +98,38 @@ class HighLevelAO():
         r0s = self.atmo_pars['r0']
         L0 = self.atmo_pars['outerScaleInM']
         r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
-        # self.atmo_pars_str = f'L0{L0:1.0f}m_r0{r0*1e+2:1.1f}cm_'
-        KL_path = os.path.join(self.savecalibpath,str(save_prefix)+'KL.fits')#+self.atmo_pars_str+'KL.fits')
-        m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+'m2c.fits')#+self.atmo_pars_str+'m2c.fits')
+        KL_path = os.path.join(self.savecalibpath,str(save_prefix)+'KL.fits')
+        m2c_path = os.path.join(self.savecalibpath,str(save_prefix)+'m2c.fits')
+        iffs_sv_path = os.path.join(self.savecalibpath,str(save_prefix)+'IFF_sv.fits')
+        modes_sv_path = os.path.join(self.savecalibpath,str(save_prefix)+'KLmodes_sv.fits')
         try:
             if self.recompute is True:
                 raise FileNotFoundError('Recompute is True')
             KL = myfits.read_fits(KL_path)
             m2c = myfits.read_fits(m2c_path)
+            if return_sv:
+                iffs_sv = myfits.read_fits(iffs_sv_path)
+                modes_sv = myfits.read_fits(modes_sv_path)
         except FileNotFoundError:
-            # if self.atmo_pars is None:
-            #     self.atmo_pars = self._config.read_atmo_pars()
-            # r0s = self.atmo_pars['r0']
-            # L0 = self.atmo_pars['outerScaleInM']
-            # r0 = (1/xp.sum(r0s**(-5/3)))**(3/5)
             IFFs = dm.IFF.copy()
             if dm.slaving is not None: # slaving
                 IFFs = remap_on_new_mask(dm.IFF, dm.mask, dm.pupil_mask)
                 IFFs = IFFs[:,dm.master_ids]
                 print(f'SLAVING: downsized IFFs from {dm.IFF.shape} to {IFFs.shape}')
-            KL, m2c, _ = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
+            KL, m2c, SV = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
                 self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes, filt_modes = filt_modes,
-                oversampling=oversampling, if_max_condition_number=1e+3, verbose=True, xp=xp, dtype=self.dtype)         
+                oversampling=oversampling, if_max_condition_number=1e+3, verbose=True, xp=xp, dtype=self.dtype) 
+            iffs_sv = SV['S1']                 
+            modes_sv = SV['S2']    
             hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
             myfits.save_fits(m2c_path, m2c, hdr_dict)
             myfits.save_fits(KL_path, KL, hdr_dict)
-        return KL, m2c
+            myfits.save_fits(iffs_sv_path, iffs_sv, hdr_dict)
+            myfits.save_fits(modes_sv_path, modes_sv, hdr_dict)
+        if return_sv: 
+            return KL, m2c, iffs_sv, modes_sv
+        else:
+            return KL, m2c
     
 
     def compute_reconstructor(self, slope_computer, MM, lambdaInM, ampsInM, save_prefix:str=''):
