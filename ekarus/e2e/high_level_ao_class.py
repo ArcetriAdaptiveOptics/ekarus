@@ -316,7 +316,7 @@ class HighLevelAO():
     
     
     def get_contrast(self, residual_phases_in_rad, oversampling:int=10, 
-                     use_avg_field:bool=True, normalize_to_perfect_psf:bool=True):
+                     use_avg_field:bool=False, normalize_to_perfect_psf:bool=True):
         """
         Computes the PSF and contrast from the residual phase
         using the formula for a perfect idealized coronograph.
@@ -339,8 +339,7 @@ class HighLevelAO():
                 avg_electric_field = xp.sum(input_field * field_amp) / xp.sum(field_amp)
                 perfect_coro_field = input_field - avg_electric_field * field_amp
             else:
-                # phase_var = xp.sum((res_phase-xp.mean(res_phase))**2) 
-                phase_var = reshape_on_mask((res_phase-xp.mean(res_phase))**2, pup_mask)
+                phase_var = xp.sum((res_phase-xp.mean(res_phase))**2)/len(res_phase)
                 perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d, dtype=self.cdtype))
             coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
             coro_psf = abs(coro_focal_plane_ef)**2
@@ -406,6 +405,7 @@ class HighLevelAO():
         type = wfs_pars['type']
         try:
             roofSize = wfs_pars["roofSize"]
+            print(f'Pyramid roof size is {roofSize*oversampling:1.0f} pixels (oversampling = {oversampling:1.0f})')
         except KeyError:
             roofSize = 0.0
         match type: # TODO Move to PWFS class
@@ -455,6 +455,7 @@ class HighLevelAO():
         sc.compute_slope_null(zero_phase, lambdaOverD)
         
         return pyr, det, sc
+
 
     def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM,
                                 ampsInM:float=50e-9, save_prefix:str=''):

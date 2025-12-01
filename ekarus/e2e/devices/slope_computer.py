@@ -190,6 +190,8 @@ class SlopeComputer():
 
     def set_new_gain(self, intGain:float):
         """ Scale all gains by a single scalar coefficient """
+        if self.intGain == 0:
+            self.intGain = 1.0
         self.modalGains *= intGain/self.intGain
         self.intGain = intGain
 
@@ -272,7 +274,6 @@ class SlopeComputer():
             # qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
             qy,qx = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
-            print(qx,qy)
             if centerObscPixDiam > 0.0:
                 obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
                 subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)

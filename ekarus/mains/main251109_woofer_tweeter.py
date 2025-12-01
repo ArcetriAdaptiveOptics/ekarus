@@ -22,7 +22,6 @@ def main(tn:str,
     amp = 50e-9
 
     wooftweet.initialize_turbulence(tn=atmo_tn)
-
     KL1, m2c1 = wooftweet.define_KL_modes(wooftweet.dm1, zern_modes=2, save_prefix='woof_')
 
     # KL2, m2c2 = wooftweet.define_KL_modes(wooftweet.dm2, filt_modes=KL1[:wooftweet.sc1.nModes,:], save_prefix='tweet_')
@@ -35,16 +34,16 @@ def main(tn:str,
     _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL2, wooftweet.pyr2.lambdaInM, ampsInM=amp, save_prefix='tweet_')
     wooftweet.sc2.load_reconstructor(IM2,m2c2)
 
-    # Slope null
-    modes_null = Rec1 @ wooftweet.sc1.slope_null
-    modes_null *= wooftweet.pyr1.lambdaInM/(2*xp.pi)
-    plt.figure()
-    plt.plot(xp.asnumpy(xp.abs(modes_null)),'-o')
-    plt.grid()
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.title('Slope null modes')
-    # slope_null = None
+    # # Slope null
+    # modes_null = Rec1 @ wooftweet.sc1.slope_null
+    # modes_null *= wooftweet.pyr1.lambdaInM/(2*xp.pi)
+    # plt.figure()
+    # plt.plot(xp.asnumpy(xp.abs(modes_null)),'-o')
+    # plt.grid()
+    # plt.xscale('log')
+    # plt.yscale('log')
+    # plt.title('Slope null modes')
+    # # slope_null = None
 
     wooftweet.get_photons_per_subap(wooftweet.starMagnitude)
 
@@ -101,7 +100,8 @@ def main(tn:str,
     wooftweet.KL = KL1.copy()
     
     print('Running the loop ...')
-    tweeter_sig2, woofer_sig2, input_sig2 = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, save_prefix=f'mag{wooftweet.starMagnitude:1.0f}_')
+    saveprefix = f'mag{wooftweet.starMagnitude:1.0f}_'
+    tweeter_sig2, woofer_sig2, input_sig2 = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, save_prefix=saveprefix)
     wooftweet.sig2 = tweeter_sig2
 
     # Post-processing and plotting
@@ -147,9 +147,9 @@ def main(tn:str,
         plt.grid()
         plt.title('Interaction matrix singular values')
 
-    wooftweet.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
+    wooftweet.plot_iteration(lambdaRef, frame_id=-1, save_prefix=saveprefix)
     if show_contrast:
-        wooftweet.psd1, wooftweet.psd2,wooftweet.pix_scale = wooftweet.plot_contrast(lambdaRef=lambdaRef, frame_ids=xp.arange(wooftweet.Nits-200,wooftweet.Nits).tolist(),save_prefix='')
+        wooftweet.psd1, wooftweet.psd2,wooftweet.pix_scale = wooftweet.plot_contrast(lambdaRef=lambdaRef, frame_ids=xp.arange(wooftweet.Nits-200,wooftweet.Nits).tolist(),save_prefix=saveprefix)
 
     tvec = xp.asnumpy(xp.arange(wooftweet.Nits)*wooftweet.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))

@@ -110,7 +110,7 @@ class DeformableMirror():
             plt_mask = plt_mask.get()
         
         image = masked_array(image, plt_mask)
-        plt.imshow(image, origin = 'lower', cmap = 'hot')
+        plt.imshow(image, origin = 'lower', cmap = 'RdGy')
         
         img_rms = xp.std(image.data[~image.mask])
         if title == '':
@@ -148,7 +148,7 @@ class DeformableMirror():
         act_pix_size = 12 if self.Nacts < 100 else 3
         
         plt.scatter(xp.asnumpy(x), xp.asnumpy(y), c=xp.asnumpy(pos), 
-                    s=act_pix_size**2, cmap='hot')
+                    s=act_pix_size**2, cmap='RdGy')
         plt.axis('equal')
         plt.grid()
         # plt.gca().set_xticks(np.linspace(min(x),max(x),5))

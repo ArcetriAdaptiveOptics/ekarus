@@ -2,7 +2,6 @@ IMPORTANT:
 
 PWFS ERROR BUDGET (aliasing & noise vs: Nsubap, slopes method, sensor, rMod)
 PETALING sensitivity
-Specula slaving algorithm update
 Modal IIR filter
 
 
@@ -13,6 +12,7 @@ Simplified DM class
 Aliasing function (matrix product)
 Differential Piston Kalman Filter
 NCPA calibration
+Analytical slaving
 
 
 COSMETIC CHANGES:

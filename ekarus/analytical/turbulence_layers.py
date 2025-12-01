@@ -65,7 +65,7 @@ class TurbulenceLayers():
                     print(f'Generating {Npix:1.0f}x{Npix:1.0f} phase-screen ...')
             self._phs.generate_normalized_phase_screens(N)
             if self.savepath is not None:
-                self._phs.save_normalized_phase_screens(self.savepath)
+                self._phs.save_normalized_phase_screens(self.savepath)#,overwrite=True)
         
         self.phase_screens = xp.asarray(self._phs._phaseScreens, dtype=self.dtype)
         self._normalization_factors = (1/self.pixelsPerMeter / self.r0s) ** (5. / 6)
