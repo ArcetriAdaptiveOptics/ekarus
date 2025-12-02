@@ -348,10 +348,7 @@ class HighLevelAO():
                 psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
                 max_psf = xp.max(psf)
             coro_psf /= max_psf
-            # psf_stack[k] = coro_psf
             psf_stack.append(coro_psf)
-            # psf_rms += coro_psf**2
-        # psf_rms = xp.sqrt(psf_rms/N)
         psf_stack = xp.array(psf_stack)
         psf_rms = xp.std(psf_stack,axis=0)
         rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),psf_rms.shape[0]/2,psf_rms.shape[1]/2)
@@ -458,7 +455,7 @@ class HighLevelAO():
 
 
     def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM,
-                                ampsInM:float=50e-9, save_prefix:str=''):
+                                ampsInM:float=50e-9, save_prefix:str='', IM=None):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
         
@@ -482,16 +479,20 @@ class HighLevelAO():
         opt_gains : array
             The computed optical gains.
         """
-        og_cl_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'closed_loop_OG.fits')
-        og_pl_path = os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'perfect_loop_OG.fits')
+        og_cl_path = os.path.join(self.savecalibpath,str(save_prefix)+'closed_loop_OG.fits')#self.atmo_pars_str+
+        og_pl_path = os.path.join(self.savecalibpath,str(save_prefix)+'perfect_loop_OG.fits')#+self.atmo_pars_str
         try:
             if self.recompute is True:
                 raise FileNotFoundError('Recompute is True')
             cl_opt_gains = myfits.read_fits(og_cl_path)
             pl_opt_gains = myfits.read_fits(og_pl_path)
         except FileNotFoundError:
-            IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+self.atmo_pars_str+'IM.fits'))
-            Nmodes = slope_computer.nModes
+            if IM is None:
+                try:
+                    IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
+                except FileNotFoundError:
+                    IM = myfits.read_fits(os.path.join(self.savecalibpath,'IM.fits'))
+            Nmodes = int(min(slope_computer.nModes,xp.shape(IM)[1]))
             IMc = IM[:,:Nmodes]
             cl_opt_gains = xp.zeros(Nmodes)
             pl_opt_gains = xp.zeros(Nmodes)

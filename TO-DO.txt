@@ -8,7 +8,7 @@ Modal IIR filter
 FUTURE IMPROVEMENTS:
 
 Controller class
-Simplified DM class
+Simplified DM class (IFFs, act_coords)
 Aliasing function (matrix product)
 Differential Piston Kalman Filter
 NCPA calibration
