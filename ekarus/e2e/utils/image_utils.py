@@ -48,6 +48,7 @@ def get_photocenter(image):
     return qx,qy 
 
 
+
 def get_circular_mask(mask_shape, mask_radius, mask_center=None):
     """
     Create a circular mask for the given shape.

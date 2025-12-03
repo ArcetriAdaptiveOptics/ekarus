@@ -4,6 +4,9 @@ from abc import abstractmethod
 import matplotlib.pyplot as plt
 from arte.types.mask import CircularMask
 
+from ekarus.e2e.utils.image_utils import image_grid, reshape_on_mask
+from ekarus.analytical.apodizer import generate_app_keller
+
 
 class Coronograph(object):
     
@@ -245,4 +248,60 @@ class VectorVortexCoronograph(Coronograph):
             vortex *= self._refLambdaInM/self.lambdaInM
         focal_mask = xp.exp(1j*vortex)
         return focal_mask
+    
 
+class ApodizerPhasePlate(Coronograph):
+
+    def __init__(self,
+                 referenceLambdaInM:float,
+                 pupil,
+                 contrastInDarkHole:float,
+                 iwaInLambdaOverD:float,
+                 owaInLambdaOverD:float,
+                 oversampling:int=8,
+                 beta:float=0.9,
+                 max_its:int=500,
+                 show:bool=True):
+        self._refLambdaInM = referenceLambdaInM
+        self._telescopePupil = pupil.copy()
+        self._define_apodizer(pupil, contrastInDarkHole, 
+                              iwaInLambdaOverD, owaInLambdaOverD,
+                              oversampling, max_its, beta, show)
+
+    def _define_apodizer(self, pupil, contrast, iwa, owa, oversampling, max_its, beta, show):
+        mask_shape = max(pupil.shape)
+        padded_pupil = xp.pad(1-pupil.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
+        X,Y = image_grid(padded_pupil.shape,recenter=True)
+        rho = xp.sqrt(X**2+Y**2)
+        target_contrast = xp.ones_like(rho)
+        where = (rho <= owa*oversampling) * (X >= iwa*oversampling) 
+        target_contrast[where] = contrast
+        app = generate_app_keller(padded_pupil, target_contrast, max_iterations=max_its, beta=beta)
+        phase = xp.angle(app)[padded_pupil>0.0]
+        apodizer_phase = reshape_on_mask(phase, pupil)
+        self._apodizer = 1.0 * xp.exp(1j*apodizer_phase, dtype=xp.complex64)
+        if show:
+            focal_field = xp.fft.fftshift(xp.fft.fft2(app))
+            app_psf = xp.abs(focal_field)**2
+            app_psf /= xp.max(app_psf)
+            plt.figure()
+            plt.imshow(xp.asnumpy(xp.log10(target_contrast)),origin='lower',cmap='RdGy')
+            plt.colorbar()
+            plt.title('Target contrast')
+            plt.figure(figsize=(12,4))
+            plt.subplot(1,2,1)
+            plt.imshow(xp.asnumpy(apodizer_phase),origin='lower',cmap='RdBu')
+            plt.colorbar()
+            plt.title('APP phase')
+            plt.subplot(1,2,2)
+            plt.imshow(xp.asnumpy(xp.log10(app_psf)),cmap='inferno',vmin=xp.log10(xp.min(target_contrast)))
+            plt.colorbar()
+            plt.xlim([44*oversampling,84*oversampling])
+            plt.ylim([44*oversampling,84*oversampling])
+            plt.title('Apodized PSF')
+
+    def _get_pupil_mask(self, field):
+        return 1.0
+    
+    def _get_focal_plane_mask(self, field):
+        return 1.0
