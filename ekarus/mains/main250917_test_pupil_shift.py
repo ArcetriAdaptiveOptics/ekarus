@@ -13,7 +13,7 @@ from ekarus.e2e.pupil_shift_ao_class import PupilShift
 
 def main(tn:str='example_pupil_shift', 
         pupilShiftsInPixel:list=[0.1,0.2,0.3], 
-        shiftAnglesInDegrees:list=[0.0,15,30,45,60,90],
+        shiftAnglesInDegrees:list=[0,45,90],
         atmo_tn='ekarus_5cm',
         it_ss:int = 1000):
 

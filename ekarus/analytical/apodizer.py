@@ -1,5 +1,8 @@
-
+import matplotlib.pyplot as plt
 import xupy as xp
+
+from ekarus.e2e.utils.image_utils import reshape_on_mask, image_grid
+
 
 def generate_app_keller(pupil, target_contrast, max_iterations:int, beta:float=0, oversampling:int=4):
     """
@@ -77,8 +80,50 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int, beta:float=0
         app[~pupil.astype(bool)] = 0 # enforce pupil
         # app[pupil] /= xp.abs(app[pupil]) # enforce unity transmission within pupil
     
+    psf = xp.abs(image)**2
+    contrast =  psf / xp.max(psf)
+    ref_psf = xp.abs(xp.fft.fftshift(xp.fft.fft2(pupil)))**2
+
     if i == max_iterations-1:
-        contrast = xp.abs(image)**2 / xp.max(xp.abs(image)**2)
         raise Warning(f'Maximum number of iterations ({max_iterations:1.0f}) reached, worst contrast in dark hole is: {xp.log10(xp.max(contrast[dark_zone])):1.1f}')
 
+    print(f'Apodizer computed: average contrast in dark hole is {xp.mean(xp.log10(contrast[dark_zone])):1.1f}, Strehl is {xp.max(psf)/xp.max(ref_psf)*1e+2:1.2f}%')
+
     return app
+
+
+def define_apodizing_phase(pupil, contrast, iwa, owa, symmetric_dark_hole, 
+                           oversampling, max_its, beta, show):
+    mask_shape = max(pupil.shape)
+    padded_pupil = xp.pad(1-pupil.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
+    X,Y = image_grid(padded_pupil.shape,recenter=True)
+    rho = xp.sqrt(X**2+Y**2)
+    target_contrast = xp.ones_like(rho)
+    if symmetric_dark_hole is True:
+        where = (rho <= owa*oversampling) * (rho >= iwa*oversampling)
+    else:
+        where = (rho <= owa*oversampling) * (X >= iwa*oversampling) 
+    target_contrast[where] = contrast
+    app = generate_app_keller(padded_pupil, target_contrast, max_iterations=max_its, beta=beta)
+    phase = xp.angle(app)[padded_pupil>0.0]
+    apodizer_phase = reshape_on_mask(phase, pupil)
+    if show:
+        focal_field = xp.fft.fftshift(xp.fft.fft2(app))
+        app_psf = xp.abs(focal_field)**2
+        app_psf /= xp.max(app_psf)
+        plt.figure(figsize=(18,4))
+        plt.subplot(1,3,1)
+        plt.imshow(xp.asnumpy(xp.log10(target_contrast)),origin='lower',cmap='RdGy')
+        plt.colorbar()
+        plt.title('Target contrast')
+        plt.subplot(1,3,2)
+        plt.imshow(xp.asnumpy(apodizer_phase),origin='lower',cmap='RdBu')
+        plt.colorbar()
+        plt.title('APP phase')
+        plt.subplot(1,3,3)
+        plt.imshow(xp.asnumpy(xp.log10(app_psf)),cmap='inferno',vmin=xp.log10(xp.min(target_contrast)))
+        plt.colorbar()
+        plt.xlim([44*oversampling,84*oversampling])
+        plt.ylim([44*oversampling,84*oversampling])
+        plt.title('Apodized PSF')
+    return apodizer_phase

@@ -4,8 +4,8 @@ from abc import abstractmethod
 import matplotlib.pyplot as plt
 from arte.types.mask import CircularMask
 
-from ekarus.e2e.utils.image_utils import image_grid, reshape_on_mask
-from ekarus.analytical.apodizer import generate_app_keller
+# from ekarus.e2e.utils.image_utils import image_grid, reshape_on_mask
+from ekarus.analytical.apodizer import define_apodizing_phase
 
 
 class Coronograph(object):
@@ -24,14 +24,15 @@ class Coronograph(object):
         plane electric field trhough the 
         coronograph focal-plane mask """
 
-    def _get_apodizer(self):
+    def _get_apodizer(self, lambdaInM):
         return 1.0
 
     def get_coronographic_psf(self, input_field, oversampling, lambdaInM=None):
+        self.pupil = xp.abs(input_field) > 1e-6
         self.oversampling = oversampling
         self.lambdaInM = lambdaInM
         pad_width = int(max(input_field.shape)*(self.oversampling-1))//2
-        self._apodizer = self._get_apodizer()
+        self._apodizer = self._get_apodizer(lambdaInM)
         apodized_field = input_field * self._apodizer
         padded_field = xp.pad(apodized_field,pad_width=pad_width,mode='constant',constant_values=0.0)
         self._focal_field = xp.fft.fftshift(xp.fft.fft2(padded_field))
@@ -67,6 +68,23 @@ class Coronograph(object):
         self.showZoomedPSF(xp.abs(self._focal_coro_field)**2,
                            1/self.oversampling,title='Coronographic PSF',
                            maxLogVal=maxLogPsf)
+        
+    # def compute_strehl_and_throughput(self):
+    #     psf = self.get_reference_psf()
+    #     coro_psf = self.get_coronographic_psf(self.pupil,self.oversampling)
+    #     throughput = xp.sum(coro_psf)/xp.sum(psf)
+    #     strehl = xp.max(coro_psf)/xp.max(psf)
+    #     return strehl, throughput
+        
+    # def get_reference_psf(self):
+    #     if self.pupil is None:
+    #         raise ValueError('Pupil is not defined!')
+    #     pad_width = int(max(self.pupil.shape)*(self.oversampling-1))//2
+    #     padded_field = xp.pad(self.pupil,pad_width=pad_width,mode='constant',constant_values=0.0)
+    #     focal_field = xp.fft.fftshift(xp.fft.fft2(padded_field))
+    #     psf = xp.abs(focal_field * xp.conj(focal_field))
+    #     return psf
+    
 
     @staticmethod
     def showZoomedPSF(image, pixelSize, maxLogVal = None, title='',
@@ -258,47 +276,22 @@ class ApodizerPhasePlate(Coronograph):
                  contrastInDarkHole:float,
                  iwaInLambdaOverD:float,
                  owaInLambdaOverD:float,
+                 symmetricDarkHole:bool=False,
                  oversampling:int=8,
                  beta:float=0.9,
                  max_its:int=500,
                  show:bool=True):
         self._refLambdaInM = referenceLambdaInM
         self._telescopePupil = pupil.copy()
-        self._define_apodizer(pupil, contrastInDarkHole, 
-                              iwaInLambdaOverD, owaInLambdaOverD,
+        self._apodizer_phase = define_apodizing_phase(pupil, contrastInDarkHole, 
+                              iwaInLambdaOverD, owaInLambdaOverD, symmetricDarkHole,
                               oversampling, max_its, beta, show)
 
-    def _define_apodizer(self, pupil, contrast, iwa, owa, oversampling, max_its, beta, show):
-        mask_shape = max(pupil.shape)
-        padded_pupil = xp.pad(1-pupil.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
-        X,Y = image_grid(padded_pupil.shape,recenter=True)
-        rho = xp.sqrt(X**2+Y**2)
-        target_contrast = xp.ones_like(rho)
-        where = (rho <= owa*oversampling) * (X >= iwa*oversampling) 
-        target_contrast[where] = contrast
-        app = generate_app_keller(padded_pupil, target_contrast, max_iterations=max_its, beta=beta)
-        phase = xp.angle(app)[padded_pupil>0.0]
-        apodizer_phase = reshape_on_mask(phase, pupil)
-        self._apodizer = 1.0 * xp.exp(1j*apodizer_phase, dtype=xp.complex64)
-        if show:
-            focal_field = xp.fft.fftshift(xp.fft.fft2(app))
-            app_psf = xp.abs(focal_field)**2
-            app_psf /= xp.max(app_psf)
-            plt.figure()
-            plt.imshow(xp.asnumpy(xp.log10(target_contrast)),origin='lower',cmap='RdGy')
-            plt.colorbar()
-            plt.title('Target contrast')
-            plt.figure(figsize=(12,4))
-            plt.subplot(1,2,1)
-            plt.imshow(xp.asnumpy(apodizer_phase),origin='lower',cmap='RdBu')
-            plt.colorbar()
-            plt.title('APP phase')
-            plt.subplot(1,2,2)
-            plt.imshow(xp.asnumpy(xp.log10(app_psf)),cmap='inferno',vmin=xp.log10(xp.min(target_contrast)))
-            plt.colorbar()
-            plt.xlim([44*oversampling,84*oversampling])
-            plt.ylim([44*oversampling,84*oversampling])
-            plt.title('Apodized PSF')
+    def _get_apodizer(self, lambdaInM):
+        phase = self._apodizer_phase 
+        if lambdaInM is not None:
+            phase *= self._refLambdaInM/lambdaInM
+        return xp.exp(1j*phase,dtype=xp.cfloat)
 
     def _get_pupil_mask(self, field):
         return 1.0
