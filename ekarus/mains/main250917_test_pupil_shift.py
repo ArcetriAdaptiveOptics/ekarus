@@ -84,6 +84,7 @@ def main(tn:str='example_pupil_shift',
 
     pup_ssao.SRr_beforeDM = SR_beforeDM/SR_ref
     pup_ssao.SRr_afterDM = SR_afterDM/SR_ref
+    pup_ssao.sig2 = sig2
 
     # Convert to numpy for plotting
     input_sig2 = xp.asnumpy(input_sig2)
