@@ -36,9 +36,9 @@ class LyotCoronograph(Coronograph):
             lambdaInM2Px *= self._refLambdaInM/self.lambdaInM
         if self._knifeEdge is not None:
             _,X = xp.mgrid[0:field.shape[0],0:field.shape[1]]
-            edge = (field.shape[1]//2-self._knifeEdge*lambdaInM2Px)
+            edge = (field.shape[1]//2+self._knifeEdge*lambdaInM2Px)
             focal_mask = xp.ones(field.shape)
-            focal_mask[X>edge] = 0
+            focal_mask[X<=edge] = 0
         else:
             iwa = CircularMask(field.shape, maskRadius=self._iwaInLambdaOverD*lambdaInM2Px)
             if self._owaInLambdaOverD is not None:

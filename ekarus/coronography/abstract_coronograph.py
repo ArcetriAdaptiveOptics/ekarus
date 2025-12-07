@@ -40,7 +40,7 @@ class Coronograph(object):
         psf = abs(self._focal_coro_field)**2
         return psf
     
-    def show_coronograph_prop(self, maxLogPsf=None):
+    def show_coronograph_prop(self, maxLogPsf=None, minVal:float=-24):
         phase = xp.angle(self._focal_mask)
         fcmap = 'RdBu'
         phase += 2*xp.pi * (phase < 0.0)
@@ -54,19 +54,19 @@ class Coronograph(object):
         plt.colorbar()
         plt.subplot(1,4,2)
         self.showZoomedPSF(xp.abs(self._focal_field)**2,
-                           1/self.oversampling,title='PSF at focal mask',
+                           1/self.oversampling, minVal=minVal, title='PSF at focal mask',
                            maxLogVal=maxLogPsf)
         plt.subplot(1,4,3)
         plt.imshow(xp.asnumpy(xp.abs(self._pupil_mask)),cmap='grey',origin='lower')
         plt.title('Pupil stop')
         plt.subplot(1,4,4)
-        self.showZoomedPSF(xp.abs(self._focal_coro_field)**2,
-                           1/self.oversampling,title='Coronographic PSF',
+        self.showZoomedPSF(xp.abs(self._focal_coro_field)**2, 
+                           1/self.oversampling, minVal=minVal, title='Coronographic PSF',
                            maxLogVal=maxLogPsf)
     
 
     @staticmethod
-    def showZoomedPSF(image, pixelSize, maxLogVal = None, title='',
+    def showZoomedPSF(image, pixelSize, minVal, maxLogVal = None, title='',
                    xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', zlabel=''):
         imageHalfSizeInPoints= image.shape[0]/2
         roi= [int(imageHalfSizeInPoints*0.8), int(imageHalfSizeInPoints*1.2)]
@@ -78,7 +78,7 @@ class Coronograph(object):
         plt.imshow(xp.asnumpy(imageZoomedLog), 
                 extent=[-sz[0]/2*pixelSize, sz[0]/2*pixelSize,
                     -sz[1]/2*pixelSize, sz[1]/2*pixelSize],
-                    cmap='inferno',vmin=-10)
+                    cmap='inferno',vmin=minVal)
         plt.title(title)
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)

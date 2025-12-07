@@ -1,18 +1,19 @@
 IMPORTANT:
 
-PWFS ERROR BUDGET (aliasing & noise vs: Nsubap, slopes method, sensor, rMod)
 PETALING sensitivity
 Modal IIR filter
+NCPA calibration
+Analytical slaving
+
+
+OG from PSD (long exposure)
+
 
 
 FUTURE IMPROVEMENTS:
 
 Controller class
 Simplified DM class (IFFs, act_coords)
-Aliasing function (matrix product)
-Differential Piston Kalman Filter
-NCPA calibration
-Analytical slaving
 
 
 COSMETIC CHANGES:

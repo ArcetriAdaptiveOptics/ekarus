@@ -1,14 +1,14 @@
 DM: 
   Nacts: 24
   geom: 'alpao'
-  max_stroke_in_m: 5e-6   
+  max_stroke_in_m: 6e-6   
 
 PYR:
   oversampling: 4           # oversampling for PSF computation
-  lambdaInM: 800e-9        # [m] sensor wavelength
+  lambdaInM: 700e-9        # [m] sensor wavelength
   bandWidthInM: 0e-9        # [m] sensor band amplitude
   subapPixSize: 41.5        # subaperture diameter in pix
-  subapPixSep: 20           # pixel distance between subaps
+  subapPixSep: 18.3           # pixel distance between subaps
 
 CCD:
   detector_shape: [168,168]    # detector pixel size
@@ -18,7 +18,7 @@ CCD:
 
 SLOPE.COMPUTER:
   loopFrequencyInHz: 1000     
-  integratorGain: [0.9]           # loop integrator gain
+  integratorGain: [0.99]           # loop integrator gain
   delay: 2                      # loop delay in steps
   nModes2Correct: [430]           # number of reconstructor modes
   modulationInLambdaOverD: 3.0
@@ -28,10 +28,13 @@ TELESCOPE:
   centerObscuration: 0.6    # [m] central obscuration diameter
   pupilSizeInPixels: 128    # pixels across the pupil diameter
   throughput: 0.11          # accounting for beam splitter
+  spiders:
+    angles:   [40,140,-40,-140] # [deg] CCW from East
+    widthInM: 0.01 
 
 ATMO:
   outerScaleInM: 25         # [m]
-  r0: 5e-2                          # [m]
+  r0: 5e-2                         # [m]
   cn2: [55, 20, 10, 10, 5]
   windSpeed: [10, 10, 12, 12, 16]     # [m/s]
   windAngle: [-12, 44, 0, 123, -132]  # [deg] CCW from East
