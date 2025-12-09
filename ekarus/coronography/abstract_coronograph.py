@@ -33,10 +33,13 @@ class Coronograph(object):
         self._focal_field = xp.fft.fftshift(xp.fft.fft2(padded_field))
         self._focal_mask = self._get_focal_plane_mask(self._focal_field)
         prop_focal_field = self._focal_field * self._focal_mask
-        pupil_field = xp.fft.ifft2(xp.fft.ifftshift(prop_focal_field))
-        self._pupil_mask = self._get_pupil_mask(padded_field)
+        pad_pupil_field = xp.fft.ifft2(xp.fft.ifftshift(prop_focal_field))
+        pupil_field = pad_pupil_field[pad_width:pad_width+input_field.shape[0],
+                                      pad_width:pad_width+input_field.shape[1]]
+        self._pupil_mask = self._get_pupil_mask(pupil_field)
         coro_field = pupil_field * self._pupil_mask
-        self._focal_coro_field = xp.fft.fftshift(xp.fft.fft2(coro_field))
+        pad_coro_field = xp.pad(coro_field,pad_width=pad_width,mode='constant',constant_values=0.0)
+        self._focal_coro_field = xp.fft.fftshift(xp.fft.fft2(pad_coro_field))
         psf = abs(self._focal_coro_field)**2
         return psf
     

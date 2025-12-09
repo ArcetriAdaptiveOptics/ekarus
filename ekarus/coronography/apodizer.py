@@ -78,7 +78,7 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int, beta:float=0
 
         app = xp.fft.ifft2(xp.fft.ifftshift(new_image)) # determine pupil electric field
         app[~pupil.astype(bool)] = 0 # enforce pupil
-        # app[pupil] /= xp.abs(app[pupil]) # enforce unity transmission within pupil
+        app[pupil.astype(bool)] /= xp.abs(app[pupil.astype(bool)]) # enforce unity transmission within pupil
     
     psf = xp.abs(image)**2
     contrast =  psf / xp.max(psf)

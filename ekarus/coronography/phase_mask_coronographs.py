@@ -31,8 +31,8 @@ class FourQuadrantCoronograph(Coronograph):
         self._outPupilStopSize = outPupilStopInFractionOfPupil
 
     def _get_pupil_mask(self, field):
-        inStop = CircularMask(field.shape, maskRadius=self._inPupilStopSize*max(field.shape)/self.oversampling)
-        outStop = CircularMask(field.shape, maskRadius=self._outPupilStopSize*max(field.shape)/self.oversampling)
+        inStop = CircularMask(field.shape, maskRadius=self._inPupilStopSize*max(field.shape)/2)#/self.oversampling)
+        outStop = CircularMask(field.shape, maskRadius=self._outPupilStopSize*max(field.shape)/2)#/self.oversampling)
         pupil_mask = xp.logical_and(xp.asarray(outStop.asTransmissionValue()),xp.asarray(inStop.mask()))
         return pupil_mask
     
@@ -73,8 +73,8 @@ class VectorVortexCoronograph(Coronograph):
             self._innerShift = xp.pi if inVortexShift is None else inVortexShift
 
     def _get_pupil_mask(self, field):
-        inStop = CircularMask(field.shape, maskRadius=self._inPupilStopSize*max(field.shape)/self.oversampling)
-        outStop = CircularMask(field.shape, maskRadius=self._outPupilStopSize*max(field.shape)/self.oversampling)
+        inStop = CircularMask(field.shape, maskRadius=self._inPupilStopSize*max(field.shape)/2)#/self.oversampling)
+        outStop = CircularMask(field.shape, maskRadius=self._outPupilStopSize*max(field.shape)/2)#/self.oversampling)
         pupil_mask = xp.logical_and(xp.asarray(outStop.asTransmissionValue()),xp.asarray(inStop.mask()))
         return pupil_mask
     

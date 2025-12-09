@@ -25,8 +25,8 @@ class LyotCoronograph(Coronograph):
             self._knifeEdge = inFocalStopInLambdaOverD
 
     def _get_pupil_mask(self, field):
-        inStop = CircularMask(field.shape, maskRadius=self._inPupilStopSize*max(field.shape)/self.oversampling)
-        outStop = CircularMask(field.shape, maskRadius=self._outPupilStopSize*max(field.shape)/self.oversampling)
+        inStop = CircularMask(field.shape, maskRadius=self._inPupilStopSize*max(field.shape)/2)#/self.oversampling)
+        outStop = CircularMask(field.shape, maskRadius=self._outPupilStopSize*max(field.shape)/2)#/self.oversampling)
         pupil_mask = xp.logical_and(xp.asarray(outStop.asTransmissionValue()),xp.asarray(inStop.mask()))
         return pupil_mask
     
@@ -47,32 +47,3 @@ class LyotCoronograph(Coronograph):
             else:
                 focal_mask = xp.asarray(iwa.mask())
         return focal_mask
-    
-
-# class KnifeEdgeCoronograph(Coronograph):
-
-#     def __init__(self,
-#                 referenceLambdaInM:float,
-#                 iwaFocalStopInLambdaOverD:float,
-#                 outPupilStopInFractionOfPupil:float=1.0,
-#                 inPupilStopInFractionOfPupil:float=0.0):
-#         self._refLambdaInM = referenceLambdaInM
-#         self._edgeInLambdaOverD = iwaFocalStopInLambdaOverD
-#         self._inPupilStopSize = inPupilStopInFractionOfPupil
-#         self._outPupilStopSize = outPupilStopInFractionOfPupil
-
-#     def _get_pupil_mask(self, field):
-#         inStop = CircularMask(field.shape, maskRadius=self._inPupilStopSize*max(field.shape)/self.oversampling)
-#         outStop = CircularMask(field.shape, maskRadius=self._outPupilStopSize*max(field.shape)/self.oversampling)
-#         pupil_mask = xp.logical_and(xp.asarray(outStop.asTransmissionValue()),xp.asarray(inStop.mask()))
-#         return pupil_mask
-    
-#     def _get_focal_plane_mask(self, field):
-#         lambdaInM2Px = self.oversampling
-#         if self.lambdaInM is not None:
-#             lambdaInM2Px *= self._refLambdaInM/self.lambdaInM
-#         _,X = xp.mgrid[0:field.shape[0],0:field.shape[1]]
-#         edge = (field.shape[1]//2+self._edgeInLambdaOverD*lambdaInM2Px)
-#         focal_mask = xp.ones(field.shape)
-#         focal_mask[X<=edge] = 0
-#         return focal_mask

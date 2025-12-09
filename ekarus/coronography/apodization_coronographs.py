@@ -1,5 +1,6 @@
 import xupy as xp
 from ekarus.coronography.apodizer import define_apodizing_phase
+from arte.types.mask import CircularMask
 
 from ekarus.coronography.abstract_coronograph import Coronograph
 from ekarus.coronography.lyot_coronographs import LyotCoronograph
@@ -13,6 +14,7 @@ class ApodizerPhasePlateCoronograph(Coronograph):
                  iwaInLambdaOverD:float,
                  owaInLambdaOverD:float,
                  oversampling:int=8,
+                 symmetric:bool=False,
                  beta:float=0.9,
                  max_its:int=1000,
                  show:bool=True):
@@ -20,7 +22,8 @@ class ApodizerPhasePlateCoronograph(Coronograph):
         self._telescopePupil = pupil.copy()
         self._apodizer_phase = define_apodizing_phase(pupil, contrastInDarkHole, 
                               iwaInLambdaOverD, owaInLambdaOverD,
-                              beta, oversampling, max_its=max_its, show=show)
+                              beta, oversampling, symmetric_dark_hole=symmetric,
+                              max_its=max_its, show=show)
 
     def _get_apodizer(self, lambdaInM):
         phase = self._apodizer_phase 
@@ -29,7 +32,7 @@ class ApodizerPhasePlateCoronograph(Coronograph):
         return xp.exp(1j*phase,dtype=xp.cfloat)
 
     def _get_pupil_mask(self, field):
-        return 1.0
+        return self._telescopePupil
     
     def _get_focal_plane_mask(self, field):
         return 1.0
@@ -45,7 +48,8 @@ class PAPLC(LyotCoronograph):
                  owaInLambdaOverD:float,
                  fpmIWAInLambdaOverD:float,
                  fpmOWAInLambdaOverD:float=None,
-                 knife_edge:bool=True,
+                 knife_edge:bool=False,
+                 symmetric:bool=False,
                  outPupilStopInFractionOfPupil:float=1.0,
                  inPupilStopInFractionOfPupil:float=0.0,
                  oversampling:int=8,
@@ -60,8 +64,17 @@ class PAPLC(LyotCoronograph):
                         knife_edge)
         self._telescopePupil = pupil.copy()
         self._apodizer_phase = define_apodizing_phase(pupil, contrastInDarkHole, 
-                              iwaInLambdaOverD, owaInLambdaOverD,
-                              beta, oversampling, max_its=max_its, show=show)
+                              iwaInLambdaOverD, owaInLambdaOverD, 
+                              beta, oversampling, 
+                              symmetric_dark_hole=symmetric,
+                              max_its=max_its, show=show)
+        
+    def _get_pupil_mask(self, field):
+        inStop = CircularMask(field.shape, maskRadius=self._inPupilStopSize*max(field.shape)/2)#/self.oversampling)
+        outStop = CircularMask(field.shape, maskRadius=self._outPupilStopSize*max(field.shape)/2)#/self.oversampling)
+        pupil_mask = xp.logical_and(xp.asarray(outStop.asTransmissionValue()),xp.asarray(inStop.mask()))
+        pupil_mask = xp.logical_and(1-self._telescopePupil,pupil_mask)
+        return pupil_mask
 
     def _get_apodizer(self, lambdaInM):
         phase = self._apodizer_phase 
