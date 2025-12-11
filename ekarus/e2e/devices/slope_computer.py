@@ -117,7 +117,8 @@ class SlopeComputer():
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(zero_phase, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
-                    self._define_pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
+                    centerOnPix = False if self._slope_method == 'raw_intensity' else True
+                    self._define_pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixDiam=centerObscPixelSize, centerOnPix=centerOnPix)
                     hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case '3PWFS':
@@ -132,7 +133,8 @@ class SlopeComputer():
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(zero_phase, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
-                    self._define_3pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixelSize)
+                    centerOnPix = False if self._slope_method == 'raw_intensity' else True
+                    self._define_3pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixDiam=centerObscPixelSize, centerOnPix=centerOnPix)
                     hdr_dict = {'APEX_ANG': self._wfs.vertex3_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case 'ZWFS':
@@ -174,7 +176,7 @@ class SlopeComputer():
         return slopes
     
     
-    def load_reconstructor(self, IM, m2c, method:str=None):
+    def load_reconstructor(self, IM, m2c):
         """
         Load the reconstructor and the mode-to-command matrix
         """
@@ -183,9 +185,6 @@ class SlopeComputer():
         Rec = (V.T * 1/D) @ U.T
         self.Rec = Rec
         self.m2c = m2c[:,:self.nModes]
-
-        if method is not None:
-            self._slope_method = method
 
 
     def set_new_gain(self, intGain:float):
@@ -196,12 +195,9 @@ class SlopeComputer():
         self.intGain = intGain
 
 
-    def compute_slope_null(self, zero_phase, lambdaOverD):
+    def compute_slope_null(self, zero_phase, lambdaOverD, nPhotons):
         """ Set the slope null value """
-        self.slope_null = self.compute_slopes(zero_phase,lambdaOverD,nPhotons=None)
-        # detector_image = self._detector.last_frame
-        # frame = xp.vstack([detector_image[~self._roi_masks[j]] for j in range(xp.shape(self._roi_masks)[0])])
-        # self._ref_slope = xp.mean(frame,axis=0)
+        self.slope_null = self.compute_slopes(zero_phase,lambdaOverD,nPhotons)
 
 
     def _compute_pyr_signal(self, detector_image):
@@ -219,8 +215,7 @@ class SlopeComputer():
             case 'diagonal_slopes':
                 up_down = (A+B) - (C+D)
                 left_right = (A+C) - (B+D)
-                diag = (A+D) - (B+C)
-                # diag = xp.sqrt(2)*(A+D) - xp.sqrt(2)*(B+C) # this is probably worse in noise propagation
+                diag = (A+D) - (B+C)#*xp.sqrt(2)
                 slopes = xp.hstack((up_down, left_right, diag))
                 
             case 'raw_intensity':
@@ -229,7 +224,7 @@ class SlopeComputer():
             case _:
                 raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'diagonal_slopes'")
             
-        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))/4
+        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))/4 #xp.sum(xp.hstack((A,B,C,D)))/len(A) #
         slopes *= 1/mean_intensity
         return slopes
     
@@ -247,7 +242,6 @@ class SlopeComputer():
 
             case 'all_slopes':
                 ab = (A+B)/2-C
-                # ac = (A+C)/2-B # note that ab+bc = -ac, so it is redundant
                 bc = (C+B)/2-A
                 slopes = xp.hstack((ab,bc))
                 
@@ -257,12 +251,12 @@ class SlopeComputer():
             case _:
                 raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'all_slopes'")
             
-        mean_intensity = xp.mean(xp.hstack((A,B,C)))/3
+        mean_intensity = xp.mean(xp.hstack((A,B,C)))/3 # xp.sum(xp.hstack((A,B,C)))/len(A) #
         slopes *= 1/mean_intensity
         return slopes
     
     
-    def _define_pyr_subaperture_masks(self, subaperture_image, Npix, centerObscPixDiam:float = 0.0):
+    def _define_pyr_subaperture_masks(self, subaperture_image, Npix, centerOnPix:bool=True, centerObscPixDiam:float = 0.0):
         """
         Create subaperture masks for the given shape and pixel size.
 
@@ -271,8 +265,8 @@ class SlopeComputer():
         ny,nx = subaperture_image.shape
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
         for i in range(4):
-            # qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
-            qy,qx = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
+            qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
+            # qy,qx = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant', centerOnPix=centerOnPix)
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
             if centerObscPixDiam > 0.0:
                 obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
@@ -280,7 +274,7 @@ class SlopeComputer():
         self._roi_masks = subaperture_masks
 
 
-    def _define_3pyr_subaperture_masks(self, subaperture_image, Npix, centerObscPixDiam:float = 0.0):
+    def _define_3pyr_subaperture_masks(self, subaperture_image, Npix, centerOnPix:bool=True, centerObscPixDiam:float = 0.0):
         """
         Create subaperture masks for the given shape and pixel size.
 
@@ -289,7 +283,7 @@ class SlopeComputer():
         ny,nx = subaperture_image.shape
         subaperture_masks = xp.zeros((3, ny, nx), dtype=bool)
         for i in range(3):
-            qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='triangle')
+            qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='triangle', centerOnPix=centerOnPix)
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
             if centerObscPixDiam > 0.0:
                 obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
@@ -298,7 +292,7 @@ class SlopeComputer():
 
     
     @staticmethod
-    def find_subaperture_center(detector_image, index:int=1, mode:str='quadrant'):
+    def find_subaperture_center(detector_image, mode, index:int=1, centerOnPix:bool=True):
         X,Y = image_grid(detector_image.shape, recenter=True)
         roi_mask = xp.zeros_like(detector_image, dtype=xp.float)
         if mode == 'quadrant':
@@ -325,17 +319,8 @@ class SlopeComputer():
                     raise ValueError('Possible quadrant numbers are 1,2,3 (right, top-left, bottom-left)')
         roi_mask = xp.reshape(roi_mask, detector_image.shape)
         intensity = detector_image * roi_mask
-        qx,qy = get_photocenter(intensity)
+        qx,qy = get_photocenter(intensity,offset=False)
         
-        # if mode == 'quadrant':
-        #     return xp.round(qy), xp.round(qx)
-        # else:
-        return xp.round(qx-0.5), xp.round(qy-0.5)#xp.round(qx), xp.round(qy)#
-        
-    @staticmethod
-    def define_cramer_rao_matrix(ref_intensity, nPhotons, RON, Npupils):
-        pix_intensity = ref_intensity/xp.sum(ref_intensity)*nPhotons
-        N = nPhotons/len(pix_intensity)
-        Cn_diag = pix_intensity/N**2 + Npupils*RON**2/N**2
-        Cn = xp.diag(Cn_diag)
-        return Cn
+        if centerOnPix:
+            qx,qy = xp.round(qx), xp.round(qy)
+        return qx,qy

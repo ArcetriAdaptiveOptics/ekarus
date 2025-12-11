@@ -56,7 +56,7 @@ class ChangingGainSSAO(HighLevelAO):
     def run_loop(self, lambdaInM:float, starMagnitude:float,
                  changeGain_it_numbers:list=None, new_gains:list=None, 
                  new_modAngInLambdaOverD:float=None, changeMod_it_number:int=None, new_Rec=None,
-                 method:str='slopes', save_prefix:str=None):
+                 save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 
@@ -126,7 +126,7 @@ class ChangingGainSSAO(HighLevelAO):
 
             if i == changeGain_it_number:
                 print(f'Changing gain from {self.sc.intGain} to {new_gains[ctr]}')
-                self.sc.intGain = new_gains[ctr]
+                self.sc.set_new_gain(new_gains[ctr])
                 ctr += 1
                 if ctr < len(changeGain_it_numbers):
                     changeGain_it_number = changeGain_it_numbers[ctr]
@@ -137,6 +137,8 @@ class ChangingGainSSAO(HighLevelAO):
                 print(f'Changing modulation to {new_modAngInLambdaOverD:1.1f}')
                 self.pyr.set_modulation_angle(new_modAngInLambdaOverD)
                 self.sc.Rec = new_Rec
+                nPhotons = self.get_photons_per_second(self.starMagnitude)*self.sc.dt
+                self.sc.compute_slope_null(1-self.cmask,lambdaInM/self.pupilSizeInM,nPhotons)
 
             if save_prefix is not None:            
                 residual_phases[i, :] = residual_phase

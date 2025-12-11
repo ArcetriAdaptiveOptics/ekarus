@@ -8,43 +8,35 @@ import matplotlib.pyplot as plt
 from ekarus.e2e.single_stage_ao_class import SingleStageAO
 from ekarus.e2e.changing_gain_ao_class import ChangingGainSSAO
 
-# import os.path as op
-# import ekarus.e2e.utils.my_fits_package as myfits
 
+def main():
 
-def main(tn:str='example_decreasing_mod'):
-
-    ssao = SingleStageAO(tn)
-    ssao.initialize_turbulence()
+    ssao = SingleStageAO(tn='ekarus')
+    ssao.initialize_turbulence(tn='five_layers_25mOS')
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
     Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=50e-9)
     ssao.sc.load_reconstructor(IM,m2c)
     sig2, input_sig2 = ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='')
 
-    unmod_ssao = SingleStageAO(tn)
-    unmod_ssao.initialize_turbulence()
+    unmod_ssao = SingleStageAO(tn='ekarus_unmod')
+    unmod_ssao.initialize_turbulence(tn='five_layers_25mOS')
     unmod_ssao.pyr.set_modulation_angle(0.0)
-    unmod_ssao.sc.compute_slope_null(1-unmod_ssao.cmask, unmod_ssao.pyr.lambdaInM/unmod_ssao.pupilSizeInM)
-    mod0_Rec, mod0_IM = unmod_ssao.compute_reconstructor(unmod_ssao.sc, KL, unmod_ssao.pyr.lambdaInM, ampsInM=10e-9, save_prefix='mod0_')
+    _, mod0_IM = unmod_ssao.compute_reconstructor(unmod_ssao.sc, KL, unmod_ssao.pyr.lambdaInM, ampsInM=20e-9, save_prefix='mod0_')
     unmod_ssao.sc.load_reconstructor(mod0_IM,m2c)
     mod0_sig2, _ = unmod_ssao.run_loop(ssao.pyr.lambdaInM, ssao.starMagnitude, save_prefix='mod0_')
 
-    dmod_ssao = ChangingGainSSAO(tn)
-    dmod_ssao.initialize_turbulence()
-    dmod_ssao.sc.load_reconstructor(mod0_IM,m2c)
+    dmod_ssao = ChangingGainSSAO(tn='ekarus')
+    dmod_ssao.initialize_turbulence(tn='five_layers_25mOS')
+    dmod_ssao.sc.load_reconstructor(IM,m2c)
     dmod_sig2, input_sig2 = dmod_ssao.run_loop(dmod_ssao.pyr.lambdaInM, dmod_ssao.starMagnitude,
-                                      new_gains=[1.0], changeGain_it_numbers=[100], save_prefix='dmod_')
-                                    #   new_Rec=mod0_Rec, changeMod_it_number=200, save_prefix='dmod_')
+                                    #   new_gains=[1.0], changeGain_it_numbers=[100], save_prefix='dmod_')
+                                      new_Rec=unmod_ssao.sc.Rec, new_modAngInLambdaOverD=0.0,
+                                      changeMod_it_number=200, save_prefix='dmod_')
 
     lambdaRef = dmod_ssao.pyr.lambdaInM
     # ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
     # unmod_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='mod0_')
     dmod_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='dmod_')
-
-
-    # ssao.plot_rec_modes(save_prefix='')
-    # unmod_ssao.plot_rec_modes(save_prefix='mod0_')
-    dmod_ssao.plot_rec_modes(save_prefix='dmod_')
 
     ssao.sig2 = sig2
     ssao.dmod_sig2 = dmod_sig2
@@ -78,19 +70,6 @@ def main(tn:str='example_decreasing_mod'):
     plt.xlabel('Time [ms]')
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.gca().set_yscale('log')
-
-    _,S,_ = xp.linalg.svd(Rec,full_matrices=False)
-    _,mod0_S,_ = xp.linalg.svd(mod0_Rec,full_matrices=False)
-    S = xp.asnumpy(S)
-    mod0_S = xp.asnumpy(mod0_S)
-    plt.figure()
-    plt.plot(S,'-o',label=f'modulation: {ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
-    plt.plot(mod0_S,'-x',label=f'modulation: {unmod_ssao.pyr.modulationAngleInLambdaOverD} $lambda/D$')
-    plt.legend()
-    plt.xlabel('KL mode number')
-    plt.yscale('log')
-    plt.grid()
-    plt.title('Reconstructor singular values')
 
     _,S,_ = xp.linalg.svd(IM,full_matrices=False)
     _,mod0_S,_ = xp.linalg.svd(mod0_IM,full_matrices=False)

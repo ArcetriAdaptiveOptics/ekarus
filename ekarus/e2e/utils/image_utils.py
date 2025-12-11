@@ -30,7 +30,7 @@ def image_grid(shape, recenter:bool = False):
     return X,Y
 
 
-def get_photocenter(image):
+def get_photocenter(image,offset:bool=True):
     """ 
     Compute the image photocenter
     
@@ -42,8 +42,9 @@ def get_photocenter(image):
     qy = xp.sum(Y * image) / xp.sum(image)
     qx = xp.sum(X * image) / xp.sum(image)
 
-    qy += 0.5
-    qx += 0.5
+    if offset:
+        qy += 0.5
+        qx += 0.5
 
     return qx,qy 
 

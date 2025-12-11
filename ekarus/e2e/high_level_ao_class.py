@@ -449,7 +449,8 @@ class HighLevelAO():
                         xp.floor(subapertureSize+1.0)*self.centerObscurationInM/self.pupilSizeInM
         ) 
         pyr.set_modulation_angle(sc.modulationAngleInLambdaOverD)
-        sc.compute_slope_null(zero_phase, lambdaOverD)
+        nPhotons = self.get_photons_per_second(self.starMagnitude) * sc.dt
+        sc.compute_slope_null(zero_phase, lambdaOverD, nPhotons)
         
         return pyr, det, sc
 
@@ -492,8 +493,10 @@ class HighLevelAO():
             if IM is None:
                 try:
                     IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
+                    print(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
                 except FileNotFoundError:
                     IM = myfits.read_fits(os.path.join(self.savecalibpath,'IM.fits'))
+                    print(os.path.join(self.savecalibpath,'IM.fits'))
             Nmodes = int(min(slope_computer.nModes,xp.shape(IM)[1]))
             IMc = IM[:,:Nmodes]
             N = xp.shape(pre_corrected_screens)[0]
