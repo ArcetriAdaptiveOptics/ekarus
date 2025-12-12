@@ -4,7 +4,9 @@ import xupy as xp
 from ekarus.e2e.utils.image_utils import reshape_on_mask, image_grid
 
 
-def generate_app_keller(pupil, target_contrast, max_iterations:int, beta:float=0, oversampling:int=4):
+def generate_app_keller(pupil, target_contrast, max_iterations:int, 
+                        beta:float=0, oversampling:int=4, 
+                        phi_guess=None, phi_residual=None):
     """
     Function taken from HCIpy (Por et al. 2018):
     https://github.com/ehpor/hcipy/blob/master/hcipy/coronagraphy/apodizing_phase_plate.py
@@ -39,6 +41,12 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int, beta:float=0
     oversampling : int (optional)
         The oversampling to use for the PSF computation.
         Should be greater than 3 to avoid issues, default is 4.
+    phi_guess : ndarray(float)
+        Initial guess for the APP phase in [rad].
+        Default is zero phase across the pupil.
+    phi_residual : ndarray(float)
+        Residual pupil phase in [rad].
+        Default is zero (diffraction limited).
 
     Returns
     -------
@@ -56,15 +64,22 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int, beta:float=0
     if oversampling < 3:
         raise ValueError('Oversampling should be at least 3 to avoid numerical issues.')
 
-    # initialize APP with pupil
-    app = pupil * xp.exp(1j*xp.zeros(pupil.shape),dtype=xp.complex64)
+    if phi_guess is None:
+        # initialize APP with pupil
+        app = pupil * xp.exp(1j*xp.zeros(pupil.shape),dtype=xp.complex64)
+    else:
+        app = pupil * xp.exp(1j*phi_guess,dtype=xp.complex64)
 
     # define dark zone as location where contrast is < 1e-1
     dark_zone = target_contrast < 0.1
 
     old_image = None
     for i in range(max_iterations):
-        image = xp.fft.fftshift(xp.fft.fft2(app)) # calculate image plane electric field
+        # calculate image plane electric field
+        if phi_residual is not None:
+            image = xp.fft.fftshift(xp.fft.fft2(app * xp.exp(1j*phi_residual,dtype=xp.complex64))) 
+        else:
+            image = xp.fft.fftshift(xp.fft.fft2(app)) 
 
         if not xp.any(xp.abs(image)**2 / xp.max(xp.abs(image)**2) > target_contrast):
             break
@@ -78,24 +93,38 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int, beta:float=0
 
         app = xp.fft.ifft2(xp.fft.ifftshift(new_image)) # determine pupil electric field
         app[~pupil.astype(bool)] = 0 # enforce pupil
-        app[pupil.astype(bool)] /= xp.abs(app[pupil.astype(bool)]) # enforce unity transmission within pupil
+        # app[pupil.astype(bool)] /= xp.abs(app[pupil.astype(bool)]) # enforce unity transmission within pupil
+        app = xp.asarray(pupil) * xp.exp(1j*xp.angle(app),dtype=xp.complex64)
     
     psf = xp.abs(image)**2
     contrast =  psf / xp.max(psf)
     ref_psf = xp.abs(xp.fft.fftshift(xp.fft.fft2(pupil)))**2
 
+    flag = 0
     if i == max_iterations-1:
-        raise Warning(f'Maximum number of iterations ({max_iterations:1.0f}) reached, worst contrast in dark hole is: {xp.log10(xp.max(contrast[dark_zone])):1.1f}')
+        print(f'Maximum number of iterations ({max_iterations:1.0f}) reached, worst contrast in dark hole is: {xp.log10(xp.max(contrast[dark_zone])):1.1f}')
+        flag = 1
+    else:
+        print(f'Apodizer computed after {i:1.0f} iterations: average contrast in dark hole is {xp.mean(xp.log10(contrast[dark_zone])):1.1f}, Strehl is {xp.max(psf)/xp.max(ref_psf)*1e+2:1.2f}%')
 
-    print(f'Apodizer computed: average contrast in dark hole is {xp.mean(xp.log10(contrast[dark_zone])):1.1f}, Strehl is {xp.max(psf)/xp.max(ref_psf)*1e+2:1.2f}%')
-
-    return app
+    return app, flag
 
 
 def define_apodizing_phase(pupil, contrast, iwa, owa, beta:float, 
                            oversampling:int, symmetric_dark_hole:bool=False, 
-                           max_its:int=1000, show:bool=True):
+                           max_its:int=1000, show:bool=True, 
+                           phi_guess_in_rad=None, phi_offset_in_rad=None):
     mask_shape = max(pupil.shape)
+    if phi_guess_in_rad is not None:
+        guess_phase = reshape_on_mask(phi_guess_in_rad,pupil)
+        phi_guess = xp.pad(guess_phase.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
+    else:
+        phi_guess = None
+    if phi_offset_in_rad is not None:
+        offset_phase = reshape_on_mask(phi_offset_in_rad,pupil)
+        phi_residual = xp.pad(offset_phase.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
+    else:
+        phi_residual = None
     padded_pupil = xp.pad(1-pupil.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
     X,Y = image_grid(padded_pupil.shape,recenter=True)
     rho = xp.sqrt(X**2+Y**2)
@@ -105,13 +134,15 @@ def define_apodizing_phase(pupil, contrast, iwa, owa, beta:float,
     else:
         where = (rho <= owa*oversampling) * (X >= iwa*oversampling) 
     target_contrast[where] = contrast
-    app = generate_app_keller(padded_pupil, target_contrast, max_iterations=max_its, beta=beta)
+    app, max_its_flag = generate_app_keller(padded_pupil, target_contrast, max_iterations=max_its, beta=beta, 
+                              phi_guess=phi_guess, phi_residual=phi_residual)
     phase = xp.angle(app)[padded_pupil>0.0]
     apodizer_phase = reshape_on_mask(phase, pupil)
     if show:
         focal_field = xp.fft.fftshift(xp.fft.fft2(app))
         app_psf = xp.abs(focal_field)**2
         app_psf /= xp.max(app_psf)
+        sz = app_psf.shape
         plt.figure(figsize=(18,4))
         plt.subplot(1,3,1)
         plt.imshow(xp.asnumpy(xp.log10(target_contrast)),origin='lower',cmap='RdGy')
@@ -124,7 +155,8 @@ def define_apodizing_phase(pupil, contrast, iwa, owa, beta:float,
         plt.subplot(1,3,3)
         plt.imshow(xp.asnumpy(xp.log10(app_psf)),cmap='inferno',vmin=xp.log10(xp.min(target_contrast)))
         plt.colorbar()
-        plt.xlim([44*oversampling,84*oversampling])
-        plt.ylim([44*oversampling,84*oversampling])
+        pp = 20
+        plt.xlim([sz[0]//2-pp*oversampling,sz[0]//2+pp*oversampling])
+        plt.ylim([sz[1]//2-pp*oversampling,sz[1]//2+pp*oversampling])
         plt.title('Apodized PSF')
-    return apodizer_phase
+    return apodizer_phase, max_its_flag

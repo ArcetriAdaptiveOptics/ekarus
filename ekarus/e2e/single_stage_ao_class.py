@@ -29,7 +29,7 @@ class SingleStageAO(HighLevelAO):
             "ccd_frames",
             "reconstructor_modes",
             "dm_commands",
-            "rms2_residual"
+            "rms2_residual",
         ]
 
         self._initialize_devices()

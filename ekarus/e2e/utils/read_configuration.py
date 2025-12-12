@@ -34,6 +34,10 @@ class ConfigReader():
 
     def read_detector_pars(self, detector_name: str = 'DETECTOR'):
         """ Read detector parameters from the configuration file."""
+        try:
+            bs = self._cfile[detector_name]['beam_splitter_ratio']
+        except KeyError:
+            self._cfile[detector_name]['beam_splitter_ratio'] = 1.0
         return self._cfile[detector_name]
     
     def read_dm_pars(self, dm_name: str = 'DM'):

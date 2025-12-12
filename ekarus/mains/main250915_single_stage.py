@@ -17,8 +17,8 @@ def main(tn:str='example_single_stage',
          show_contrast:bool =False,
          optimize_gain:bool=False, 
          starMagnitudes=None, 
-         atmo_tn='example_single_stage',
-         lambdaRef:float=750e-9,
+         atmo_tn='nine_layers_25mOS',
+         lambdaRef:float=700e-9,
          save_prefix:str=None):
     
     if gain_list is not None:

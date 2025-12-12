@@ -5,7 +5,7 @@ from arte.math.toccd import toccd
 
 class Detector:
 
-    def __init__(self, detector_shape = None, RON:float = 0.0, quantum_efficiency:float = 1.0, beam_split_ratio:float = 1.0, max_bits:int = 14):
+    def __init__(self, detector_shape = None, RON:float = 0.0, quantum_efficiency:float = 1.0, beam_split_ratio:float = 1.0, max_bits:int = 16):
         """
         Detector constructor.
         

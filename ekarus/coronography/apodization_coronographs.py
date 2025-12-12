@@ -20,7 +20,7 @@ class ApodizerPhasePlateCoronograph(Coronograph):
                  show:bool=True):
         self._refLambdaInM = referenceLambdaInM
         self._telescopePupil = pupil.copy()
-        self._apodizer_phase = define_apodizing_phase(pupil, contrastInDarkHole, 
+        self._apodizer_phase, _ = define_apodizing_phase(pupil, contrastInDarkHole, 
                               iwaInLambdaOverD, owaInLambdaOverD,
                               beta, oversampling, symmetric_dark_hole=symmetric,
                               max_its=max_its, show=show)
@@ -63,7 +63,7 @@ class PAPLC(LyotCoronograph):
                         inPupilStopInFractionOfPupil,
                         knife_edge)
         self._telescopePupil = pupil.copy()
-        self._apodizer_phase = define_apodizing_phase(pupil, contrastInDarkHole, 
+        self._apodizer_phase, _ = define_apodizing_phase(pupil, contrastInDarkHole, 
                               iwaInLambdaOverD, owaInLambdaOverD, 
                               beta, oversampling, 
                               symmetric_dark_hole=symmetric,
