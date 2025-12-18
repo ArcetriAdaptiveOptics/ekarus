@@ -1,19 +1,12 @@
 IMPORTANT:
 
-PETALING sensitivity
-Modal IIR filter
+
+DM branch: Simplified DM class (IFFs, act_coords), Analytical slaving
+Controller branch: modal IIR filter, ML reconstruction, regularization
+
 NCPA calibration
-Analytical slaving
-
-
-OG from PSD (long exposure)
-
-
-
-FUTURE IMPROVEMENTS:
-
-Controller class
-Simplified DM class (IFFs, act_coords)
+PETALING sensitivity
+OGs from PSD (long exposure)
 
 
 COSMETIC CHANGES:

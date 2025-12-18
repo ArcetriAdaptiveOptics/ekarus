@@ -78,8 +78,8 @@ def main(tn:str='example_single_stage',
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
             save_prefix = f'magV{starMag:1.0f}_'#+ssao.atmo_pars_str
-            print(f'Now simulating for magnitude: {starMag:1.1f}')
             sig[k,:],_ = ssao.run_loop(lambdaRef, starMag, save_prefix=save_prefix)
+            print(f'Simulated magnitude {starMag:1.1f}, average SR: {xp.mean(xp.exp(-sig[k,-it_ss:]))*1e+2:1.2f}%')
         ssao.SR = xp.mean(xp.exp(-sig[:,-it_ss:]),axis=1)
         ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
     else:

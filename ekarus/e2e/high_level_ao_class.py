@@ -455,6 +455,80 @@ class HighLevelAO():
         return pyr, det, sc
 
 
+    # def measure_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM, save_prefix:str=''):
+    #     """
+    #     Calibrates the optical gains for each mode using a phase screen at a given time.
+        
+    #     Parameters
+    #     ----------
+    #     pre_corrected_screens : cube (Nframes,Npix,Npix)
+    #         The pre-corrected phase screens to use for the calibration.
+    #     slope_computer : SlopeComputer
+    #         The slope computer object.
+    #     lambdaInM : float | array
+    #         The wavelength(s) at which calibration is performed.
+        
+    #     Returns 
+    #     -------
+    #     opt_gains : array
+    #         The computed optical gains.
+    #     """
+    #     og_fullres_path = os.path.join(self.savecalibpath,str(save_prefix)+'full_res_meas_OG.fits')#self.atmo_pars_str+
+    #     og_lowres_path = os.path.join(self.savecalibpath,str(save_prefix)+'low_res_meas_OG.fits')#self.atmo_pars_str+
+    #     try:
+    #         if self.recompute is True:
+    #             raise FileNotFoundError('Recompute is True')
+    #         fullres_opt_gains = myfits.read_fits(og_fullres_path)
+    #         lowres_opt_gains = myfits.read_fits(og_lowres_path)
+    #     except FileNotFoundError:
+    #         Nmodes = slope_computer.nModes
+    #         N = xp.shape(pre_corrected_screens)[0]
+    #         # fullres_opt_gains = xp.zeros([N,Nmodes])
+    #         # lowres_opt_gains = xp.zeros([N,Nmodes])
+    #         rec_modes = xp.zeros(Nmodes)
+    #         true_modes = xp.zeros(Nmodes)
+    #         lo_rec_modes = xp.zeros(Nmodes)
+    #         lo_true_modes = xp.zeros(Nmodes)
+    #         phase2modes = xp.linalg.pinv(MM.T) 
+    #         lophase2modes = xp.linalg.pinv(MM[:Nmodes,:].T) 
+    #         lambdaInM = self.pyr.lambdaInM
+    #         m2rad = 2*xp.pi/lambdaInM
+    #         lambdaOverD = lambdaInM/self.pupilSizeInM
+    #         for i in range(N):
+    #             print(f'\rPhase realization {i+1}/{N}', end='\r', flush=True)
+    #             phi = pre_corrected_screens[int(i),:]
+    #             phi -= xp.mean(phi)
+    #             res_phi = phi*m2rad
+    #             input_ef = (1-self.cmask) * xp.exp(1j*reshape_on_mask(res_phi,self.cmask), dtype=xp.complex64)
+    #             meas_slopes = slope_computer.compute_slopes(input_ef, lambdaOverD, None)
+    #             rec_mode = slope_computer.Rec @ meas_slopes
+    #             rec_modes += rec_mode**2
+    #             true_mode = phase2modes @ phi
+    #             true_modes += (true_mode[:Nmodes]*m2rad)**2
+
+    #             lo_mode = lophase2modes @ phi
+    #             lo_phi = MM[:Nmodes,:].T @ lo_mode                
+    #             lo_res_phi = lo_phi*m2rad
+    #             input_ef = (1-self.cmask) * xp.exp(1j*reshape_on_mask(lo_res_phi,self.cmask), dtype=xp.complex64)
+    #             meas_slopes = slope_computer.compute_slopes(input_ef, lambdaOverD, None)
+    #             lo_rec_mode = slope_computer.Rec @ meas_slopes
+    #             lo_rec_modes += lo_rec_mode**2
+    #             lo_true_modes += (lo_mode[:Nmodes]*m2rad)**2
+    #             # import matplotlib.pyplot as plt
+    #             # plt.figure(figsize=(12,5))
+    #             # plt.subplot(1,2,1)
+    #             # plt.plot(xp.asnumpy(xp.maximum(abs(rec_modes / true_modes[:Nmodes]),0.01)))
+    #             # plt.grid()
+    #             # plt.yscale('log')
+    #             # plt.subplot(1,2,2)
+    #             # plt.plot(xp.asnumpy(abs(rec_modes - true_modes[:Nmodes])))
+    #             # plt.grid()
+    #         fullres_opt_gains = xp.sqrt(rec_modes/true_modes)
+    #         lowres_opt_gains = xp.sqrt(lo_rec_modes/lo_true_modes)
+    #         myfits.save_fits(og_fullres_path,fullres_opt_gains)
+    #         myfits.save_fits(og_lowres_path,lowres_opt_gains)
+    #     return fullres_opt_gains, lowres_opt_gains
+
     def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM,
                                 ampsInM:float=50e-9, save_prefix:str='', IM=None, return_perfect_ogs:bool=False):
         """
