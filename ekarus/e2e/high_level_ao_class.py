@@ -30,7 +30,7 @@ class HighLevelAO():
 
         self._config = ConfigReader(tn)
         self._tn = tn
-        
+
         self._define_pupil_mask()
         self._read_loop_parameters()
 
@@ -43,7 +43,7 @@ class HighLevelAO():
         collecting_area = xp.pi/4*(self.pupilSizeInM**2-self.centerObscurationInM**2)
         collected_flux = self.throughput * total_flux * collecting_area
         return collected_flux
-    
+
 
     def _define_pupil_mask(self):
         """ Reads the Telescope configuration file, defining the mask """
@@ -68,13 +68,13 @@ class HighLevelAO():
             self._add_telescope_spiders(spiderPixWidth, spiderAngles)
         except KeyError:
             pass
-    
 
-    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2, 
+
+    def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2,
                         filt_modes=None, save_prefix:str='', return_sv:bool=False):
         """
         Defines the Karhunen-Loève (KL) modes for the given DM and oversampling.
-        
+
         Parameters
         ----------
         dm : DeformableMirror
@@ -87,7 +87,7 @@ class HighLevelAO():
             Prefix for saving the KL modes files, by default ''.
         return_sv : bool, optional
             Boolean to return IFs and KL modes singular values.
-            
+
         Returns
         -------
         KL : array
@@ -116,26 +116,26 @@ class HighLevelAO():
                 IFFs = remap_on_new_mask(dm.IFF, dm.mask, dm.pupil_mask)
                 IFFs = IFFs[:,dm.master_ids]
                 print(f'SLAVING: downsized IFFs from {dm.IFF.shape} to {IFFs.shape}')
-            KL, m2c, SV = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels, 
+            KL, m2c, SV = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels,
                 self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes, filt_modes = filt_modes,
-                oversampling=oversampling, if_max_condition_number=1e+3, verbose=True, xp=xp, dtype=self.dtype) 
-            iffs_sv = SV['S1']                 
-            modes_sv = SV['S2']    
+                oversampling=oversampling, if_max_condition_number=1e+3, verbose=True, xp=xp, dtype=self.dtype)
+            iffs_sv = SV['S1']
+            modes_sv = SV['S2']
             hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
             myfits.save_fits(m2c_path, m2c, hdr_dict)
             myfits.save_fits(KL_path, KL, hdr_dict)
             myfits.save_fits(iffs_sv_path, iffs_sv, hdr_dict)
             myfits.save_fits(modes_sv_path, modes_sv, hdr_dict)
-        if return_sv: 
+        if return_sv:
             return KL, m2c, iffs_sv, modes_sv
         else:
             return KL, m2c
-    
+
 
     def compute_reconstructor(self, slope_computer, MM, lambdaInM, ampsInM, save_prefix:str=''):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
-        
+
         Parameters
         ----------
         slope_computer : SlopeComputer
@@ -172,7 +172,7 @@ class HighLevelAO():
             myfits.save_fits(Rec_path, Rec)
         return Rec, IM
 
-    
+
     def initialize_turbulence(self, tn:str=None, N:int=None, dt:float=None):
         """
         Initializes the turbulence layers based on atmospheric parameters.
@@ -182,7 +182,7 @@ class HighLevelAO():
         Parameters
         ----------
         N : int, optional
-            The number of pupil lengths for the generated phase screens. 
+            The number of pupil lengths for the generated phase screens.
         dt : float, optional
             Maximum time step, screen length is computed using the maximum wind speeds and simulation time.
         The minimum length for the screen is 24 pupil diameters.
@@ -211,13 +211,13 @@ class HighLevelAO():
                 N = 24
         N = int(np.max([24,N])) # set minimum N to 24
         screenPixels = N*self.pupilSizeInPixels
-        screenMeters = N*self.pupilSizeInM 
+        screenMeters = N*self.pupilSizeInM
         if tn is not None:
             self.atmo_tn = tn
         else:
             self.atmo_tn = self._tn
         atmo_dir = os.path.join(atmopath,self.atmo_tn)
-        if not os.path.exists(atmo_dir):   
+        if not os.path.exists(atmo_dir):
             os.mkdir(atmo_dir)
         atmo_path = os.path.join(atmo_dir,'atmospheric_phase_layers.fits')
         self.layers = TurbulenceLayers(r0s, L0, windSpeeds, windAngles, atmo_path)
@@ -227,8 +227,7 @@ class HighLevelAO():
         self.layers._r0 = r0
         self.layers._L0 = L0
 
-    
-    
+
     def perform_loop_iteration(self, phase, slope_computer, starMagnitude:float=None, slaving=None):
         """
         Performs a single iteration of the AO loop.
@@ -240,7 +239,7 @@ class HighLevelAO():
             The slope computer object.
         starMagnitude : float
             The magnitude of the star being observed.
-        
+
         Returns
         -------
         dm_cmd : xp.array
@@ -285,8 +284,8 @@ class HighLevelAO():
         masked_phases = self.layers.move_mask_on_phasescreens(time)
         masked_phase = xp.sum(masked_phases,axis=0)
         return masked_phase
-    
-    
+
+
     def save_telemetry_data(self, data_dict, save_prefix:str=''):
         """
         Saves the telemetry data to FITS files.
@@ -295,8 +294,8 @@ class HighLevelAO():
         for key in data_dict:
             file_path = os.path.join(self.savepath,save_prefix+str(key)+'.fits')
             myfits.save_fits(file_path, data_dict[key])
-    
-            
+
+
     def load_telemetry_data(self, data_keys:list[str]=None, save_prefix:str=''):
         """
         Load telemetry data from FITS files.
@@ -313,14 +312,14 @@ class HighLevelAO():
                 print(f'File {file_path} not found, trying {new_path} instead')
                 loaded_data.append(myfits.read_fits(new_path))
         return loaded_data
-    
-    
-    def get_contrast(self, residual_phases_in_rad, oversampling:int=10, 
+
+
+    def get_contrast(self, residual_phases_in_rad, oversampling:int=10,
                      use_avg_field:bool=False, normalize_to_perfect_psf:bool=True):
         """
         Computes the PSF and contrast from the residual phase
         using the formula for a perfect idealized coronograph.
-        """        
+        """
         N = residual_phases_in_rad.shape[0]
         res_phases = xp.array(residual_phases_in_rad)
         padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
@@ -355,7 +354,7 @@ class HighLevelAO():
         pix_dist = dist/oversampling
         return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
 
-    
+
     def _read_loop_parameters(self):
         """
         Reads the loop parameters from the configuration file.
@@ -376,7 +375,7 @@ class HighLevelAO():
 
 
     def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):
-        """ 
+        """
         Initialize devices for PyrWFS slope computation
         """
 
@@ -392,7 +391,7 @@ class HighLevelAO():
             beam_split_ratio=det_pars["beam_splitter_ratio"],
         )
 
-        wfs_pars = self._config.read_sensor_pars(pyr_id) 
+        wfs_pars = self._config.read_sensor_pars(pyr_id)
         oversampling = wfs_pars["oversampling"]
         sensorLambda = wfs_pars["lambdaInM"]
         sensorBandwidth = wfs_pars['bandWidthInM']
@@ -410,8 +409,8 @@ class HighLevelAO():
                 from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
                 apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2
                 pyr= PyramidWFS(
-                    apex_angle=apex_angle, 
-                    oversampling=oversampling, 
+                    apex_angle=apex_angle,
+                    oversampling=oversampling,
                     sensorLambda=sensorLambda,
                     sensorBandwidth=sensorBandwidth,
                     roofSize=roofSize
@@ -420,8 +419,8 @@ class HighLevelAO():
                 from ekarus.e2e.devices.pyr3_wfs import Pyr3WFS
                 vertex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*((xp.floor(subapertureSize+1.0)+subapPixSep)/(2*xp.cos(xp.pi/6)))*rebin/2
                 pyr= Pyr3WFS(
-                    vertex_angle=vertex_angle, 
-                    oversampling=oversampling, 
+                    vertex_angle=vertex_angle,
+                    oversampling=oversampling,
                     sensorLambda=sensorLambda,
                     sensorBandwidth=sensorBandwidth
                 )
@@ -431,7 +430,7 @@ class HighLevelAO():
         # Size checks
         if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
             raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f}  separated by {subapPixSep:1.0f} cannot fit on a  {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
-        
+
         if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
             raise ValueError(f'Pupil center in the subquadrant is {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
 
@@ -439,101 +438,71 @@ class HighLevelAO():
         lambdaOverD = sensorLambda/self.pupilSizeInM
         sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
         sc = SlopeComputer(pyr, det, sc_pars)
-        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_', 
+        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_',
                         recompute=self.recompute,
-                        zero_phase=zero_phase, 
+                        zero_phase=zero_phase,
                         lambdaOverD=lambdaOverD,
                         Npix = subapertureSize,
-                        centerObscurationInPixels = 
+                        centerObscurationInPixels =
                         # self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
                         xp.floor(subapertureSize+1.0)*self.centerObscurationInM/self.pupilSizeInM
-        ) 
+        )
         pyr.set_modulation_angle(sc.modulationAngleInLambdaOverD)
         nPhotons = self.get_photons_per_second(self.starMagnitude) * sc.dt
         sc.compute_slope_null(zero_phase, lambdaOverD, nPhotons)
-        
+
         return pyr, det, sc
 
 
-    # def measure_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM, save_prefix:str=''):
-    #     """
-    #     Calibrates the optical gains for each mode using a phase screen at a given time.
-        
-    #     Parameters
-    #     ----------
-    #     pre_corrected_screens : cube (Nframes,Npix,Npix)
-    #         The pre-corrected phase screens to use for the calibration.
-    #     slope_computer : SlopeComputer
-    #         The slope computer object.
-    #     lambdaInM : float | array
-    #         The wavelength(s) at which calibration is performed.
-        
-    #     Returns 
-    #     -------
-    #     opt_gains : array
-    #         The computed optical gains.
-    #     """
-    #     og_fullres_path = os.path.join(self.savecalibpath,str(save_prefix)+'full_res_meas_OG.fits')#self.atmo_pars_str+
-    #     og_lowres_path = os.path.join(self.savecalibpath,str(save_prefix)+'low_res_meas_OG.fits')#self.atmo_pars_str+
-    #     try:
-    #         if self.recompute is True:
-    #             raise FileNotFoundError('Recompute is True')
-    #         fullres_opt_gains = myfits.read_fits(og_fullres_path)
-    #         lowres_opt_gains = myfits.read_fits(og_lowres_path)
-    #     except FileNotFoundError:
-    #         Nmodes = slope_computer.nModes
-    #         N = xp.shape(pre_corrected_screens)[0]
-    #         # fullres_opt_gains = xp.zeros([N,Nmodes])
-    #         # lowres_opt_gains = xp.zeros([N,Nmodes])
-    #         rec_modes = xp.zeros(Nmodes)
-    #         true_modes = xp.zeros(Nmodes)
-    #         lo_rec_modes = xp.zeros(Nmodes)
-    #         lo_true_modes = xp.zeros(Nmodes)
-    #         phase2modes = xp.linalg.pinv(MM.T) 
-    #         lophase2modes = xp.linalg.pinv(MM[:Nmodes,:].T) 
-    #         lambdaInM = self.pyr.lambdaInM
-    #         m2rad = 2*xp.pi/lambdaInM
-    #         lambdaOverD = lambdaInM/self.pupilSizeInM
-    #         for i in range(N):
-    #             print(f'\rPhase realization {i+1}/{N}', end='\r', flush=True)
-    #             phi = pre_corrected_screens[int(i),:]
-    #             phi -= xp.mean(phi)
-    #             res_phi = phi*m2rad
-    #             input_ef = (1-self.cmask) * xp.exp(1j*reshape_on_mask(res_phi,self.cmask), dtype=xp.complex64)
-    #             meas_slopes = slope_computer.compute_slopes(input_ef, lambdaOverD, None)
-    #             rec_mode = slope_computer.Rec @ meas_slopes
-    #             rec_modes += rec_mode**2
-    #             true_mode = phase2modes @ phi
-    #             true_modes += (true_mode[:Nmodes]*m2rad)**2
+    def calibrate_slope_nulls_from_precorrected_screens(self, pre_corrected_screens, slope_computer,
+                                                       save_prefix:str=''):
+        """
+        Calibrates the optical gains for each mode using a phase screen at a given time.
 
-    #             lo_mode = lophase2modes @ phi
-    #             lo_phi = MM[:Nmodes,:].T @ lo_mode                
-    #             lo_res_phi = lo_phi*m2rad
-    #             input_ef = (1-self.cmask) * xp.exp(1j*reshape_on_mask(lo_res_phi,self.cmask), dtype=xp.complex64)
-    #             meas_slopes = slope_computer.compute_slopes(input_ef, lambdaOverD, None)
-    #             lo_rec_mode = slope_computer.Rec @ meas_slopes
-    #             lo_rec_modes += lo_rec_mode**2
-    #             lo_true_modes += (lo_mode[:Nmodes]*m2rad)**2
-    #             # import matplotlib.pyplot as plt
-    #             # plt.figure(figsize=(12,5))
-    #             # plt.subplot(1,2,1)
-    #             # plt.plot(xp.asnumpy(xp.maximum(abs(rec_modes / true_modes[:Nmodes]),0.01)))
-    #             # plt.grid()
-    #             # plt.yscale('log')
-    #             # plt.subplot(1,2,2)
-    #             # plt.plot(xp.asnumpy(abs(rec_modes - true_modes[:Nmodes])))
-    #             # plt.grid()
-    #         fullres_opt_gains = xp.sqrt(rec_modes/true_modes)
-    #         lowres_opt_gains = xp.sqrt(lo_rec_modes/lo_true_modes)
-    #         myfits.save_fits(og_fullres_path,fullres_opt_gains)
-    #         myfits.save_fits(og_lowres_path,lowres_opt_gains)
-    #     return fullres_opt_gains, lowres_opt_gains
+        Parameters
+        ----------
+        pre_corrected_screens : cube (Nframes,Npix,Npix)
+            The pre-corrected phase screens to use for the calibration.
+        slope_computer : SlopeComputer
+            The slope computer object.
+
+        Returns
+        -------
+        opt_gains : array
+            The computed optical gains.
+        """
+        sn_path = os.path.join(self.savecalibpath,str(save_prefix)+'slope_nulls.fits')
+        print('Calibrating slope nulls...')
+        try:
+            if self.recompute is True:
+                raise FileNotFoundError('Recompute is True')
+            slope_null = myfits.read_fits(sn_path)
+        except FileNotFoundError:
+            N = xp.shape(pre_corrected_screens)[0]
+            slope_null = None
+            lambdaInM = self.pyr.lambdaInM
+            lambdaOverD = lambdaInM/self.pupilSizeInM
+            field_amp = 1-self.cmask
+            nPhot = self.get_photons_per_second(self.starMagnitude) * slope_computer.dt
+            for i in range(N):
+                print(f'\rPhase realization {i+1}/{N}', end='\r', flush=True)
+                phi = pre_corrected_screens[int(i),:]
+                phi -= xp.mean(phi)
+                res_phi = phi*2*xp.pi/lambdaInM
+                input_field = field_amp * xp.exp(1j*reshape_on_mask(res_phi,self.cmask),dtype=xp.cfloat)
+                if slope_null is None:
+                    slope_null = slope_computer.compute_slopes(input_field, lambdaOverD, nPhotons=nPhot)/N
+                else:
+                    slope_null += slope_computer.compute_slopes(input_field, lambdaOverD, nPhotons=nPhot)/N
+            myfits.save_fits(sn_path,slope_null)
+        return slope_null
+
 
     def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM,
                                 ampsInM:float=50e-9, save_prefix:str='', IM=None, return_perfect_ogs:bool=False):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
-        
+
         Parameters
         ----------
         pre_corrected_screens : cube (Nframes,Npix,Npix)
@@ -548,8 +517,8 @@ class HighLevelAO():
             The amplitudes for each mode.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
-        
-        Returns 
+
+        Returns
         -------
         opt_gains : array
             The computed optical gains.
@@ -577,7 +546,7 @@ class HighLevelAO():
             cl_opt_gains = xp.zeros([N,Nmodes])
             if return_perfect_ogs:
                 pl_opt_gains = xp.zeros([N,Nmodes])
-                phase2modes = xp.linalg.pinv(MM.T) 
+                phase2modes = xp.linalg.pinv(MM.T)
             for i in range(N):
                 print(f'\rPhase realization {i+1}/{N}', end='\r', flush=True)
                 phi = pre_corrected_screens[int(i),:]
@@ -599,12 +568,12 @@ class HighLevelAO():
             return cl_opt_gains, pl_opt_gains
         else:
             return cl_opt_gains
-    
 
-    
+
+
 
     def _get_slopes(self, slope_computer, MM, lambdaInM, ampInM, phase_offset=None):
-        """ 
+        """
         Computes the slopes for the given mode matrix MM using push-pull method.
 
         Parameters
@@ -619,8 +588,8 @@ class HighLevelAO():
             The amplitudes for each mode.
         phase_offset : array, optional
             Phase offset to be added to each mode, by default None.
-        
-        Returns 
+
+        Returns
         -------
         slopes : array
             The computed slopes for each mode.
@@ -655,7 +624,7 @@ class HighLevelAO():
                 slopes = xp.vstack((slopes,(push_slope-pull_slope)/2))
         return slopes
 
-    
+
     def _psf_from_frame(self, frame, lambdaInM, oversampling:int=8):
         """
         Computes the PSF from a given frame and mask.
@@ -683,7 +652,7 @@ class HighLevelAO():
         psf = abs(field_on_focal_plane)**2
         pixelSize = 1/oversampling
         return psf, pixelSize
-    
+
 
     def _add_telescope_spiders(self, spiderWidth, spiderAngles):
         """
@@ -722,19 +691,93 @@ class HighLevelAO():
     def radial_order(i_mode):
         noll = i_mode + 2
         return xp.ceil(-3.0/2.0+xp.sqrt(1+8*noll)/2.0)
-        
+
 
     @staticmethod
     def phase_rms(vec):
         return xp.sqrt(xp.sum(vec**2)/len(vec))
 
-            
+
+    # def measure_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM, save_prefix:str=''):
+    #     """
+    #     Calibrates the optical gains for each mode using a phase screen at a given time.
+
+    #     Parameters
+    #     ----------
+    #     pre_corrected_screens : cube (Nframes,Npix,Npix)
+    #         The pre-corrected phase screens to use for the calibration.
+    #     slope_computer : SlopeComputer
+    #         The slope computer object.
+    #     lambdaInM : float | array
+    #         The wavelength(s) at which calibration is performed.
+
+    #     Returns
+    #     -------
+    #     opt_gains : array
+    #         The computed optical gains.
+    #     """
+    #     og_fullres_path = os.path.join(self.savecalibpath,str(save_prefix)+'full_res_meas_OG.fits')#self.atmo_pars_str+
+    #     og_lowres_path = os.path.join(self.savecalibpath,str(save_prefix)+'low_res_meas_OG.fits')#self.atmo_pars_str+
+    #     try:
+    #         if self.recompute is True:
+    #             raise FileNotFoundError('Recompute is True')
+    #         fullres_opt_gains = myfits.read_fits(og_fullres_path)
+    #         lowres_opt_gains = myfits.read_fits(og_lowres_path)
+    #     except FileNotFoundError:
+    #         Nmodes = slope_computer.nModes
+    #         N = xp.shape(pre_corrected_screens)[0]
+    #         # fullres_opt_gains = xp.zeros([N,Nmodes])
+    #         # lowres_opt_gains = xp.zeros([N,Nmodes])
+    #         rec_modes = xp.zeros(Nmodes)
+    #         true_modes = xp.zeros(Nmodes)
+    #         lo_rec_modes = xp.zeros(Nmodes)
+    #         lo_true_modes = xp.zeros(Nmodes)
+    #         phase2modes = xp.linalg.pinv(MM.T)
+    #         lophase2modes = xp.linalg.pinv(MM[:Nmodes,:].T)
+    #         lambdaInM = self.pyr.lambdaInM
+    #         m2rad = 2*xp.pi/lambdaInM
+    #         lambdaOverD = lambdaInM/self.pupilSizeInM
+    #         for i in range(N):
+    #             print(f'\rPhase realization {i+1}/{N}', end='\r', flush=True)
+    #             phi = pre_corrected_screens[int(i),:]
+    #             phi -= xp.mean(phi)
+    #             res_phi = phi*m2rad
+    #             input_ef = (1-self.cmask) * xp.exp(1j*reshape_on_mask(res_phi,self.cmask), dtype=xp.complex64)
+    #             meas_slopes = slope_computer.compute_slopes(input_ef, lambdaOverD, None)
+    #             rec_mode = slope_computer.Rec @ meas_slopes
+    #             rec_modes += rec_mode**2
+    #             true_mode = phase2modes @ phi
+    #             true_modes += (true_mode[:Nmodes]*m2rad)**2
+
+    #             lo_mode = lophase2modes @ phi
+    #             lo_phi = MM[:Nmodes,:].T @ lo_mode
+    #             lo_res_phi = lo_phi*m2rad
+    #             input_ef = (1-self.cmask) * xp.exp(1j*reshape_on_mask(lo_res_phi,self.cmask), dtype=xp.complex64)
+    #             meas_slopes = slope_computer.compute_slopes(input_ef, lambdaOverD, None)
+    #             lo_rec_mode = slope_computer.Rec @ meas_slopes
+    #             lo_rec_modes += lo_rec_mode**2
+    #             lo_true_modes += (lo_mode[:Nmodes]*m2rad)**2
+    #             # import matplotlib.pyplot as plt
+    #             # plt.figure(figsize=(12,5))
+    #             # plt.subplot(1,2,1)
+    #             # plt.plot(xp.asnumpy(xp.maximum(abs(rec_modes / true_modes[:Nmodes]),0.01)))
+    #             # plt.grid()
+    #             # plt.yscale('log')
+    #             # plt.subplot(1,2,2)
+    #             # plt.plot(xp.asnumpy(abs(rec_modes - true_modes[:Nmodes])))
+    #             # plt.grid()
+    #         fullres_opt_gains = xp.sqrt(rec_modes/true_modes)
+    #         lowres_opt_gains = xp.sqrt(lo_rec_modes/lo_true_modes)
+    #         myfits.save_fits(og_fullres_path,fullres_opt_gains)
+    #         myfits.save_fits(og_lowres_path,lowres_opt_gains)
+    #     return fullres_opt_gains, lowres_opt_gains
+
 
     # def calibrate_optical_gains(self, N:int, slope_computer, MM, mode_offset =None,
     #                             ampsInM:float=50e-9, save_prefix:str=''):
     #     """
     #     Calibrates the optical gains for each mode using a phase screen at a given time.
-        
+
     #     Parameters
     #     ----------
     #     N : int
@@ -749,8 +792,8 @@ class HighLevelAO():
     #         The amplitudes for each mode.
     #     phase_offset : array, optional
     #         Phase offset to be added to each mode, by default None.
-        
-    #     Returns 
+
+    #     Returns
     #     -------
     #     opt_gains : array
     #         The computed optical gains.
@@ -771,7 +814,7 @@ class HighLevelAO():
     #         cl_opt_gains = xp.zeros(Nmodes)
     #         # ol_opt_gains = xp.zeros(Nmodes)
     #         pl_opt_gains = xp.zeros(Nmodes)
-    #         phase2modes = xp.linalg.pinv(MM.T) 
+    #         phase2modes = xp.linalg.pinv(MM.T)
     #         field_amp = 1-self.cmask
     #         lambdaOverD = self.pyr.lambdaInM/self.pupilSizeInM
     #         r0s = self.atmo_pars['r0']
@@ -822,7 +865,7 @@ class HighLevelAO():
     #         # myfits.save_fits(og_ol_path,ol_opt_gains)
     #         myfits.save_fits(og_cl_path,cl_opt_gains)
     #         myfits.save_fits(og_pl_path,pl_opt_gains)
-    #     return cl_opt_gains, pl_opt_gains #ol_opt_gains, 
+    #     return cl_opt_gains, pl_opt_gains #ol_opt_gains,
 
 
 
@@ -830,4 +873,3 @@ class HighLevelAO():
 
 
 
-        

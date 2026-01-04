@@ -11,8 +11,9 @@ from ekarus.e2e.utils import my_fits_package as myfits
 def main(tn:str='optical_gains', 
          optimize_gain:bool=False,
          gain_list = None,
-         atmo_tn='ekarus_3.5cm',
-         N:int=1):
+         atmo_tn='five_layers_25mOS',
+         N:int=40,
+         new_r0=None):
     
     if gain_list is not None:
         optimize_gain = True
@@ -23,10 +24,13 @@ def main(tn:str='optical_gains',
 
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence(atmo_tn)
-    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
-    saveprefix = f'mod{ssao.sc.modulationAngleInLambdaOverD:1.0f}_'
+    if new_r0 is not None:
+        ssao.layers.update_r0(new_r0)
+    saveprefix = f'mod{ssao.sc.modulationAngleInLambdaOverD:1.0f}_r0{ssao.layers._r0*1e+2:1.1f}cm_'
+
     amp = 50e-9
-    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp, save_prefix=saveprefix)
+    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
+    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp, save_prefix='')
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 
@@ -39,18 +43,32 @@ def main(tn:str='optical_gains',
     ma_res_screens = myfits.read_fits(os.path.join(ssao.savepath,'residual_phases.fits'))
 
     offset = 100
+
+    # M = xp.shape(xp.asarray(ma_res_screens.data))[0]-offset
+    # all_phases = xp.zeros([M,int(xp.sum(1-ssao.cmask))])
+    # for j in range(M):
+    #     all_phases[j,:] = xp.asarray(ma_res_screens[j+offset].data[~ma_res_screens[j+offset].mask])
+    # sn = ssao.calibrate_slope_nulls_from_precorrected_screens(all_phases,slope_computer=ssao.sc,save_prefix=saveprefix)
+    # plt.figure()
+    # plt.plot(xp.asnumpy(sn),'--.')
+    # plt.xscale('log')
+    # plt.grid()
+    # plt.title('Slope Nulls')
+
     loop_residual_phases = xp.zeros([N,int(xp.sum(1-ssao.cmask))])
     step = (xp.shape(xp.asarray(ma_res_screens.data))[0]-offset)//N
     for j in range(N):
         loop_residual_phases[j,:] = xp.asarray(ma_res_screens[j*step+offset].data[~ma_res_screens[j*step+offset].mask])
-
     print('Calibrating optical gains ...')
     cl_opt_gains, pl_opt_gains = ssao.calibrate_optical_gains_from_precorrected_screens(
                                  loop_residual_phases,
                                  slope_computer=ssao.sc, MM=KL, 
-                                 save_prefix = saveprefix, ampsInM=amp)
+                                 save_prefix = saveprefix, ampsInM=amp,
+                                 return_perfect_ogs=True)
+    cl_opt_gains = xp.mean(cl_opt_gains,axis=0)
+    pl_opt_gains = xp.mean(pl_opt_gains,axis=0)
+
     plt.figure()
-    # plt.plot(xp.asnumpy(ol_opt_gains),'-.',label='open loop')
     plt.plot(xp.asnumpy(cl_opt_gains),'-.',label='closed loop')
     plt.plot(xp.asnumpy(pl_opt_gains),'-.',label='perfect loop')
     plt.legend()
@@ -59,20 +77,21 @@ def main(tn:str='optical_gains',
 
     ogcl_ssao = SingleStageAO(tn)
     ogcl_ssao.initialize_turbulence(atmo_tn)
+    if new_r0 is not None:
+        ogcl_ssao.layers.update_r0(new_r0)
     ogcl_ssao.sc.load_reconstructor(IM,m2c)
     ogcl_ssao.sc.modalGains /= cl_opt_gains
-
-    # ogol_ssao = SingleStageAO(tn)
-    # ogol_ssao.initialize_turbulence()
-    # ogol_ssao.pyr.set_modulation_angle(ssao.sc.modulationAngleInLambdaOverD)
-    # ogol_ssao.sc.load_reconstructor(IM,m2c)
-    # ogol_ssao.sc.modalGains /= cl_opt_gains
-    # ogol_ssao.sc.set_new_gain(gain)
+    # ogcl_ssao.sc.slope_null /= cl_opt_gains
+    # ogcl_ssao.sc.slope_null = sn.copy()
 
     ogpl_ssao = SingleStageAO(tn)
     ogpl_ssao.initialize_turbulence(atmo_tn)
+    if new_r0 is not None:
+        ogpl_ssao.layers.update_r0(new_r0)
     ogpl_ssao.sc.load_reconstructor(IM,m2c)
     ogpl_ssao.sc.modalGains /= pl_opt_gains
+    # ogpl_ssao.sc.slope_null /= pl_opt_gains
+    # ogpl_ssao.sc.slope_null = sn.copy()
 
     it_ss = max(200,int(ssao.Nits//2))
     if optimize_gain is True:
@@ -102,17 +121,13 @@ def main(tn:str='optical_gains',
         plt.title('Strehl ratio vs integrator gain')
 
     ogcl_ssao.KL = KL
-    # ogol_ssao.KL = KL
     ogpl_ssao.KL = KL
 
-    ogcl_sig2, input_sig2 = ogcl_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogcl_')
-    # ogol_sig2, _ = ogol_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogol_')
+    ogcl_sig2, _ = ogcl_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogcl_')
     ogpl_sig2, _ = ogpl_ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix='ogpl_')
 
     ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='')
-    # psd,pix_dist=ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix='')
     ogcl_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogcl_')
-    # ogol_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogol_')
     ogpl_ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix='ogpl_')
 
     # plt.figure()

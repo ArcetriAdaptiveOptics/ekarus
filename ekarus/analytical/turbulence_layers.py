@@ -72,6 +72,13 @@ class TurbulenceLayers():
         self.screen_shape = self._phs._phaseScreens.shape[1:]
 
 
+    def update_r0(self, r0:float):
+        """ Update r0 value for phase-screens """
+        self._normalization_factors *= (self._r0/r0)**(5./6.)
+        self.phase_screens *= (self._r0/r0)**(5./6.)
+        self._r0 = r0
+
+
     def rescale_phasescreens(self):
         """ Rescale the phase screens to meters """
         if self.nLayers > 1:

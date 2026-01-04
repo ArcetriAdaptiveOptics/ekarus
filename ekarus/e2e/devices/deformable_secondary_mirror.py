@@ -43,14 +43,15 @@ class DSM(DeformableMirror):
         self.pupil_mask = xp.logical_or(self.mask, pupil_mask)
         self.act_pos = xp.zeros(self.Nacts, dtype=xp.float)
         self.surface = self.IFF @ self.act_pos
-        self.R, self.U = dmutils.compute_reconstructor(self.IFF)
+        # self.R, self.U = dmutils.compute_reconstructor(self.IFF)
 
         self.max_stroke = kwargs['max_stroke'] if 'max_stroke' in kwargs else None
 
         valid_ids = xp.arange(xp.sum(1-self.mask))
         master_ids = dmutils.find_master_acts(self.pupil_mask, self.act_coords, d_thr = xp.sqrt(4*self.pitch))
         if len(master_ids) < self.Nacts: # slaving
-            self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, slaving_method='wmean', p=2, d_thr=1.0*self.pitch)
+            # self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, slaving_method='wmean', p=2, d_thr=1.0*self.pitch)
+            self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, slaving_method='zero')
             self.master_ids = master_ids
         valid_ids = xp.arange(xp.sum(1-self.mask))
         valid_ids_2d = reshape_on_mask(valid_ids, self.mask)
