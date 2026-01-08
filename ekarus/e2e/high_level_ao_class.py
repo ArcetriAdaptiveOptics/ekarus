@@ -53,11 +53,12 @@ class HighLevelAO():
         self.pixelScale = self.pupilSizeInPixels/self.pupilSizeInM
         self.throughput = telescope_pars['throughput']
         mask_shape = (self.pupilSizeInPixels, self.pupilSizeInPixels)
-        self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels/2)
+        maskCenter = (self.pupilSizeInPixels/2-0.5,self.pupilSizeInPixels/2-0.5)
+        self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels/2, mask_center=maskCenter)
         try:
             self.centerObscurationInM = telescope_pars['centerObscuration']
             obscSizeInPixels = self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
-            obs_mask = get_circular_mask(mask_shape, mask_radius=obscSizeInPixels/2)
+            obs_mask = get_circular_mask(mask_shape, mask_radius=obscSizeInPixels/2, mask_center=maskCenter)
             self.cmask = (self.cmask + (1-obs_mask)).astype(bool)
         except KeyError:
             self.centerObscurationInM = 0.0
@@ -65,7 +66,7 @@ class HighLevelAO():
             spiderWidth = telescope_pars['spiders']['widthInM']
             spiderAngles = telescope_pars['spiders']['angles']
             spiderPixWidth = spiderWidth * self.pixelScale
-            self._add_telescope_spiders(spiderPixWidth, spiderAngles)
+            self._add_telescope_spiders(spiderPixWidth, spiderAngles, maskCenter)
         except KeyError:
             pass
 
@@ -132,7 +133,7 @@ class HighLevelAO():
             return KL, m2c
 
 
-    def compute_reconstructor(self, slope_computer, MM, lambdaInM, ampsInM, save_prefix:str=''):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, ampsInM, save_prefix:str='', phase_offset=None):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
 
@@ -164,7 +165,7 @@ class HighLevelAO():
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
-            slopes = self._get_slopes(slope_computer, MM, lambdaInM, ampsInM)
+            slopes = self._get_slopes(slope_computer, MM, lambdaInM, ampsInM, phase_offset=phase_offset)
             IM = slopes.T
             U,S,Vt = xp.linalg.svd(IM, full_matrices=False)
             Rec = xp.array((Vt.T*1/S) @ U.T,dtype=self.dtype)
@@ -654,7 +655,7 @@ class HighLevelAO():
         return psf, pixelSize
 
 
-    def _add_telescope_spiders(self, spiderWidth, spiderAngles):
+    def _add_telescope_spiders(self, spiderWidth, spiderAngles, maskCenter=None):
         """
         Adds radial spiders to self.cmask.
 
@@ -666,23 +667,17 @@ class HighLevelAO():
             Spiders' orientation angle, CCW from East.
         """
         cmask = self.cmask.copy()
-        cx,cy = cmask.shape[0]/2,cmask.shape[1]/2
-        top = xp.zeros_like(cmask)
-        top[cx:,:] = 1
-        right = xp.zeros_like(cmask)
-        right[:,cy:] = 1
+        if maskCenter is not None:
+            cx,cy = maskCenter
+        else:
+            cx,cy = cmask.shape[0]//2-0.5,cmask.shape[1]//2-0.5
         for angle in spiderAngles:
-            dist = lambda x,y: xp.asarray(y-cy)-xp.asarray(x-cx)*xp.tan(angle) if abs(abs(angle)-xp.pi/2) > 1e-10 else xp.asarray(x-cx)
-            spider_mask = xp.fromfunction(lambda j,i: abs(dist(i,j))<spiderWidth, cmask.shape)
-            # dist_grid = xp.fromfunction(lambda j,i: dist(i,j), cmask.shape)
-            if xp.sin(angle) >= 0:
-                spider_mask *= top
-            else:
-                spider_mask *= (1-top).astype(bool)
-            if xp.cos(angle) >= 0:
-                spider_mask *= right
-            else:
-                spider_mask *= (1-right).astype(bool)
+            cos_a = xp.cos(angle)
+            sin_a = xp.sin(angle)
+            dist = lambda x,y: abs((xp.asarray(y-cy))*cos_a - (xp.asarray(x-cx))*sin_a)
+            # Component along the spider direction
+            along = lambda x,y: (xp.asarray(x-cx))*cos_a + (xp.asarray(y-cy))*sin_a
+            spider_mask = xp.fromfunction(lambda j,i: (dist(i,j)<spiderWidth) & (along(i,j)>=0), mask.shape)
             cmask = xp.logical_or(cmask, (spider_mask).astype(bool))
         self.cmask = cmask.copy()
 
