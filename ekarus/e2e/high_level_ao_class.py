@@ -53,12 +53,12 @@ class HighLevelAO():
         self.pixelScale = self.pupilSizeInPixels/self.pupilSizeInM
         self.throughput = telescope_pars['throughput']
         mask_shape = (self.pupilSizeInPixels, self.pupilSizeInPixels)
-        maskCenter = (self.pupilSizeInPixels/2-0.5,self.pupilSizeInPixels/2-0.5)
-        self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels/2, mask_center=maskCenter)
+        # maskCenter = (self.pupilSizeInPixels/2-0.5,self.pupilSizeInPixels/2-0.5)
+        self.cmask = get_circular_mask(mask_shape, mask_radius=self.pupilSizeInPixels/2)#, mask_center=maskCenter)
         try:
             self.centerObscurationInM = telescope_pars['centerObscuration']
             obscSizeInPixels = self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
-            obs_mask = get_circular_mask(mask_shape, mask_radius=obscSizeInPixels/2, mask_center=maskCenter)
+            obs_mask = get_circular_mask(mask_shape, mask_radius=obscSizeInPixels/2)#, mask_center=maskCenter)
             self.cmask = (self.cmask + (1-obs_mask)).astype(bool)
         except KeyError:
             self.centerObscurationInM = 0.0
@@ -66,7 +66,7 @@ class HighLevelAO():
             spiderWidth = telescope_pars['spiders']['widthInM']
             spiderAngles = telescope_pars['spiders']['angles']
             spiderPixWidth = spiderWidth * self.pixelScale
-            self._add_telescope_spiders(spiderPixWidth, spiderAngles, maskCenter)
+            self._add_telescope_spiders(spiderPixWidth, spiderAngles)#, maskCenter)
         except KeyError:
             pass
 
@@ -316,7 +316,8 @@ class HighLevelAO():
 
 
     def get_contrast(self, residual_phases_in_rad, oversampling:int=10,
-                     use_avg_field:bool=False, normalize_to_perfect_psf:bool=True):
+                     use_avg_field:bool=False, normalize_to_perfect_psf:bool=True,
+                     one_sided_contrast:bool=False):
         """
         Computes the PSF and contrast from the residual phase
         using the formula for a perfect idealized coronograph.
@@ -351,7 +352,11 @@ class HighLevelAO():
             psf_stack.append(coro_psf)
         psf_stack = xp.array(psf_stack)
         psf_rms = xp.std(psf_stack,axis=0)
-        rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),psf_rms.shape[0]/2,psf_rms.shape[1]/2)
+        H,W = psf_rms.shape
+        if one_sided_contrast:
+            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms[:,W/2:]),H/2,0)
+        else:
+            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),H/2,W/2)
         pix_dist = dist/oversampling
         return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
 
@@ -670,7 +675,7 @@ class HighLevelAO():
         if maskCenter is not None:
             cx,cy = maskCenter
         else:
-            cx,cy = cmask.shape[0]//2-0.5,cmask.shape[1]//2-0.5
+            cx,cy = cmask.shape[0]/2,cmask.shape[1]/2 #cmask.shape[0]//2-0.5,cmask.shape[1]//2-0.5
         for angle in spiderAngles:
             cos_a = xp.cos(angle)
             sin_a = xp.sin(angle)

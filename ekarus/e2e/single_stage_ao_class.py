@@ -53,7 +53,7 @@ class SingleStageAO(HighLevelAO):
         self.dm = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None, ncpa_cmd=None):
         """
         Main loop for the single stage AO system.
 
@@ -76,6 +76,9 @@ class SingleStageAO(HighLevelAO):
         # Define variables
         mask_len = int(xp.sum(1 - self.cmask))
         int_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
+        # if ncpa_cmd is not None:
+        #     dm_cmds = xp.stack([ncpa_cmd for _ in range(self.Nits)]).astype(self.dtype)
+        # else:
         dm_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
 
         res_phase_rad2 = xp.zeros(self.Nits)
@@ -124,7 +127,9 @@ class SingleStageAO(HighLevelAO):
                 dm_cmds[i,:] = self.sc.iir_filter(int_cmds[:i+1,:], dm_cmds[:i+1,:])
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
-
+            
+            if ncpa_cmd is not None:
+                dm_cmds[i,:] += ncpa_cmd.copy()
 
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2 #[xp.abs(residual_phase)>0.0]
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
@@ -206,10 +211,10 @@ class SingleStageAO(HighLevelAO):
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,2,2)
-        showZoomCenter(psf, pixelSize, shrink=0.8,
+        showZoomCenter(psf/xp.max(psf), pixelSize, shrink=0.8,
         title = f'Corrected PSF\nSR = {xp.exp(-res_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
             , cmap='inferno', xlabel=r'$\lambda/D$'
-            , ylabel=r'$\lambda/D$') 
+            , ylabel=r'$\lambda/D$', vmin=-10) 
         plt.subplot(2,2,3)
         myimshow(det_frames[frame_id], title = 'Detector frame', shrink=0.8)
         plt.subplot(2,2,4)
@@ -253,7 +258,7 @@ class SingleStageAO(HighLevelAO):
         # plt.xscale('log')
     
 
-    def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=12):
+    def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='', oversampling:int=12, one_sided_contrast:bool=False):
         """
         Plots the telemetry data for a specific iteration/frame.
         
@@ -282,7 +287,7 @@ class SingleStageAO(HighLevelAO):
         res_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
         for j in range(N):
             res_phases_in_rad[j] = xp.asarray(ma_res_phases[frame_ids[j]].data[~ma_res_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
-        _,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling)
+        _,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling,one_sided_contrast=one_sided_contrast)
 
         plt.figure()
         plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf),'--')

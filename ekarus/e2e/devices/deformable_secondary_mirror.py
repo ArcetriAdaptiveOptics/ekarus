@@ -87,33 +87,40 @@ class DSM(DeformableMirror):
         match geom:
             case 'circular':
                 if n_act % 2 == 0:
-                    na = xp.arange(xp.ceil((n_act + 1) / 2)) * 6
+                    n_act_radius = int(xp.ceil((n_act + 1) / 2))
                 else:
-                    step *= float(n_act) / float(n_act - 1)
-                    na = xp.arange(xp.ceil(n_act / 2.)) * 6
+                    n_act_radius = int(xp.ceil(n_act / 2))
+                na = xp.arange(n_act_radius) * 6
                 na[0] = 1  # The first value is always 1
                 n_act_tot = int(xp.sum(na))
+                # Calculate step based on number of actuators on diameter
+                n_act_diameter = 2 * n_act_radius - 1
+                step = float(dim - 1) / float(n_act_diameter - 1)
+
                 pol_coords = xp.zeros((2, n_act_tot))
                 ka = 0
-                for ia in range(len(na)):
+                # Refactor this!
+                for ia, _ in enumerate(na):
                     n_angles = int(na[ia])
                     for ja in range(n_angles):
                         pol_coords[0, ka] = 360. / na[ia] * ja + angle_offset  # Angle in degrees
                         pol_coords[1, ka] = ia * step  # Radial distance
                         ka += 1
-                x_c, y_c = dim / 2, dim / 2 # center
+                # System center - use (dim-1)/2 to properly center on the grid
+                x_c, y_c = (dim - 1) / 2.0, (dim - 1) / 2.0
+                # Convert from polar to Cartesian coordinates
                 x = pol_coords[1] * xp.cos(xp.radians(pol_coords[0])) + x_c
                 y = pol_coords[1] * xp.sin(xp.radians(pol_coords[0])) + y_c
             case 'alpao':
-                x, y = xp.meshgrid(xp.linspace(0, dim, n_act), xp.linspace(0, dim, n_act))
+                x, y = xp.meshgrid(xp.linspace(0, dim - 1, n_act), xp.linspace(0, dim - 1, n_act))
                 x, y = x.ravel(), y.ravel()
-                x_c, y_c = dim / 2, dim / 2 # center
+                x_c, y_c = (dim - 1) / 2.0, (dim - 1) / 2.0 # center
                 rho = xp.sqrt((x-x_c)**2+(y-y_c)**2)
-                rho_max = (dim*(9/8-n_act/(24*16)))/2 # slightly larger than dim, depends on n_act
+                rho_max = ((dim - 1)*(9/8-n_act/(24*16)))/2 # slightly larger than (dim-1)/2, depends on n_act
                 x = x[rho<=rho_max]
                 y = y[rho<=rho_max]
             case _:
-                x, y = xp.meshgrid(xp.linspace(0, dim, n_act), xp.linspace(0, dim, n_act))
+                x, y = xp.meshgrid(xp.linspace(0, dim - 1, n_act), xp.linspace(0, dim - 1, n_act))
                 x, y = x.ravel(), y.ravel()
 
         coords = xp.vstack((x,y)) #xp.array([x,y])
@@ -141,7 +148,8 @@ class DSM(DeformableMirror):
         # Define mask & pixel scale
         if isinstance(pupil_mask, int):
             pupilDiamInPixels = pupil_mask
-            self.mask = xp.array(get_circular_mask((pupil_mask,pupil_mask),pupil_mask//2),dtype=bool)
+            maskRadius = pupil_mask/2
+            self.mask = xp.array(get_circular_mask((pupil_mask,pupil_mask),maskRadius),dtype=bool)
         else:
             pupil_mask = (pupil_mask).astype(bool)
             pix_coords = dmutils.getMaskPixelCoords(pupil_mask)
@@ -149,7 +157,8 @@ class DSM(DeformableMirror):
             yy = pix_coords[1,~pupil_mask.flatten()] - max(pix_coords[1,:])/2
             diagonals = xp.sqrt(xx**2+yy**2)*2
             pupilDiamInPixels = xp.max(diagonals)
-            self.mask = xp.array(get_circular_mask(pupil_mask.shape,max(pupil_mask.shape)//2),dtype=bool)
+            maskRadius = max(pupil_mask.shape)/2
+            self.mask = xp.array(get_circular_mask(pupil_mask.shape,maskRadius),dtype=bool)
 
         dir_path = os.path.join(self._dmpath,str(geom)+'_'+str(n_act)+'acts_on_diam/')
         hdr_dict = {'N_ACTS': n_act, 'PIX_SIZE': pupilDiamInPixels}
@@ -217,7 +226,7 @@ class DSM(DeformableMirror):
         self.mask = xp.array(dm_mask).astype(bool)
         xx = pix_coords[0,~self.mask.flatten()] - max(pix_coords[0,:])/2
         yy = pix_coords[1,~self.mask.flatten()] - max(pix_coords[1,:])/2
-        mask_diameter = xp.sqrt(xx**2+yy**2)*2
+        # mask_diameter = xp.sqrt(xx**2+yy**2)*2
         if mask is not None and self.mask != mask:
             raise NotImplementedError('Mask should be re-centered, cropped and rescaled!')
 

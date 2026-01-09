@@ -391,8 +391,8 @@ class CascadingAO(HighLevelAO):
         _,rms_psf1,pix_dist=self.get_contrast(res1_phases_in_rad,oversampling=oversampling)
         _,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
 
-        lambdaOverD2arcsec = lambdaRef/self.pupilSizeInM*180/xp.pi*3600 
-        arcsecs = pix_dist*lambdaOverD2arcsec
+        # lambdaOverD2arcsec = lambdaRef/self.pupilSizeInM*180/xp.pi*3600 
+        # arcsecs = pix_dist*lambdaOverD2arcsec
         _,ax = plt.subplots()
         ax.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf1),label='First stage')
         ax.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf2),label='Second stage')
@@ -403,10 +403,10 @@ class CascadingAO(HighLevelAO):
         ax.set_xlim([0,30])
         ax.set_ylim([1e-10,1e-2])
         ax.set_title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
-        ax2 = ax.twiny()
-        ax2.set_xlim(ax.get_xlim())
-        ax2.set_xticks(ax.get_xticks())
-        ax2.set_xlabel(f'{x*lambdaOverD2arcsec:.1f}"' for x in ax.get_xticks())
+        # ax2 = ax.twiny()
+        # ax2.set_xlim(ax.get_xlim())
+        # ax2.set_xticks(ax.get_xticks())
+        # ax2.set_xlabel(f'{x*lambdaOverD2arcsec:.1f}"' for x in ax.get_xticks())
         plt.tight_layout()
 
         return rms_psf1, rms_psf2, pix_dist
