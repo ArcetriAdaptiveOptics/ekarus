@@ -245,12 +245,12 @@ def find_master_acts(mask, coords, d_thr:float=xp.sqrt(2.0)):#, pix_scale:float 
     master_ids = xp.array(master_ids)
     if len(master_ids) < nActs:
         print(f'Unobscured actuators: {len(master_ids)}/{nActs}')
-        plt.figure()
-        plt.imshow(xp.asnumpy(mask),origin='lower',cmap='grey')
-        plt.scatter(xp.asnumpy(act_pix_coords[0]),xp.asnumpy(act_pix_coords[1]),c='red',label='slaves')
-        plt.scatter(xp.asnumpy(act_pix_coords[0,master_ids]),xp.asnumpy(act_pix_coords[1,master_ids]),c='green',label='masters')
-        plt.legend()
-        plt.grid()
+        # plt.figure()
+        # plt.imshow(xp.asnumpy(mask),origin='lower',cmap='grey')
+        # plt.scatter(xp.asnumpy(act_pix_coords[0]),xp.asnumpy(act_pix_coords[1]),c='red',label='slaves')
+        # plt.scatter(xp.asnumpy(act_pix_coords[0,master_ids]),xp.asnumpy(act_pix_coords[1,master_ids]),c='green',label='masters')
+        # plt.legend()
+        # plt.grid()
     
     return master_ids
 

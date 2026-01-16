@@ -41,11 +41,9 @@ def get_photocenter(image,offset:bool=True):
     X,Y = image_grid(image.shape)
     qy = xp.sum(Y * image) / xp.sum(image)
     qx = xp.sum(X * image) / xp.sum(image)
-
     if offset:
         qy += 0.5
         qx += 0.5
-
     return qx,qy 
 
 
@@ -60,7 +58,7 @@ def get_circular_mask(mask_shape, mask_radius, mask_center=None):
     """
     H,W = mask_shape
     if mask_center is None:
-        mask_center = (W/2,H/2)
+        mask_center = (W/2-0.5,H/2-0.5)
     dist = lambda x,y: xp.sqrt((xp.asarray(x)-mask_center[0])**2+(xp.asarray(y)-mask_center[1])**2)
     mask = xp.fromfunction(lambda i,j: dist(j,i) >= mask_radius, [H,W])
     mask = xp.asarray(mask,dtype=bool)

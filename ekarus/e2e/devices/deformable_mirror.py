@@ -147,14 +147,14 @@ class DeformableMirror():
         
         act_pix_size = 12 if self.Nacts < 100 else 3
         
-        plt.scatter(xp.asnumpy(x), xp.asnumpy(y), c=xp.asnumpy(pos)*1e+9, 
-                    s=act_pix_size**2, cmap='hot')
+        plt.scatter(xp.asnumpy(x), xp.asnumpy(y), c=xp.asnumpy(pos), 
+                    s=act_pix_size**2, cmap='RdGy')
         plt.axis('equal')
         plt.grid()
         # plt.gca().set_xticks(np.linspace(min(x),max(x),5))
         # plt.gca().set_yticks(np.linspace(min(y),max(y),5))
         cbar=plt.colorbar(shrink=shrink)
-        cbar.ax.set_title('[nm]')
+        # cbar.ax.set_title('[nm]')
     
 
 

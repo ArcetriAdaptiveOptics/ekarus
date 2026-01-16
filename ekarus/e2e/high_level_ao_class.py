@@ -7,7 +7,7 @@ from ekarus.analytical.turbulence_layers import TurbulenceLayers
 from ekarus.e2e.utils.read_configuration import ConfigReader
 from ekarus.e2e.utils.root import resultspath, calibpath, atmopath
 
-from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask, remap_on_new_mask
+from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask, remap_on_new_mask#, showZoomCenter
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
 from arte.utils.radial_profile import computeRadialProfile
 
@@ -72,7 +72,8 @@ class HighLevelAO():
 
 
     def define_KL_modes(self, dm, oversampling:int=4, zern_modes:int=2,
-                        filt_modes=None, save_prefix:str='', return_sv:bool=False):
+                        filt_modes=None, save_prefix:str='', 
+                        freq_filter=None, return_sv:bool=False):
         """
         Defines the Karhunen-Loève (KL) modes for the given DM and oversampling.
 
@@ -119,7 +120,8 @@ class HighLevelAO():
                 print(f'SLAVING: downsized IFFs from {dm.IFF.shape} to {IFFs.shape}')
             KL, m2c, SV = make_modal_base_from_ifs_fft(1-self.cmask, self.pupilSizeInPixels,
                 self.pupilSizeInM, IFFs.T, r0, L0, zern_modes=zern_modes, filt_modes = filt_modes,
-                oversampling=oversampling, if_max_condition_number=1e+3, verbose=True, xp=xp, dtype=self.dtype)
+                oversampling=oversampling, if_max_condition_number=1e+3, verbose=True, xp=xp, 
+                dtype=self.dtype, frequency_filter=freq_filter)
             iffs_sv = SV['S1']
             modes_sv = SV['S2']
             hdr_dict = {'r0': r0, 'L0': L0, 'N_ZERN': zern_modes}
@@ -435,7 +437,7 @@ class HighLevelAO():
 
         # Size checks
         if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
-            raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f}  separated by {subapPixSep:1.0f} cannot fit on a  {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
+            raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f} separated by {subapPixSep:1.0f} cannot fit on a {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
 
         if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
             raise ValueError(f'Pupil center in the subquadrant is {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
@@ -444,7 +446,7 @@ class HighLevelAO():
         lambdaOverD = sensorLambda/self.pupilSizeInM
         sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
         sc = SlopeComputer(pyr, det, sc_pars)
-        sc.calibrate_sensor(self._tn, prefix_str=pyr_id+'_',
+        sc.calibrate_sensor(tn=self._tn, prefix_str=pyr_id+'_',
                         recompute=self.recompute,
                         zero_phase=zero_phase,
                         lambdaOverD=lambdaOverD,
@@ -574,6 +576,70 @@ class HighLevelAO():
             return cl_opt_gains, pl_opt_gains
         else:
             return cl_opt_gains
+        
+    
+    def get_ristretto_contrast(self, residual_phases_in_rad, lambdaInM,
+                               oversampling:int=12, smfRadiusInMAS=18, #star_flux=1e+4,
+                               use_avg_field:bool=False, normalize_to_perfect_psf:bool=False):
+        # Spectral resolution: 620-840nm / 140'000 = 1.57pm
+        # Proxima Cen flux ~ 4e+8 ph/s in 620-840nm (estimate)
+        # Flux per spectral line = (4e+8/(840-620)*0.00157) ~= 3000 ph/s
+        N = residual_phases_in_rad.shape[0]
+        res_phases = xp.array(residual_phases_in_rad)
+        padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
+        pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
+        field_amp = 1-pup_mask
+        if normalize_to_perfect_psf:
+            psf = abs(xp.fft.fftshift(xp.fft.fft2(field_amp)))**2
+            tot_psf = xp.sum(psf)
+        lambdaOverD = lambdaInM/self.pupilSizeInM
+        smfRadInPix = smfRadiusInMAS/(lambdaOverD*180/xp.pi*1000*3600)*oversampling
+        angles = xp.arange(6)*2*np.pi/6
+        x_smf = xp.hstack([0,xp.cos(angles) * smfRadInPix * 2])
+        y_smf = xp.hstack([0,xp.sin(angles) * smfRadInPix * 2])
+        # X,Y = image_grid(pup_mask.shape,recenter=True)
+        # fiber_ef = lambda xc,yc,sigma: xp.exp(-((X-xc)**2+(Y-yc)**2)/2/sigma**2)
+        # sigma_smf = smfRadInPix*0.7#/np.sqrt(np.log(2**8))
+        fiber_coupling = xp.zeros([7,N])
+        apothem = smfRadInPix-0.6
+        hex_mask = xp.zeros([7,pup_mask.shape[0],pup_mask.shape[1]],dtype=bool)
+        for h in range(7):
+            def is_inside_hexagon(i, j):
+                x = xp.asnumpy(j - pup_mask.shape[0]/2 - float(x_smf[h]))
+                y = xp.asnumpy(i - pup_mask.shape[1]/2 - float(y_smf[h]))
+                c1 = np.abs(x) < float(apothem)
+                c2 = np.abs(x/2 + y*np.sqrt(3)/2) < float(apothem)
+                c3 = np.abs(x/2 - y*np.sqrt(3)/2) < float(apothem)
+                return c1 & c2 & c3
+            hex = np.fromfunction(is_inside_hexagon, pup_mask.shape)
+            hex_mask[h,:,:] = xp.asarray(hex,dtype=bool)    
+        for k,res_phase in enumerate(res_phases):
+            print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
+            phase_2d = reshape_on_mask(res_phase, pup_mask)
+            if use_avg_field:
+                input_field = field_amp * xp.exp(1j*phase_2d, dtype=self.cdtype)
+                avg_electric_field = xp.sum(input_field * field_amp) / xp.sum(field_amp)
+                perfect_coro_field = input_field - avg_electric_field * field_amp
+            else:
+                phase_var = xp.sum((res_phase-xp.mean(res_phase))**2)/len(res_phase)
+                perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d, dtype=self.cdtype))
+            coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
+            I = xp.abs(coro_focal_plane_ef)**2
+            if normalize_to_perfect_psf is False:
+                input_field = field_amp * xp.exp(1j*phase_2d)
+                psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
+                tot_psf = xp.sum(psf)
+            I /= tot_psf
+            for j in range(7):
+                # fiberj_ef = fiber_ef(x_smf[j],y_smf[j],sigma_smf)
+                # fiberj_ef /= xp.max(fiberj_ef) # normalize to 1
+                # fiber_coupling[j,k] = xp.abs(xp.sum(fiberj_ef*coro_focal_plane_ef*hex_mask[j]))**2/(xp.sum(xp.abs(fiberj_ef)**2*hex_mask[j])*xp.sum(xp.abs(coro_focal_plane_ef)**2*hex_mask[j]))
+                fiber_coupling[j,k] = xp.sum(I*hex_mask[j,:,:])
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # showZoomCenter(psf*xp.sum(hex_mask[1:,:,:],axis=0), 1/oversampling, cmap='inferno', xlabel=r'$\lambda/D$'
+        #     , ylabel=r'$\lambda/D$') 
+        return fiber_coupling
 
 
 
