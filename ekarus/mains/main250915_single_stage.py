@@ -34,15 +34,15 @@ def main(tn:str='example_single_stage',
     ssao.initialize_turbulence(tn=atmo_tn)
 
     amp = 50e-9
-    # if ssao.sc.modulationAngleInLambdaOverD < 1.0:
-    #     amp = 25e-9
+    if ssao.sc.modulationAngleInLambdaOverD < 1.0:
+        amp = 25e-9
 
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
     Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL
 
-    print(ssao.sc._slope_method)
+    # print(ssao.sc._slope_method)
 
     it_ss = max(200,int(ssao.Nits//2))
 

@@ -236,39 +236,37 @@ class WooferTweeterAO(HighLevelAO):
         plt.figure()#figsize=(9,9))
         plt.subplot(2,4,1)
         myimshow(masked_array(ma_atmo_phases[frame_id],cmask), \
-        title=f'Atmosphere phase [m]\nSR = {xp.exp(-atmo_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]',\
+        title=f'Atmosphere phase [m]\nSR = {xp.exp(-atmo_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]',\
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,4,2)
-        myimshow(det_woofer_frames[frame_id], title = 'Woofer detector frame', shrink=0.8)
+        myimshow(det_woofer_frames[frame_id], title = 'LO detector frame', shrink=0.8, cmap='Blues')
         plt.subplot(2,4,3)
-        showZoomCenter(psf_woofer, pixelSize, shrink=0.8,
-        title = f'PSF after woofer (DM1)\nSR = {xp.exp(-res_woofer_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
-            , cmap='inferno', xlabel=r'$\lambda/D$'
-            , ylabel=r'$\lambda/D$') 
+        showZoomCenter(psf_woofer/xp.max(psf_woofer), pixelSize, shrink=0.8,
+        title = f'PSF after LODM\nSR = {xp.exp(-res_woofer_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
         plt.subplot(2,4,4)
         self.dm1.plot_position(dm1_cmds[frame_id])
-        plt.title('Woofer (DM1) command [m]')
+        plt.title('LODM command [m]')
         plt.axis('off')
 
         plt.subplot(2,4,5)
         myimshow(masked_array(res_woofer_phases[frame_id],cmask), \
-        title=f'Residual phase [m] after DM2\nSR = {xp.exp(-res_woofer_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]',\
+        title=f'Residual phase [m] after LODM\nSR = {xp.exp(-res_woofer_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]',\
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,4,6)
-        myimshow(det_tweeter_frames[frame_id], title = 'Tweeter detector frame', shrink=0.8)
+        myimshow(det_tweeter_frames[frame_id], title = 'HO detector frame', shrink=0.8, cmap='Blues')
         plt.subplot(2,4,7)
-        showZoomCenter(psf_tweeter, pixelSize, shrink=0.8,
-        title = f'PSF after woofer-tweeter\nSR = {xp.exp(-res_tweeter_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
-            , cmap='inferno', xlabel=r'$\lambda/D$'
-            , ylabel=r'$\lambda/D$') 
+        showZoomCenter(psf_tweeter/xp.max(psf_tweeter), pixelSize, shrink=0.8,
+        title = f'PSF after woofer-tweeter\nSR = {xp.exp(-res_tweeter_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
         plt.subplot(2,4,8)
         self.dm2.plot_position(dm2_cmds[frame_id])
-        plt.title('Tweeter (DM2) command [m]\n')
+        plt.title('HODM command [m]\n')
         plt.axis('off')
 
-        N = 100 if 100 < self.Nits//2 else self.Nits//2
+        N = int(xp.maximum(self.Nits-100,self.Nits/2))
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         # res1_modes = xp.zeros([N,self.sc1.nModes])
         res2_modes = xp.zeros([N,self.sc1.nModes+self.sc2.nModes])
@@ -288,9 +286,9 @@ class WooferTweeterAO(HighLevelAO):
 
         plt.figure()
         plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
-        plt.plot(xp.asnumpy(rec1_modes_rms)*1e+9,'--',label='woofer measured modes')
+        plt.plot(xp.asnumpy(rec1_modes_rms)*1e+9,'--',label='LOWFS modes')
         plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes)+self.sc1.nModes),
-                 xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='tweeter measured modes')
+                 xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='HOWFS modes')
         plt.plot(xp.asnumpy(res2_mode_rms)*1e+9,label='residual')
         plt.legend()
         plt.xlabel('mode index')
@@ -347,6 +345,55 @@ class WooferTweeterAO(HighLevelAO):
         plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
         return rms_psf1, rms_psf2, pix_dist
+    
+
+    def plot_ristretto_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=10):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : list, optional
+            The frames over which the std is computed, by default, the bottom half.
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        if frame_ids is None:
+            frame_ids = xp.arange(self.Nits)
+        else:
+            frame_ids = xp.array(frame_ids)
+        frame_ids = xp.asnumpy(frame_ids)
+
+        res2_phases, = self.load_telemetry_data(save_prefix=save_prefix, data_keys=['res_phases'])
+
+        N = len(frame_ids)
+        # res1_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        for j in range(N):
+            res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+            # res1_phases_in_rad[j] = xp.asarray(res1_phases[frame_ids[j]].data[~res1_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+
+        # smf1_couplings=self.get_ristretto_contrast(res1_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling)
+        smf2_couplings=self.get_ristretto_contrast(res2_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling,smfRadiusInMAS=19)
+
+        # plt.figure()
+        # plt.plot(xp.asnumpy(smf1_couplings.T))
+        # plt.grid()
+        # plt.yscale('log')        
+        plt.figure()
+        plt.plot(xp.asnumpy(smf2_couplings[1:].T),'--')
+        plt.grid()
+        plt.yscale('log')
+        plt.xlabel('Iteration')
+        plt.ylabel('Normalized flux')
+        plt.title('Post-coronographic star flux\nin the 6 side spaxels\n(normalized to non-coronographic star flux)')
+
+        return smf2_couplings
 
     # def __init__(self, tn, xp=np):
 

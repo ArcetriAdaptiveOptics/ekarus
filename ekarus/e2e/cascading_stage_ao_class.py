@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow 
 
 from ekarus.e2e.high_level_ao_class import HighLevelAO
-from ekarus.e2e.utils.image_utils import reshape_on_mask #, get_masked_array
+from ekarus.e2e.utils.image_utils import reshape_on_mask, image_grid #, get_masked_array
 
 
 
@@ -391,6 +391,9 @@ class CascadingAO(HighLevelAO):
         _,rms_psf1,pix_dist=self.get_contrast(res1_phases_in_rad,oversampling=oversampling)
         _,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
 
+        smf1_couplings,_=self.get_ristretto_contrast(res1_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling)
+        smf2_couplings,_=self.get_ristretto_contrast(res2_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling)
+
         # lambdaOverD2arcsec = lambdaRef/self.pupilSizeInM*180/xp.pi*3600 
         # arcsecs = pix_dist*lambdaOverD2arcsec
         _,ax = plt.subplots()
@@ -409,7 +412,17 @@ class CascadingAO(HighLevelAO):
         # ax2.set_xlabel(f'{x*lambdaOverD2arcsec:.1f}"' for x in ax.get_xticks())
         plt.tight_layout()
 
+        plt.figure()
+        plt.plot(xp.asnumpy(smf1_couplings.T))
+        plt.grid()
+        plt.yscale('log')        
+        plt.figure()
+        plt.plot(xp.asnumpy(smf2_couplings.T))
+        plt.grid()
+        plt.yscale('log')
+
         return rms_psf1, rms_psf2, pix_dist
+    
 
     # def __init__(self, tn, xp=np):
 

@@ -47,9 +47,15 @@ class SingleStageAO(HighLevelAO):
 
         print('Initializing devices ...')
 
-        self.pyr, self.ccd, self.sc = self._initialize_pyr_slope_computer('PYR','CCD','SLOPE.COMPUTER')
+        try:
+            self.pyr, self.ccd, self.sc = self._initialize_pyr_slope_computer('PYR','CCD','SLOPE.COMPUTER')
+        except KeyError:
+            self.pyr, self.ccd, self.sc = self._initialize_pyr_slope_computer('PYR1','CCD1','SLOPE.COMPUTER1')
 
-        dm_pars = self._config.read_dm_pars()
+        try:
+            dm_pars = self._config.read_dm_pars()
+        except KeyError:
+            dm_pars = self._config.read_dm_pars('DM1')
         self.dm = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
     
 
@@ -72,13 +78,12 @@ class SingleStageAO(HighLevelAO):
 
         IF = self.dm.IFF.copy()
         dm_surf = xp.zeros(IF.shape[0])
+        if ncpa_cmd is not None:
+            dm_surf = IF @ ncpa_cmd
 
         # Define variables
         mask_len = int(xp.sum(1 - self.cmask))
         int_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
-        # if ncpa_cmd is not None:
-        #     dm_cmds = xp.stack([ncpa_cmd for _ in range(self.Nits)]).astype(self.dtype)
-        # else:
         dm_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
 
         res_phase_rad2 = xp.zeros(self.Nits)
@@ -128,8 +133,8 @@ class SingleStageAO(HighLevelAO):
             else:
                 dm_cmds[i,:] = dm_cmds[i-1,:].copy()
             
-            if ncpa_cmd is not None:
-                dm_cmds[i,:] += ncpa_cmd.copy()
+            # if ncpa_cmd is not None:
+            #     dm_cmds[i,:] += ncpa_cmd.copy()
 
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2 #[xp.abs(residual_phase)>0.0]
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
