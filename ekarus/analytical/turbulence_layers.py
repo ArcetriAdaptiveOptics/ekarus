@@ -49,7 +49,7 @@ class TurbulenceLayers():
         """  
         self.pixelsPerMeter = screenSizeInPixels/screenSizeInMeters
         self._phs = PhaseScreenGenerator(screenSizeInPixels, screenSizeInMeters, \
-                            outerScaleInMeters=self.L0, seed=int(xp.random.randint(1)))
+                            outerScaleInMeters=self.L0, seed=int(xp.random.randint(1000)))
         try:
             if recompute is True:
                 raise FileNotFoundError('Recompute is True!')

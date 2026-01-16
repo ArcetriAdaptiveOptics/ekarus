@@ -40,7 +40,7 @@ def make_ortho_modes(array, xp, dtype):
 def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influence_functions, r0, L0,
                             zern_modes=0, oversampling=2, filt_modes=None,
                             if_max_condition_number=None, verbose=False,
-                            xp=np, dtype=np.float32):
+                            xp=np, dtype=np.float32, frequency_filter=None):
     """"
     Generate a modal basis from the influence functions
 
@@ -189,7 +189,8 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
         print("Step 4: Calculating turbulence covariance matrix...")
 
     ifft_covariance = compute_ifs_covmat(pupil_mask, diameter, filtered_ifs, r0, L0, 
-                                         oversampling, verbose, xp=xp, dtype=dtype)
+                                         oversampling, verbose, xp=xp, dtype=dtype, 
+                                         frequency_filter=frequency_filter)
 
     if verbose:
         print("Step 5: Calculating modal basis...")
@@ -239,7 +240,8 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
 
 
 def compute_ifs_covmat(pupil_mask, diameter, influence_functions, r0, L0,
-                       oversampling=2, verbose=False, xp=np, dtype=np.float32):
+                       oversampling=2, verbose=False, xp=np, dtype=np.float32,
+                       frequency_filter=None):
     """"
     Compute the covariance matrix of the influence functions
 
@@ -322,7 +324,7 @@ def compute_ifs_covmat(pupil_mask, diameter, influence_functions, r0, L0,
     sp_freq        = generate_distance_grid(
         oversampling*mask_size, xp=xp, dtype=dtype
     )/(oversampling*diameter)
-    phase_spectrum = generate_phase_spectrum(sp_freq, r0, L0, xp=xp, dtype=dtype)
+    phase_spectrum = generate_phase_spectrum(sp_freq, r0, L0, xp=xp, dtype=dtype, frequency_filter=frequency_filter)
     norm_factor    = npupil_mask**2 * (oversampling * diameter)**2
 
     prod_ft_shape = ft_shape[0] * ft_shape[1]
@@ -346,105 +348,7 @@ def compute_ifs_covmat(pupil_mask, diameter, influence_functions, r0, L0,
     return ifft_covariance
 
 
-# def compute_ifs_covmat(pupil_mask, diameter, influence_functions, r0, L0, oversampling=2, verbose=False, xp=np, dtype=np.float32):
-#     """"
-#     Compute the covariance matrix of the influence functions
-
-#     Parameters:
-#     -----------
-#     pupil_mask : 2D array
-#         Pupil mask
-#     diameter : float
-#         Telescope diameter
-#     influence_functions : 2D array
-#         Influence functions
-#     r0 : float
-#         Fried parameter
-#     L0 : float
-#         Outer scale
-#     oversampling : int
-#         Oversampling factor
-#     verbose : bool
-#         Verbose mode
-#     xp : module, optional
-#         Array processing module (numpy or cupy)
-#     dtype : data type, optional
-#         Data type for arrays
-
-#     Returns:
-#     --------
-#     ifft_covariance : 2D array
-#         Covariance matrix    
-#     """
-
-#     if verbose:
-#         print("Computing turbulence covariance matrix...")
-
-#     if dtype == xp.float32:
-#         cdtype = xp.complex64
-#     elif dtype == xp.float64:
-#         cdtype = xp.complex128
-#     elif dtype == xp.float:
-#         cdtype = xp.cfloat
-#     else:
-#         cdtype = complex
-
-#     idx_mask = xp.where(pupil_mask.ravel())[0]
-#     npupil_mask = int(xp.sum(pupil_mask))
-#     n_actuators = influence_functions.shape[0]
-#     mask_shape = pupil_mask.shape
-
-#     mask_size = max(mask_shape)
-
-#     # Fourier transform of the influence functions 3D array
-#     ft_shape = (oversampling * mask_size, oversampling * mask_size)
-#     ft_influence_functions = xp.zeros((ft_shape[0], ft_shape[1], n_actuators), dtype=cdtype)
-
-#     for act_idx in range(n_actuators):
-#         if_flat = influence_functions[act_idx, :]
-
-#         if_2d = xp.zeros(mask_shape, dtype=dtype)
-#         if_2d.ravel()[idx_mask] = if_flat
-
-#         support = xp.zeros(ft_shape, dtype=dtype)
-#         support[:mask_shape[0], :mask_shape[1]] = if_2d
-
-#         ft_support = xp.fft.fft2(support)
-#         ft_influence_functions[:, :, act_idx] = ft_support
-
-#     # Generation of Phase Spectrum
-#     sp_freq        = generate_distance_grid(oversampling*mask_size, xp=xp, dtype=dtype)/(oversampling*diameter)
-#     phase_spectrum = generate_phase_spectrum(sp_freq, r0, L0, xp=xp)
-#     norm_factor    = npupil_mask**2 * (oversampling * diameter)**2
-
-#     if xp.on_gpu: #__name__ == "cupy":
-#         prod_ft_shape = ft_shape[0] * ft_shape[1]
-#     else:
-#         prod_ft_shape = xp.prod(ft_shape)
-
-#     # Fourier transform of the influence functions
-#     if_ft = xp.zeros((prod_ft_shape, n_actuators), dtype=cdtype)
-#     for act_idx in range(n_actuators):
-#         if_ft[:, act_idx] = (ft_influence_functions[:, :, act_idx] * phase_spectrum).flatten()
-
-#     # Fourier transform of the influence functions conjugate
-#     if_ft_conj = xp.conj(ft_influence_functions.reshape(prod_ft_shape, n_actuators))
-
-#     r_if_ft = xp.real(if_ft)
-#     i_if_ft = xp.imag(if_ft)
-#     r_if_ft_conj = xp.real(if_ft_conj)
-#     i_if_ft_conj = xp.imag(if_ft_conj)
-
-#     r_ifft_cov = xp.matmul(r_if_ft.T, r_if_ft_conj)
-#     i_ifft_cov = xp.matmul(i_if_ft.T, i_if_ft_conj)
-
-#     ifft_covariance = (r_ifft_cov - i_ifft_cov) / norm_factor
-
-#     return ifft_covariance
-
-
-
-def generate_phase_spectrum(f, r0, L0, xp=np, dtype=np.float32):
+def generate_phase_spectrum(f, r0, L0, xp=np, dtype=np.float32, frequency_filter=None):
     """
     Generate the phase spectrum of the turbulence
 
@@ -475,6 +379,22 @@ def generate_phase_spectrum(f, r0, L0, xp=np, dtype=np.float32):
 
     cst = (gamma(11.0/6.0)**2/(2.0*np.pi**(11.0/3.0)))*(24.0*gamma(6.0/5.0)/5.0)**(5.0/6.0)
     out = cst * r0**(-5.0/3.0)*(f**2+(1.0/L0)**2)**(-11.0/6.0)
+
+    # import matplotlib.pyplot as plt
+    # from arte.utils.radial_profile import computeRadialProfile
+    # r,d = computeRadialProfile(out.get(),out.shape[0]/2,out.shape[1]/2)
+    # plt.figure()
+    # plt.plot(d,r,'--.',label='Turbulence')
+    if frequency_filter is not None:
+        filt = frequency_filter(f)
+        out *= filt.copy()
+        # r,d = computeRadialProfile(out.get(),int(out.shape[0]/2),int(out.shape[1]/2))
+    #     plt.plot(d,r,'--.',label='Filtered turbulence')
+    # plt.legend()
+    # plt.grid()
+    # plt.xscale('log')
+    # plt.yscale('log')
+    # # raise ValueError()
     return xp.asarray(out, dtype=dtype)
 
 
