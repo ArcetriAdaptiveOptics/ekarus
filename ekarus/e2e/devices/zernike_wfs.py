@@ -40,14 +40,14 @@ class ZernikeWFS:
         intensity = xp.abs(cropped_field)**2
         return intensity
 
-    @lru_cache(maxsize=5)
+    # @lru_cache(maxsize=5)
     def zwfs_complex_amplitude(self,shape,lambdaOverD):
         ratio = self.lambdaOverD/lambdaOverD
         alpha = self.dot_radius * ratio
         delta = self.phase_delay * ratio
         amp = get_circular_mask(shape,alpha*self.oversampling/2)
         phase = delta * (1-amp)
-        field = 1.0 - (1.0 - xp.exp(1j*phase,dtype=self.dtype))*amp
+        field = xp.exp(1j*phase,dtype=self.cdtype)#1.0 - (1.0 - xp.exp(1j*phase,dtype=self.cdtype))*amp
         return field
     
 

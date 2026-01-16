@@ -95,7 +95,7 @@ class SlopeComputer():
         return iir
 
 
-    def calibrate_sensor(self, tn:str, prefix_str:str, recompute:bool, **kwargs):
+    def calibrate_sensor(self, **kwargs):
         """
         Calibrates the sensor.
         
@@ -103,6 +103,18 @@ class SlopeComputer():
         -----
         - PWFS/3PWFS: defines the subaperture masks
         """
+        try:
+            tn = kwargs['tn']
+        except KeyError:
+            tn = ''
+        try:
+            prefix_str = kwargs['prefix_str']
+        except KeyError:
+            prefix_str = ''
+        try:
+            recompute = kwargs['recompute']
+        except KeyError:
+            recompute = True
         roi_path = join(calibpath, tn, prefix_str+'ROI-Masks.fits')    
         match self.wfs_type:
             case 'PWFS':
