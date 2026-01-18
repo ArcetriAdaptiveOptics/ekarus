@@ -10,7 +10,7 @@ from ekarus.analytical.kl_modes import compute_ifs_covmat
 
 def main(tn:str='offaxis_modalbase',
          show:bool=False,
-         show_contrast:bool =True,
+         show_contrast:bool =False,
          atmo_tn='nine_layers_25mOS',
          lambdaRef:float=700e-9):
 
@@ -34,7 +34,6 @@ def main(tn:str='offaxis_modalbase',
     Cred = P @ Ckol @ P.T
     m2c,D,_ = xp.linalg.svd(Cred)
     KL = (ssao.dm.IFF @ m2c).T
-    # Mr = (V @ ssao.dm.IFF.T).T
 
     # Define KL and m2c
     last_mode = KL[-1,:].copy() # apodizer
@@ -45,6 +44,9 @@ def main(tn:str='offaxis_modalbase',
     first_mode_cmd = m2c[:,0]
     m2c[:,0] = last_mode_cmd.copy()
     m2c[:,-1] = first_mode_cmd.copy()
+
+    KL = KL[1:,:]
+    m2c = m2c[:,1:]
 
     # Save KL and m2c
     if not os.path.exists(ssao.savecalibpath):
@@ -70,7 +72,7 @@ def main(tn:str='offaxis_modalbase',
         plt.yscale('log')
         plt.title('Modes eigenvalues')
         
-        display_modes(pupil, xp.asnumpy(KL.T), N=8)
+    display_modes(pupil, xp.asnumpy(KL.T), N=8)
 
     # Calibration and loop
     amp = 50e-9
@@ -82,10 +84,10 @@ def main(tn:str='offaxis_modalbase',
     # Repeat everything with apodizer offset
     apo_ssao = SingleStageAO(tn)
     apo_ssao.initialize_turbulence(tn=atmo_tn)
-    lambdaOverD = ssao.pyr.lambdaInM/ssao.pupilSizeInM
-    nPhotons = ssao.get_photons_per_second(ssao.starMagnitude)*ssao.sc.dt
-    apo_field = (1-ssao.cmask) * xp.exp(1j*app_phase,dtype=xp.cfloat)
-    apo_ssao.sc.compute_slope_null(apo_field,lambdaOverD,nPhotons)
+    # lambdaOverD = ssao.pyr.lambdaInM/ssao.pupilSizeInM
+    # nPhotons = ssao.get_photons_per_second(ssao.starMagnitude)*ssao.sc.dt
+    # apo_field = (1-ssao.cmask) * xp.exp(1j*app_phase,dtype=xp.cfloat)
+    # apo_ssao.sc.compute_slope_null(apo_field,lambdaOverD,nPhotons)
     apo_ssao.KL = KL.copy()
     _, apoIM = apo_ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=50e-9, phase_offset=app_phase[~ssao.cmask], save_prefix='apo_')
     apo_ssao.sc.load_reconstructor(apoIM,m2c)

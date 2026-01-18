@@ -78,13 +78,13 @@ class SingleStageAO(HighLevelAO):
 
         IF = self.dm.IFF.copy()
         dm_surf = xp.zeros(IF.shape[0])
-        if ncpa_cmd is not None:
-            dm_surf = IF @ ncpa_cmd
 
         # Define variables
         mask_len = int(xp.sum(1 - self.cmask))
         int_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
         dm_cmds = xp.zeros([self.Nits, self.dm.Nacts],dtype=self.dtype)
+        if ncpa_cmd is not None:
+            dm_cmds = xp.repeat(ncpa_cmd.reshape([1,self.dm.Nacts]),self.Nits,axis=0)
 
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
@@ -129,12 +129,9 @@ class SingleStageAO(HighLevelAO):
                 int_cmds[i,:], modes = self.perform_loop_iteration(residual_phase, self.sc, 
                                                                     starMagnitude=starMagnitude, 
                                                                     slaving=self.dm.slaving)
-                dm_cmds[i,:] = self.sc.iir_filter(int_cmds[:i+1,:], dm_cmds[:i+1,:])
+                dm_cmds[i,:] += self.sc.iir_filter(int_cmds[:i+1,:], dm_cmds[:i+1,:])
             else:
-                dm_cmds[i,:] = dm_cmds[i-1,:].copy()
-            
-            # if ncpa_cmd is not None:
-            #     dm_cmds[i,:] += ncpa_cmd.copy()
+                dm_cmds[i,:] += dm_cmds[i-1,:].copy()
 
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2 #[xp.abs(residual_phase)>0.0]
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2

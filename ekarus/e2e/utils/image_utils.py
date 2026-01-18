@@ -30,12 +30,11 @@ def image_grid(shape, recenter:bool = False):
     return X,Y
 
 
-def get_photocenter(image,offset:bool=True):
+def get_photocenter(image,offset:bool=False):
     """ 
     Compute the image photocenter
     
     :param image: 2D array intensity on which to compute the photocenter
-    :param xp: (optional) numpy or cupy for GPU acceleration
     :return: y,x coordinates of the photocenter
     """
     X,Y = image_grid(image.shape)

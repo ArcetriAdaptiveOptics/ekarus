@@ -1,16 +1,8 @@
 IMPORTANT:
-
-
 DM branch: Simplified DM class (IFFs, act_coords), Analytical slaving
 Controller branch: modal IIR filter, ML reconstruction, regularization
 
-NCPA calibration
-PETALING sensitivity
+PETALING (LWE) sensitivity
+Sensor fusion
 OGs from PSD (long exposure)
 
-
-COSMETIC CHANGES:
-
-Remove xupy (cupy) dependency
-Remove arte dependency
-GPU-accelerated tps
