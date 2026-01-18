@@ -382,15 +382,19 @@ class HighLevelAO():
             self.tt_offload = None
 
 
-    def _initialize_pyr_slope_computer(self, pyr_id:str, detector_id:str, slope_computer_id:str):
+    def _initialize_slope_computer(self, wfs_id:str, detector_id:str, slope_computer_id:str):
         """
-        Initialize devices for PyrWFS slope computation
+        Initialize devices for WFS slope computation
         """
 
         from ekarus.e2e.devices.detector import Detector
         from ekarus.e2e.devices.slope_computer import SlopeComputer
 
         det_pars = self._config.read_detector_pars(detector_id)
+        sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
+        wfs_pars = self._config.read_sensor_pars(wfs_id)
+
+        # Detector
         detector_shape=det_pars["detector_shape"]
         det = Detector(
             detector_shape=detector_shape,
@@ -399,67 +403,71 @@ class HighLevelAO():
             beam_split_ratio=det_pars["beam_splitter_ratio"],
         )
 
-        wfs_pars = self._config.read_sensor_pars(pyr_id)
+        zero_phase = 1-self.cmask
+        # Sensor
         oversampling = wfs_pars["oversampling"]
         sensorLambda = wfs_pars["lambdaInM"]
         sensorBandwidth = wfs_pars['bandWidthInM']
-        subapPixSep = wfs_pars["subapPixSep"]
-        subapertureSize = wfs_pars["subapPixSize"]
-        rebin = oversampling*self.pupilSizeInPixels/max(detector_shape)
+        lambdaOverD = sensorLambda/self.pupilSizeInM
         type = wfs_pars['type']
-        try:
-            roofSize = wfs_pars["roofSize"]
-            print(f'Pyramid roof size is {roofSize*oversampling:1.0f} pixels (oversampling = {oversampling:1.0f})')
-        except KeyError:
-            roofSize = 0.0
-        match type: # TODO Move to PWFS class
-            case '4PWFS':
+
+        if type == 'ZWFS':
+            from ekarus.e2e.devices.zernike_wfs import ZernikeWFS
+            wfs = ZernikeWFS(lambdaInM=sensorLambda,
+                sizeInLambdaOverD=wfs_pars['dotSize'], 
+                delay=wfs_pars['dotDelay']*xp.pi, 
+                oversampling=oversampling, 
+                lambdaOverD=lambdaOverD)
+            args = {}
+            
+        elif type == '4PWFS' or type == '3PWFS':
+            subapPixSep = wfs_pars["subapPixSep"]
+            subapertureSize = wfs_pars["subapPixSize"]
+            rebin = oversampling*self.pupilSizeInPixels/max(detector_shape)
+            try:
+                roofSize = wfs_pars["roofSize"]
+                print(f'Pyramid roof size is {roofSize*oversampling:1.0f} pixels (oversampling = {oversampling:1.0f})')
+            except KeyError:
+                roofSize = 0.0
+            if type == '4PWFS':
                 from ekarus.e2e.devices.pyramid_wfs import PyramidWFS
                 apex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2
-                pyr= PyramidWFS(
+                wfs= PyramidWFS(
                     apex_angle=apex_angle,
                     oversampling=oversampling,
                     sensorLambda=sensorLambda,
                     sensorBandwidth=sensorBandwidth,
                     roofSize=roofSize
                 )
-            case '3PWFS':
+            else:
                 from ekarus.e2e.devices.pyr3_wfs import Pyr3WFS
                 vertex_angle = 2*xp.pi*sensorLambda/self.pupilSizeInM*((xp.floor(subapertureSize+1.0)+subapPixSep)/(2*xp.cos(xp.pi/6)))*rebin/2
-                pyr= Pyr3WFS(
+                wfs= Pyr3WFS(
                     vertex_angle=vertex_angle,
                     oversampling=oversampling,
                     sensorLambda=sensorLambda,
                     sensorBandwidth=sensorBandwidth
                 )
-            case _:
-                raise KeyError('Unrecognized WFS type: Available types are: 4PWFS, 3PWFS')
+            
+            centerObs = xp.floor(subapertureSize+1.0)*self.centerObscurationInM/self.pupilSizeInM
+            args = {'zero_phase': zero_phase, 'lambdaOverD': lambdaOverD, 'Npix': subapertureSize, 'centerObscurationInPixels': centerObs}
+            wfs.set_modulation_angle(sc_pars['modulationInLambdaOverD'])
+            # Size checks
+            if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
+                raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f} separated by {subapPixSep:1.0f} cannot fit on a {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
 
-        # Size checks
-        if xp.floor(subapertureSize+1.0)*2+subapPixSep > min(detector_shape):
-            raise ValueError(f'Subapertures of size {xp.floor(subapertureSize+1.0):1.0f} separated by {subapPixSep:1.0f} cannot fit on a {detector_shape[0]:1.0f}x{detector_shape[1]:1.0f} detector')
+            if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
+                raise ValueError(f'Pupil center in the subquadrant is {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
+        else:
+            raise KeyError('Unrecognized WFS type: Available types are: 4PWFS, 3PWFS, ZWFS')
 
-        if (xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2 <= self.pupilSizeInPixels//2:
-            raise ValueError(f'Pupil center in the subquadrant is {(xp.floor(subapertureSize+1.0)+subapPixSep)*rebin/2:1.0f} meaning pupils of size {self.pupilSizeInPixels:1.0f} would overlap')
-
-        zero_phase = 1-self.cmask
-        lambdaOverD = sensorLambda/self.pupilSizeInM
-        sc_pars = self._config.read_slope_computer_pars(slope_computer_id)
-        sc = SlopeComputer(pyr, det, sc_pars)
-        sc.calibrate_sensor(tn=self._tn, prefix_str=pyr_id+'_',
-                        recompute=self.recompute,
-                        zero_phase=zero_phase,
-                        lambdaOverD=lambdaOverD,
-                        Npix = subapertureSize,
-                        centerObscurationInPixels =
-                        # self.pupilSizeInPixels*self.centerObscurationInM/self.pupilSizeInM
-                        xp.floor(subapertureSize+1.0)*self.centerObscurationInM/self.pupilSizeInM
-        )
-        pyr.set_modulation_angle(sc.modulationAngleInLambdaOverD)
+        sc = SlopeComputer(wfs, det, sc_pars)
+        sc.calibrate_sensor(tn=self._tn, prefix_str=wfs_id+'_',
+                        recompute=self.recompute,**args)
         nPhotons = self.get_photons_per_second(self.starMagnitude) * sc.dt
         sc.compute_slope_null(zero_phase, lambdaOverD, nPhotons)
 
-        return pyr, det, sc
+        return wfs, det, sc
 
 
     def calibrate_slope_nulls_from_precorrected_screens(self, pre_corrected_screens, slope_computer,

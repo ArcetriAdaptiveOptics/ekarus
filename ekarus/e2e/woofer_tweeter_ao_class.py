@@ -20,16 +20,13 @@ class WooferTweeterAO(HighLevelAO):
         
         self.telemetry_keys = [
             "atmo_phases",
-            "dm1_woofer_phases",
-            "res_woofer_phases",
-            "ccd1_woofer_frames",
-            "rec1_woofer_modes",
-            "dm1_woofer_commands",
-            "dm2_tweeter_phases",
+            "dm_phases",
             "res_phases",
-            "ccd2_tweeter_frames",
-            "rec2_tweeter_modes",
-            "dm2_tweeter_commands",
+            "ccd1_frames",
+            "rec1_modes",
+            "ccd2_frames",
+            "rec2_modes",
+            "dm_commands",
         ]
 
         self._initialize_devices()
@@ -45,13 +42,11 @@ class WooferTweeterAO(HighLevelAO):
         - Slope computer for woofer and tweeter loops
         """
 
-        self.pyr1, self.ccd1, self.sc1 = self._initialize_pyr_slope_computer('PYR.woofer','CCD.woofer','SLOPE.COMPUTER.woofer')
-        dm_pars = self._config.read_dm_pars('DM.woofer')
-        self.dm1 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
+        self.wfs1, self.ccd1, self.sc1 = self._initialize_slope_computer('WFS1','CCD1','SLOPE.COMPUTER1')
+        self.wfs2, self.ccd2, self.sc2 = self._initialize_slope_computer('WFS2','CCD2','SLOPE.COMPUTER2')
+        dm_pars = self._config.read_dm_pars('DM')
+        self.dm = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
 
-        self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR.tweeter','CCD.tweeter','SLOPE.COMPUTER.tweeter')
-        dm_pars = self._config.read_dm_pars('DM.tweeter')
-        self.dm2 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
   
     def get_photons_per_subap(self, starMagnitude):
         collected_photons = self.get_photons_per_second(starMagnitude=starMagnitude)
@@ -61,7 +56,7 @@ class WooferTweeterAO(HighLevelAO):
         Nsubaps2 = xp.sum(1-self.sc2._roi_masks)
         ph2 = collected_photons * self.ccd2.quantum_efficiency * self.ccd2.beam_split_ratio
         ph_per_subap2 = ph2 / Nsubaps2 * self.sc2.dt
-        print(f'Woofer stage: {ph_per_subap1:1.1f}e-/frame/subap, tweeter stage: {ph_per_subap2:1.1f}e-/frame/subap')
+        print(f'First WFS: {ph_per_subap1:1.1f}e-/frame/pix, second WFS: {ph_per_subap2:1.1f}e-/frame/pix')
         return ph_per_subap1, ph_per_subap2
     
 
@@ -81,20 +76,16 @@ class WooferTweeterAO(HighLevelAO):
         """
         m2rad = 2 * xp.pi / lambdaInM 
 
-        IF1 = self.dm1.IFF.copy()
-        dm1_surf = xp.zeros(IF1.shape[0])
-
-        IF2 = self.dm2.IFF.copy()
-        dm2_surf = xp.zeros(IF2.shape[0])
+        IF = self.dm.IFF.copy()
+        dm_surf = xp.zeros(IF.shape[0])
 
         # Define variables
         mask_len = int(xp.sum(1 - self.cmask))
-        int1_cmds = xp.zeros([self.Nits,self.dm1.Nacts], dtype=self.dtype)
-        int2_cmds = xp.zeros([self.Nits,self.dm2.Nacts], dtype=self.dtype)
-        dm1_cmds = xp.zeros([self.Nits,self.dm1.Nacts], dtype=self.dtype)
-        dm2_cmds = xp.zeros([self.Nits,self.dm2.Nacts], dtype=self.dtype)
+        int_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
+        dm_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
+        dm1_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
+        dm2_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
 
-        res_woofer_phase_rad2 = xp.zeros(self.Nits)
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
@@ -103,14 +94,10 @@ class WooferTweeterAO(HighLevelAO):
             residual_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
             ccd1_images = xp.zeros([self.Nits, self.ccd1.detector_shape[0], self.ccd1.detector_shape[1]], dtype=self.dtype)
             rec1_modes = xp.zeros([self.Nits,self.sc1.Rec.shape[0]], dtype=self.dtype)
-            residual_woofer_phases = xp.zeros([self.Nits, mask_len], dtype=self.dtype)
             ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]], dtype=self.dtype)
             rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]], dtype=self.dtype)
 
-        # ttf_modes2phase = self.KL[:5,:].T
-        # ttf_phase2modes = xp.linalg.pinv(ttf_modes2phase)
-        # self.sc1.modalGains[:5] *= 0.0
-
+        delay = int(xp.minimum(self.sc2.delay,self.sc1.delay))
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)
             sim_time = self.dt * i
@@ -119,35 +106,32 @@ class WooferTweeterAO(HighLevelAO):
             input_phase = atmo_phase[~self.cmask]
             input_phase -= xp.mean(input_phase)  # remove piston
 
-            if i >= self.sc2.delay and enable_tweeter is True:
-                dm2_surf = IF2 @ dm2_cmds[i - self.sc2.delay, :]
-
             if i >= self.sc1.delay:
-                dm1_surf = IF1 @ dm1_cmds[i - self.sc1.delay, :]
+                dm_surf = IF @ dm1_cmds[i - self.sc1.delay, :]
 
-            residual_woofer_phase = input_phase - dm1_surf[self.dm1.visible_pix_ids]
-            residual_phase = residual_woofer_phase - dm2_surf[self.dm2.visible_pix_ids]
+            if i >= self.sc2.delay:
+                dm_surf += IF @ dm2_cmds[i - self.sc2.delay, :]
 
-            # ttf_coeffs = ttf_phase2modes @ residual_phase
-            # residual_phase -= ttf_modes2phase @ ttf_coeffs
-
-            if i % int(self.sc2.dt/self.dt) == 0 and enable_tweeter is True:
-                int2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, self.sc2, 
-                                                                    starMagnitude=starMagnitude, 
-                                                                    slaving=self.dm2.slaving)
-                dm2_cmds[i,:] = self.sc2.iir_filter(int2_cmds[:i+1,:], dm2_cmds[:i+1,:])
-            else:
-                dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
+            residual_phase = input_phase - dm_surf[self.dm.visible_pix_ids]
 
             if i % int(self.sc1.dt/self.dt) == 0:
-                int1_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, self.sc1, 
+                int_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, self.sc1, 
                                                                     starMagnitude=starMagnitude, 
-                                                                    slaving=self.dm1.slaving)
-                dm1_cmds[i,:] = self.sc1.iir_filter(int1_cmds[:i+1,:], dm1_cmds[:i+1,:])
+                                                                    slaving=self.dm.slaving)
+                dm1_cmds[i,:] = self.sc1.iir_filter(int_cmds[:i+1,:],dm1_cmds[:i+1,:])
             else:
                 dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
 
-            res_woofer_phase_rad2[i] = self.phase_rms(residual_woofer_phase*m2rad)**2
+            if i % int(self.sc2.dt/self.dt) == 0:
+                int_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, self.sc2, 
+                                                                    starMagnitude=starMagnitude, 
+                                                                    slaving=self.dm.slaving)
+                dm2_cmds[i,:] = self.sc2.iir_filter(int_cmds[:i+1,:], dm2_cmds[:i+1,:])
+            else:
+                dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
+            
+            dm_cmds[i,:] = dm1_cmds[i,:]+dm2_cmds[i,:]
+
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
 
@@ -157,50 +141,41 @@ class WooferTweeterAO(HighLevelAO):
                 ccd1_images[i, :, :] = self.ccd1.last_frame
                 rec1_modes[i, :] = modes1
 
-                residual_woofer_phases[i, :] = residual_woofer_phase
                 ccd2_images[i, :, :] = self.ccd2.last_frame
                 rec2_modes[i, :] = modes2
         
 
         if save_prefix is not None:
             print("Saving telemetry to .fits ...")
-            dm1_mask_cube = xp.asnumpy(xp.stack([self.dm1.mask for _ in range(self.Nits)]))
-            dm2_mask_cube = xp.asnumpy(xp.stack([self.dm2.mask for _ in range(self.Nits)]))
+            dm_mask_cube = xp.asnumpy(xp.stack([self.dm.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm1_phases = xp.stack([reshape_on_mask(IF1 @ dm1_cmds[i, :], self.dm1.mask)for i in range(self.Nits)])
-            res_woofer_phases = xp.stack([reshape_on_mask(residual_woofer_phases[i, :], self.cmask)for i in range(self.Nits)])
-            dm2_phases = xp.stack([reshape_on_mask(IF2 @ dm2_cmds[i, :], self.dm2.mask)for i in range(self.Nits)])
-            res_tweeter_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
+            dm_phases = xp.stack([reshape_on_mask(IF @ dm_cmds[i, :], self.dm.mask)for i in range(self.Nits)])
+            res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
-            ma_dm1_phases = masked_array(xp.asnumpy(dm1_phases), mask=dm1_mask_cube)
-            ma_res_woofer_phases = masked_array(xp.asnumpy(res_woofer_phases), mask=mask_cube)
-            ma_dm2_phases = masked_array(xp.asnumpy(dm2_phases), mask=dm2_mask_cube)
-            ma_res_tweeter_phases = masked_array(xp.asnumpy(res_tweeter_phases), mask=mask_cube)
+            ma_dm_phases = masked_array(xp.asnumpy(dm_phases), mask=dm_mask_cube)
+            ma_res_phases = masked_array(xp.asnumpy(res_phases), mask=mask_cube)
 
             data_dict = {}
             for key, value in zip(
                 self.telemetry_keys,
                 [
                     ma_input_phases,
-                    ma_dm1_phases,
-                    ma_res_woofer_phases,
+                    ma_dm_phases,
+                    ma_res_phases,
                     ccd1_images,
                     rec1_modes,
-                    dm1_cmds,
-                    ma_dm2_phases,
-                    ma_res_tweeter_phases,
                     ccd2_images,
                     rec2_modes,
-                    dm2_cmds,
+                    dm_cmds,
                 ],
             ):
                 data_dict[key] = value
 
             self.save_telemetry_data(data_dict, save_prefix)
 
-        return res_phase_rad2, res_woofer_phase_rad2, atmo_phase_rad2
+        return res_phase_rad2, atmo_phase_rad2
     
     
     def plot_iteration(self, lambdaRef, frame_id:int=-1, save_prefix:str=None):
@@ -219,18 +194,15 @@ class WooferTweeterAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, res_woofer_phases, det_woofer_frames, rec1_modes, dm1_cmds, _, res_tweeter_phases, det_tweeter_frames, rec2_modes, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, res_phases, det1_frames, rec1_modes, det2_frames, rec2_modes, dm_cmds = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-        res_woofer_phase_rad = res_woofer_phases[frame_id].data[~res_woofer_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
-        res_tweeter_phase_rad = res_tweeter_phases[frame_id].data[~res_tweeter_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
+        res_phase_rad = res_phases[frame_id].data[~res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
 
         atmo_err_rad2 = xp.asnumpy(self.phase_rms(atmo_phase_rad)**2)
-        res_woofer_err_rad2 = xp.asnumpy(self.phase_rms(res_woofer_phase_rad)**2)
-        res_tweeter_err_rad2 = xp.asnumpy(self.phase_rms(res_tweeter_phase_rad)**2)
+        res_err_rad2 = xp.asnumpy(self.phase_rms(res_phase_rad)**2)
 
-        psf_woofer, pixelSize = self._psf_from_frame(xp.array(res_woofer_phases[frame_id]), lambdaRef)
-        psf_tweeter, pixelSize = self._psf_from_frame(xp.array(res_tweeter_phases[frame_id]), lambdaRef)
+        psf, pixelSize = self._psf_from_frame(xp.array(res_phases[frame_id]), lambdaRef)
         cmask = self.cmask.get() if xp.on_gpu else self.cmask.copy()
 
         plt.figure()#figsize=(9,9))
@@ -240,35 +212,20 @@ class WooferTweeterAO(HighLevelAO):
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,4,2)
-        myimshow(det_woofer_frames[frame_id], title = 'LO detector frame', shrink=0.8, cmap='Blues')
+        myimshow(det1_frames[frame_id], title = 'LO detector frame', shrink=0.8, cmap='Blues')
         plt.subplot(2,4,3)
-        showZoomCenter(psf_woofer/xp.max(psf_woofer), pixelSize, shrink=0.8,
-        title = f'PSF after LODM\nSR = {xp.exp(-res_woofer_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]'
+        showZoomCenter(psf/xp.max(psf), pixelSize, shrink=0.8,
+        title = f'Corrected PSF\nSR = {xp.exp(-res_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]'
             , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
         plt.subplot(2,4,4)
-        self.dm1.plot_position(dm1_cmds[frame_id])
-        plt.title('LODM command [m]')
-        plt.axis('off')
-
-        plt.subplot(2,4,5)
-        myimshow(masked_array(res_woofer_phases[frame_id],cmask), \
-        title=f'Residual phase [m] after LODM\nSR = {xp.exp(-res_woofer_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]',\
-        cmap='RdBu',shrink=0.8)
+        self.dm.plot_position(dm_cmds[frame_id])
+        plt.title('DM command [m]')
         plt.axis('off')
         plt.subplot(2,4,6)
-        myimshow(det_tweeter_frames[frame_id], title = 'HO detector frame', shrink=0.8, cmap='Blues')
-        plt.subplot(2,4,7)
-        showZoomCenter(psf_tweeter/xp.max(psf_tweeter), pixelSize, shrink=0.8,
-        title = f'PSF after woofer-tweeter\nSR = {xp.exp(-res_tweeter_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]'
-            , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
-        plt.subplot(2,4,8)
-        self.dm2.plot_position(dm2_cmds[frame_id])
-        plt.title('HODM command [m]\n')
-        plt.axis('off')
+        myimshow(det2_frames[frame_id], title = 'HO detector frame', shrink=0.8, cmap='Blues')
 
         N = int(xp.maximum(self.Nits-100,self.Nits/2))
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
-        # res1_modes = xp.zeros([N,self.sc1.nModes])
         res2_modes = xp.zeros([N,self.sc1.nModes+self.sc2.nModes])
         phase2modes = xp.linalg.pinv(self.KL) #xp.linalg.pinv(self.KL.T)
         for frame in range(N):
@@ -277,7 +234,7 @@ class WooferTweeterAO(HighLevelAO):
             atmo_modes[frame,:] = xp.dot(atmo_phase,phase2modes) #phase2modes @ atmo_phase
             # res1_phase = xp.asarray(res_woofer_phases[-N+frame].data[~mask])
             # res1_modes[frame,:] = xp.dot(res1_phase,phase2modes[:,:self.sc1.nModes]) #pphase2modes @ res1_phase
-            res2_phase = xp.asarray(res_tweeter_phases[-N+frame].data[~mask])
+            res2_phase = xp.asarray(res_phases[-N+frame].data[~mask])
             res2_modes[frame,:] = xp.dot(res2_phase,phase2modes[:,:(self.sc2.nModes+self.sc1.nModes)]) #p phase2modes @ res2_phase
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
         res2_mode_rms = xp.sqrt(xp.mean(res2_modes**2,axis=0))
@@ -323,28 +280,23 @@ class WooferTweeterAO(HighLevelAO):
             frame_ids = xp.array(frame_ids)
         frame_ids = xp.asnumpy(frame_ids)
 
-        _, _, res1_phases, _, _, _, _, res2_phases, _, _, _ = self.load_telemetry_data(save_prefix=save_prefix)
+        res_phases, = self.load_telemetry_data(save_prefix=save_prefix,data_keys=['res_phases'])
 
         N = len(frame_ids)
-        res1_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
-        res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        res_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
         for j in range(N):
-            res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
-            res1_phases_in_rad[j] = xp.asarray(res1_phases[frame_ids[j]].data[~res1_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
-        _,rms_psf1,pix_dist=self.get_contrast(res1_phases_in_rad,oversampling=oversampling)
-        _,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
+            res_phases_in_rad[j] = xp.asarray(res_phases[frame_ids[j]].data[~res_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+        _,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling)
 
         plt.figure()
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf1),label='After woofer')
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf2),label='After woofer-tweeter')
-        plt.legend()
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf))
         plt.grid()
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
         plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
-        return rms_psf1, rms_psf2, pix_dist
+        return rms_psf, pix_dist
     
 
     def plot_ristretto_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=10):

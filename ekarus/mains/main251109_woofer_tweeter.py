@@ -23,17 +23,13 @@ def main(tn:str,
     amp = 25e-9
 
     wooftweet.initialize_turbulence(tn=atmo_tn)
-    KL, m2c = wooftweet.define_KL_modes(wooftweet.dm2, zern_modes=2, save_prefix='woof_')
+    KL, m2c = wooftweet.define_KL_modes(wooftweet.dm, zern_modes=2)
 
-    # KL2, m2c2 = wooftweet.define_KL_modes(wooftweet.dm2, filt_modes=KL1[:wooftweet.sc1.nModes,:], save_prefix='tweet_')
-    KL2 = KL[wooftweet.sc1.nModes:,:]
-    m2c2 = m2c[:,wooftweet.sc1.nModes:]
+    _, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL[:wooftweet.sc1.nModes,:], wooftweet.wfs1.lambdaInM, ampsInM=amp, save_prefix='wfs1_')
+    wooftweet.sc1.load_reconstructor(IM1,m2c[:,:wooftweet.sc1.nModes])
 
-    _, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL[:wooftweet.sc1.nModes,:], wooftweet.pyr1.lambdaInM, ampsInM=amp, save_prefix='woof_')
-    wooftweet.sc1.load_reconstructor(IM1,m2c)
-
-    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL2, wooftweet.pyr2.lambdaInM, ampsInM=amp, save_prefix='tweet_')
-    wooftweet.sc2.load_reconstructor(IM2,m2c2)
+    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL[wooftweet.sc1.nModes:,:], wooftweet.wfs2.lambdaInM, ampsInM=amp, save_prefix='wfs2_')
+    wooftweet.sc2.load_reconstructor(IM2,m2c[:,wooftweet.sc1.nModes:])
 
     # # Slope null
     # modes_null = Rec1 @ wooftweet.sc1.slope_null
@@ -73,7 +69,7 @@ def main(tn:str,
         print('Finding the best gain for woofer (DM1)')
         for gain in gain1_vec:
             wooftweet.sc1.set_new_gain(gain)
-            sig2, _, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, enable_tweeter=False)
+            sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, enable_tweeter=False)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'Woofer gain = {wooftweet.sc1.intGain:1.2f}, tweeter gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
             if SR > best_SR:
@@ -84,7 +80,7 @@ def main(tn:str,
         for gain in gain2_vec:
             wooftweet.sc1.set_new_gain(best_gain1)
             wooftweet.sc2.set_new_gain(gain)
-            sig2, _, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude)
+            sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'Woofer gain = {wooftweet.sc1.intGain:1.2f}, tweeter gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
             if SR > best_SR:
@@ -103,12 +99,12 @@ def main(tn:str,
     print('Running the loop ...')
     if saveprefix is None:
         saveprefix = f'mag{wooftweet.starMagnitude:1.0f}_'
-    tweeter_sig2, woofer_sig2, input_sig2 = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, save_prefix=saveprefix)
-    wooftweet.sig2 = tweeter_sig2
+    sig2, input_sig2 = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, save_prefix=saveprefix)
+    wooftweet.sig2 = sig2
 
     if show_contrast:
-        wooftweet.psd1, wooftweet.psd2,wooftweet.pix_scale = wooftweet.plot_contrast(lambdaRef=lambdaRef, 
-                                                                                     frame_ids=xp.arange(wooftweet.Nits-200,wooftweet.Nits).tolist(),
+        wooftweet.psd, wooftweet.pix_scale = wooftweet.plot_contrast(lambdaRef=lambdaRef, 
+                                                                                     frame_ids=xp.arange(wooftweet.Nits-160,wooftweet.Nits).tolist(),
                                                                                      save_prefix=saveprefix, oversampling=10)
         wooftweet.smf = wooftweet.plot_ristretto_contrast(lambdaRef=lambdaRef,frame_ids=xp.arange(wooftweet.Nits).tolist(), save_prefix=saveprefix, oversampling=10)
         
@@ -118,8 +114,7 @@ def main(tn:str,
         tvec = xp.asnumpy(xp.arange(wooftweet.Nits)*wooftweet.dt*1e+3)
         plt.figure()#figsize=(1.7*Nits/10,3))
         plt.plot(tvec,xp.asnumpy(input_sig2),'-.',label='open loop')
-        plt.plot(tvec,xp.asnumpy(woofer_sig2),'-.',label='after LODM')
-        plt.plot(tvec,xp.asnumpy(tweeter_sig2),'-.',label='after HODM')
+        plt.plot(tvec,xp.asnumpy(sig2),'-.',label='closed loop')
         plt.legend()
         plt.grid()
         plt.xlim([0.0,tvec[-1]])

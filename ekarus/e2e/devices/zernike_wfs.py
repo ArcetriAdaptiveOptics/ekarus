@@ -10,10 +10,11 @@ class ZernikeWFS:
     wavefront sensor, applying a phase shift with a circular focal plane mask.
     """
 
-    def __init__(self, sizeInLambdaOverD:float, delay:float, oversampling:int, lambdaOverD:float, cropSize:int=4):
+    def __init__(self, lambdaInM:float, sizeInLambdaOverD:float, delay:float, oversampling:int, lambdaOverD:float, cropSize:int=4):
         """
         Zernike wavefront sensor constructor.
         """
+        self.lambdaInM = lambdaInM
         self.dot_radius = sizeInLambdaOverD
         self.phase_delay = delay
         self.oversampling = oversampling
