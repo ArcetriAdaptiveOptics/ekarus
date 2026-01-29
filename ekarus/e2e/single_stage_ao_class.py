@@ -48,9 +48,9 @@ class SingleStageAO(HighLevelAO):
         print('Initializing devices ...')
 
         try:
-            self.pyr, self.ccd, self.sc = self._initialize_pyr_slope_computer('PYR','CCD','SLOPE.COMPUTER')
+            self.pyr, self.ccd, self.sc = self._initialize_slope_computer('PYR','CCD','SLOPE.COMPUTER')
         except KeyError:
-            self.pyr, self.ccd, self.sc = self._initialize_pyr_slope_computer('PYR1','CCD1','SLOPE.COMPUTER1')
+            self.pyr, self.ccd, self.sc = self._initialize_slope_computer('PYR1','CCD1','SLOPE.COMPUTER1')
 
         try:
             dm_pars = self._config.read_dm_pars()
@@ -89,13 +89,13 @@ class SingleStageAO(HighLevelAO):
         res_phase_rad2 = xp.zeros(self.Nits)
         atmo_phase_rad2 = xp.zeros(self.Nits)
 
-        if self.tt_offload is not None:
-            tt_coeffs = xp.zeros([self.Nits,2],dtype=self.dtype)
-            tt_offload_dt = 1/self.tt_offload['frequencyInHz']
-            tt_gain = self.tt_offload['gain']
-            tt_amps = xp.zeros(2)
-            c2tt = xp.linalg.pinv(self.dm.act_coords.T)
-            tt2surf = IF @ self.dm.act_coords.T
+        # if self.tt_offload is not None:
+        #     tt_coeffs = xp.zeros([self.Nits,2],dtype=self.dtype)
+        #     tt_offload_dt = 1/self.tt_offload['frequencyInHz']
+        #     tt_gain = self.tt_offload['gain']
+        #     tt_amps = xp.zeros(2)
+        #     c2tt = xp.linalg.pinv(self.dm.act_coords.T)
+        #     tt2surf = IF @ self.dm.act_coords.T
             
 
         if save_prefix is not None:
@@ -115,12 +115,12 @@ class SingleStageAO(HighLevelAO):
             if i >= self.sc.delay:
                 dm_surf = IF @ dm_cmds[i - self.sc.delay, :]
 
-            if self.tt_offload is not None and  i >= self.sc.delay:
-                tt_coeffs[i,:] = c2tt @ dm_cmds[i-self.sc.delay,:] #tt_coeffs[i-1,:].copy()
-                N = int(max(0,i-tt_offload_dt/self.dt))
-                tt = xp.mean(tt_coeffs[N:i,:],axis=0)
-                tt_amps += tt_gain * tt
-                dm_surf += tt2surf @ tt_amps
+            # if self.tt_offload is not None and  i >= self.sc.delay:
+            #     tt_coeffs[i,:] = c2tt @ dm_cmds[i-self.sc.delay,:] #tt_coeffs[i-1,:].copy()
+            #     N = int(max(0,i-tt_offload_dt/self.dt))
+            #     tt = xp.mean(tt_coeffs[N:i,:],axis=0)
+            #     tt_amps += tt_gain * tt
+            #     dm_surf += tt2surf @ tt_amps
                 
             residual_phase = input_phase - dm_surf[self.dm.visible_pix_ids]
 
@@ -149,8 +149,8 @@ class SingleStageAO(HighLevelAO):
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
             dm_phases = xp.stack([reshape_on_mask(IF @ dm_cmds[i, :], self.dm.mask)for i in range(self.Nits)])
-            if self.tt_offload is not None:
-                tt_dm_phases = xp.stack([reshape_on_mask(tt2surf @ tt_coeffs[i, :], self.dm.mask)for i in range(self.Nits)])
+            # if self.tt_offload is not None:
+            #     tt_dm_phases = xp.stack([reshape_on_mask(tt2surf @ tt_coeffs[i, :], self.dm.mask)for i in range(self.Nits)])
             res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
@@ -173,8 +173,8 @@ class SingleStageAO(HighLevelAO):
                 data_dict[key] = value
 
             self.save_telemetry_data(data_dict, save_prefix)
-            if self.tt_offload is not None:
-                self.save_telemetry_data({'tt_dm_phases':tt_dm_phases},save_prefix)
+            # if self.tt_offload is not None:
+            #     self.save_telemetry_data({'tt_dm_phases':tt_dm_phases},save_prefix)
 
         return res_phase_rad2, atmo_phase_rad2
     
@@ -224,7 +224,7 @@ class SingleStageAO(HighLevelAO):
         plt.title('Mirror command [m]')
         plt.axis('off')
 
-        N = 100 if 100 < self.Nits//2 else self.Nits//2
+        N = int(xp.maximum(self.Nits-100,self.Nits/2))
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res_modes = xp.zeros([N,self.KL.shape[0]])
         phase2modes = xp.linalg.pinv(self.KL) #xp.linalg.pinv(self.KL.T)
@@ -238,10 +238,12 @@ class SingleStageAO(HighLevelAO):
         res_mode_rms = xp.sqrt(xp.mean(res_modes**2,axis=0))
         rec_modes_rms = xp.sqrt(xp.mean(rec_modes[-N-1:-1,:]**2,axis=0))
 
+        x = xp.asnumpy(xp.arange(self.KL.shape[0]))+1
+
         plt.figure()
-        plt.plot(xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
-        plt.plot(xp.asnumpy(res_mode_rms)*1e+9,label='residual (true)')
-        plt.plot(xp.asnumpy(rec_modes_rms)*1e+9,'--',label='residual (measured)')
+        plt.plot(x,xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
+        plt.plot(x,xp.asnumpy(res_mode_rms)*1e+9,label='residual (true)')
+        plt.plot(x[:self.sc.nModes],xp.asnumpy(rec_modes_rms)*1e+9,'--',label='residual (measured)')
         plt.legend()
         plt.xlabel('mode index')
         plt.ylabel('mode RMS amp [nm]')

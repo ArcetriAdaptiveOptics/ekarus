@@ -1,10 +1,13 @@
 import matplotlib.pyplot as plt
-import os.path as op
+# import os.path as op
 
 from ekarus.e2e.woofer_tweeter_ao_class import WooferTweeterAO
 
-import ekarus.e2e.utils.my_fits_package as myfits   
+# import ekarus.e2e.utils.my_fits_package as myfits   
 import xupy as xp
+
+# from ekarus.e2e.utils.image_utils import reshape_on_mask
+# from numpy.ma import masked_array
 
 
 def main(tn:str, 
@@ -24,23 +27,13 @@ def main(tn:str,
 
     wooftweet.initialize_turbulence(tn=atmo_tn)
     KL, m2c = wooftweet.define_KL_modes(wooftweet.dm, zern_modes=2)
+    # display_modes(1-wooftweet.cmask, xp.asnumpy(KL.T), N=8)
 
     _, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL[:wooftweet.sc1.nModes,:], wooftweet.wfs1.lambdaInM, ampsInM=amp, save_prefix='wfs1_')
     wooftweet.sc1.load_reconstructor(IM1,m2c[:,:wooftweet.sc1.nModes])
 
-    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL[wooftweet.sc1.nModes:,:], wooftweet.wfs2.lambdaInM, ampsInM=amp, save_prefix='wfs2_')
-    wooftweet.sc2.load_reconstructor(IM2,m2c[:,wooftweet.sc1.nModes:])
-
-    # # Slope null
-    # modes_null = Rec1 @ wooftweet.sc1.slope_null
-    # modes_null *= wooftweet.pyr1.lambdaInM/(2*xp.pi)
-    # plt.figure()
-    # plt.plot(xp.asnumpy(xp.abs(modes_null)),'-o')
-    # plt.grid()
-    # plt.xscale('log')
-    # plt.yscale('log')
-    # plt.title('Slope null modes')
-    # # slope_null = None
+    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL, wooftweet.wfs2.lambdaInM, ampsInM=amp, save_prefix='wfs2_')
+    wooftweet.sc2.load_reconstructor(IM2[:,wooftweet.sc1.nModes:],m2c[:,wooftweet.sc1.nModes:])
 
     wooftweet.get_photons_per_subap(wooftweet.starMagnitude)
 
@@ -66,23 +59,23 @@ def main(tn:str,
 
         ss_it = 200
 
-        print('Finding the best gain for woofer (DM1)')
+        print('Finding the best gain for low order modes (LO)')
         for gain in gain1_vec:
             wooftweet.sc1.set_new_gain(gain)
-            sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, enable_tweeter=False)
+            sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
-            print(f'Woofer gain = {wooftweet.sc1.intGain:1.2f}, tweeter gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
+            print(f'LO gain = {wooftweet.sc1.intGain:1.2f}, HO gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
             if SR > best_SR:
                 best_SR = SR.copy()
                 best_gain1 = gain.copy()
 
-        print('Finding the best gain for tweeter (DM2)')
+        print('Finding the best gain for high order modes (HO)')
         for gain in gain2_vec:
             wooftweet.sc1.set_new_gain(best_gain1)
             wooftweet.sc2.set_new_gain(gain)
             sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
-            print(f'Woofer gain = {wooftweet.sc1.intGain:1.2f}, tweeter gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
+            print(f'LO gain = {wooftweet.sc1.intGain:1.2f}, HO gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
             if SR > best_SR:
                 best_SR = SR.copy()
                 best_gain2 = gain.copy()
@@ -92,7 +85,7 @@ def main(tn:str,
 
         wooftweet.sc1.set_new_gain(best_gain1)
         wooftweet.sc2.set_new_gain(best_gain2)
-        print(f'Selecting tweeter (DM2) gain = {wooftweet.sc2.intGain}, woofer (DM1) gain = {wooftweet.sc1.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
+        print(f'Selecting HO gain = {wooftweet.sc2.intGain}, LO gain = {wooftweet.sc1.intGain}, yielding Strehl {best_SR*1e+2:1.2f}')
 
     wooftweet.KL = KL.copy()
     
@@ -104,8 +97,8 @@ def main(tn:str,
 
     if show_contrast:
         wooftweet.psd, wooftweet.pix_scale = wooftweet.plot_contrast(lambdaRef=lambdaRef, 
-                                                                                     frame_ids=xp.arange(wooftweet.Nits-160,wooftweet.Nits).tolist(),
-                                                                                     save_prefix=saveprefix, oversampling=10)
+                                                                    frame_ids=xp.arange(wooftweet.Nits-200,wooftweet.Nits).tolist(),
+                                                                    save_prefix=saveprefix, oversampling=10)
         wooftweet.smf = wooftweet.plot_ristretto_contrast(lambdaRef=lambdaRef,frame_ids=xp.arange(wooftweet.Nits).tolist(), save_prefix=saveprefix, oversampling=10)
         
     if show:
@@ -125,6 +118,32 @@ def main(tn:str,
         plt.show()
 
     return wooftweet
+
+# def plot_mode_j(pupil,Mat,j:int,title:str=''):
+#     mode = reshape_on_mask(Mat[:,j],(1-pupil).astype(bool))
+#     plt.imshow(masked_array(xp.asnumpy(mode),xp.asnumpy(1-pupil)),origin='lower',cmap='RdBu')
+#     plt.colorbar()
+#     plt.axis('off')
+#     plt.title(title)
+
+# def display_modes(pupil, Mat, N:int=8):
+#     nModes = xp.shape(Mat)[1]
+#     plt.figure(figsize=(2.25*N,12))
+#     for i in range(N):
+#         plt.subplot(6,N,i+1)
+#         plot_mode_j(pupil,Mat,i,title=f'Mode {i}')
+#         plt.subplot(6,N,i+1+N)
+#         plot_mode_j(pupil,Mat,i+N,title=f'Mode {i+N}')
+
+#         plt.subplot(6,N,i+1+N*2)
+#         plot_mode_j(pupil,Mat,nModes//2-N+i,title=f'Mode {nModes//2-N+i}')
+#         plt.subplot(6,N,i+1+N*3)
+#         plot_mode_j(pupil,Mat,nModes//2+N+i,title=f'Mode {nModes//2+N+i}')
+
+#         plt.subplot(6,N,i+1+N*4)
+#         plot_mode_j(pupil,Mat,nModes-2*N+i,title=f'Mode {nModes-2*N+i}')
+#         plt.subplot(6,N,i+1+N*5)
+#         plot_mode_j(pupil,Mat,nModes-N+i,title=f'Mode {nModes-N+i}')
 
 if __name__ == '__main__':
     wooftweet = main(show=True)

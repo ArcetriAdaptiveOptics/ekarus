@@ -60,7 +60,7 @@ class SlopeComputer():
         except KeyError:
             self.iir_num, self.iir_den = xp.array([1.0]), xp.array([1.0,-1.0])
 
-
+        self.frame_null = None
         self.slope_null = None
 
         if hasattr(wfs,'apex_angle'):
@@ -157,7 +157,7 @@ class SlopeComputer():
                     self._roi_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
                     camera_shape = self._detector.detector_shape
-                    roiSizeInPix = max(camera_shape)/self._wfs.cropSize
+                    roiSizeInPix = max(camera_shape)/self._wfs.oversampling
                     roi_mask = get_circular_mask(camera_shape, mask_radius=roiSizeInPix/2)
                     self._roi_masks = roi_mask
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8))
@@ -171,6 +171,9 @@ class SlopeComputer():
         """
         intensity = self._wfs.get_intensity(input_field, lambdaOverD)
         detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
+
+        if self.frame_null is not None:
+            detector_image -= self.frame_null
 
         match self.wfs_type:
             case 'PWFS':
@@ -210,6 +213,8 @@ class SlopeComputer():
     def compute_slope_null(self, zero_phase, lambdaOverD, nPhotons):
         """ Set the slope null value """
         self.slope_null = self.compute_slopes(zero_phase,lambdaOverD,nPhotons)
+        # self.compute_slopes(zero_phase,lambdaOverD,nPhotons)
+        # self.frame_null = self._detector.last_frame.copy()
 
 
     def _compute_pyr_signal(self, detector_image):

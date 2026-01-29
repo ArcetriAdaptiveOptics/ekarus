@@ -13,7 +13,7 @@ from numpy.ma import masked_array
 
 def main(tn:str='example_cascading_stage', 
          atmo_tn='nine_layers_25mOS',
-         lambdaRef=750e-9, 
+         lambdaRef=730e-9, 
          show:bool=False, 
          show_contrast:bool=True,
          optimize_gain:bool=False, 
@@ -72,7 +72,7 @@ def main(tn:str='example_cascading_stage',
         best_gain1 = gain1_vec[0]
         best_gain2 = gain2_vec[0]
         best_SR = 0.0
-        ss_it = max(200,int(cascao.Nits//2))
+        ss_it = max(100,int(cascao.Nits//2))
 
         print('Finding the best gain')
         for i in range(Ni):
@@ -189,6 +189,9 @@ def main(tn:str='example_cascading_stage',
     if show_contrast:
         cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
                                                     frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), 
+                                                    save_prefix=save_prefix)
+        cascao.smf = cascao.plot_ristretto_contrast(lambdaRef=lambdaRef,oversampling=8,
+                                                    frame_ids=xp.arange(cascao.Nits).tolist(), 
                                                     save_prefix=save_prefix)
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)

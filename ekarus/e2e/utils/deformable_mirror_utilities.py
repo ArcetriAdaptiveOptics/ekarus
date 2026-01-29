@@ -224,27 +224,39 @@ def getMaskPixelCoords(mask):
     
     return pix_coords
 
-
-def find_master_acts(mask, coords, d_thr:float=xp.sqrt(2.0)):#, pix_scale:float = 1.0):
+def find_master_acts(masked_iff, threshold:float=0.1):#, pix_scale:float = 1.0):
     """ Find the master actuator ids """
 
-    nActs = len(coords[0,:])
-    act_pix_coords = coords.copy() # get_pixel_coords(mask, coords, pix_scale)
-    mask_coords = getMaskPixelCoords(mask)
-
-    valid_mask_coords = mask_coords[:,~mask.flatten()]
-    dist = lambda xy: xp.sqrt((xy[0]-valid_mask_coords[0])**2 
-                              + (xy[1]-valid_mask_coords[1])**2)
+    nActs = xp.shape(masked_iff)[1]
+    max_amp = xp.max(masked_iff)
+    if_thr = max_amp * threshold
     
     master_ids = []
     for i in range(nActs):
-        min_pix_dist = xp.min(dist(act_pix_coords[:,i]))
-        if min_pix_dist <= d_thr:
+        if xp.max(masked_iff[:,i]) >= if_thr:
             master_ids.append(i)
     
     master_ids = xp.array(master_ids)
     if len(master_ids) < nActs:
         print(f'Unobscured actuators: {len(master_ids)}/{nActs}')
+    return master_ids
+
+# def find_master_acts(mask, coords, d_thr:float=xp.sqrt(2.0)):#, pix_scale:float = 1.0):
+#     """ Find the master actuator ids """
+
+#     nActs = len(coords[0,:])
+#     act_pix_coords = coords.copy() # get_pixel_coords(mask, coords, pix_scale)
+#     mask_coords = getMaskPixelCoords(mask)
+
+#     valid_mask_coords = mask_coords[:,~mask.flatten()]
+#     dist = lambda xy: xp.sqrt((xy[0]-valid_mask_coords[0])**2 
+#                               + (xy[1]-valid_mask_coords[1])**2)
+    
+#     master_ids = []
+#     for i in range(nActs):
+#         min_pix_dist = xp.min(dist(act_pix_coords[:,i]))
+#         if min_pix_dist <= d_thr:
+#             master_ids.append(i)
         # plt.figure()
         # plt.imshow(xp.asnumpy(mask),origin='lower',cmap='grey')
         # plt.scatter(xp.asnumpy(act_pix_coords[0]),xp.asnumpy(act_pix_coords[1]),c='red',label='slaves')
@@ -252,7 +264,9 @@ def find_master_acts(mask, coords, d_thr:float=xp.sqrt(2.0)):#, pix_scale:float 
         # plt.legend()
         # plt.grid()
     
-    return master_ids
+#     master_ids = xp.array(master_ids)
+    
+#     return master_ids
 
 
 def get_slaving_m2c(coords, master_ids, slaving_method:str='wmean', p:int=1, d_thr:float=xp.inf):

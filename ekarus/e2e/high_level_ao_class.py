@@ -135,7 +135,7 @@ class HighLevelAO():
             return KL, m2c
 
 
-    def compute_reconstructor(self, slope_computer, MM, lambdaInM, ampsInM, save_prefix:str='', phase_offset=None):
+    def compute_reconstructor(self, slope_computer, MM, lambdaInM, ampsInM, save_prefix:str='', phase_offset=None, scaleAmps:bool=True):
         """
         Computes the reconstructor matrix using the provided slope computer and mode matrix.
 
@@ -167,7 +167,7 @@ class HighLevelAO():
             IM = myfits.read_fits(IM_path)
             Rec = myfits.read_fits(Rec_path)
         except FileNotFoundError:
-            slopes = self._get_slopes(slope_computer, MM, lambdaInM, ampsInM, phase_offset=phase_offset)
+            slopes = self._get_slopes(slope_computer, MM, lambdaInM, ampsInM, phase_offset=phase_offset, scaleAmps=scaleAmps)
             IM = slopes.T
             U,S,Vt = xp.linalg.svd(IM, full_matrices=False)
             Rec = xp.array((Vt.T*1/S) @ U.T,dtype=self.dtype)
@@ -652,7 +652,7 @@ class HighLevelAO():
 
 
 
-    def _get_slopes(self, slope_computer, MM, lambdaInM, ampInM, phase_offset=None):
+    def _get_slopes(self, slope_computer, MM, lambdaInM, ampInM, phase_offset=None, scaleAmps:bool=True):
         """
         Computes the slopes for the given mode matrix MM using push-pull method.
 
@@ -684,6 +684,7 @@ class HighLevelAO():
             offset = reshape_on_mask(phase_offset, self.cmask)
         if isinstance(ampInM, float):
             ampInM *= xp.ones(Nmodes)
+        if scaleAmps is True:
             rad_orders = self.radial_order(xp.arange(Nmodes)) #xp.sqrt(xp.arange(Nmodes)+1)
             ampInM /= xp.sqrt(rad_orders)
         # print(ampInM)
@@ -698,6 +699,15 @@ class HighLevelAO():
             pull_field = xp.exp(-1j*mode_phase + 1j*offset) * electric_field_amp
             push_slope = slope_computer.compute_slopes(push_field, lambdaOverD, Nphotons)/amp
             pull_slope = slope_computer.compute_slopes(pull_field, lambdaOverD, Nphotons)/amp
+            # if i <= 12:
+            #     import matplotlib.pyplot as plt
+            #     plt.figure(figsize=(8,3))
+            #     plt.subplot(1,2,1)
+            #     plt.imshow(xp.asnumpy(xp.angle(pull_field)),origin='lower',cmap='Blues')
+            #     plt.colorbar()
+            #     plt.subplot(1,2,2)
+            #     plt.imshow(xp.asnumpy(self.ccd1.last_frame),origin='lower',cmap='Blues')
+            #     plt.colorbar()
             if slopes is None:
                 slopes = (push_slope-pull_slope)/2
             else:
@@ -756,7 +766,7 @@ class HighLevelAO():
             dist = lambda x,y: abs((xp.asarray(y-cy))*cos_a - (xp.asarray(x-cx))*sin_a)
             # Component along the spider direction
             along = lambda x,y: (xp.asarray(x-cx))*cos_a + (xp.asarray(y-cy))*sin_a
-            spider_mask = xp.fromfunction(lambda j,i: (dist(i,j)<spiderWidth) & (along(i,j)>=0), mask.shape)
+            spider_mask = xp.fromfunction(lambda j,i: (dist(i,j)<spiderWidth) & (along(i,j)>=0), cmask.shape)
             cmask = xp.logical_or(cmask, (spider_mask).astype(bool))
         self.cmask = cmask.copy()
 

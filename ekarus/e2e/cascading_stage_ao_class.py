@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from ekarus.e2e.utils.image_utils import showZoomCenter, myimshow 
 
 from ekarus.e2e.high_level_ao_class import HighLevelAO
-from ekarus.e2e.utils.image_utils import reshape_on_mask, image_grid #, get_masked_array
+from ekarus.e2e.utils.image_utils import reshape_on_mask #, image_grid, get_masked_array
 
 
 
@@ -50,12 +50,12 @@ class CascadingAO(HighLevelAO):
         - Slope computer 1,2
         """
 
-        self.pyr1, self.ccd1, self.sc1 = self._initialize_pyr_slope_computer('PYR1','CCD1','SLOPE.COMPUTER1')
+        self.pyr1, self.ccd1, self.sc1 = self._initialize_slope_computer('WFS1','CCD1','SLOPE.COMPUTER1')
 
         dm_pars = self._config.read_dm_pars('DM1')
         self.dm1 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
 
-        self.pyr2, self.ccd2, self.sc2 = self._initialize_pyr_slope_computer('PYR2','CCD2','SLOPE.COMPUTER2')
+        self.pyr2, self.ccd2, self.sc2 = self._initialize_slope_computer('WFS2','CCD2','SLOPE.COMPUTER2')
 
         dm_pars = self._config.read_dm_pars('DM2')
         self.dm2 = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
@@ -72,7 +72,7 @@ class CascadingAO(HighLevelAO):
         ph2 = collected_photons * self.ccd2.quantum_efficiency * self.ccd2.beam_split_ratio
         ph_per_subap2 = ph2 / Nsubaps2 * self.sc2.dt
 
-        print(f'First stage: {ph_per_subap1:1.1f}e-/frame/subap, Second stage: {ph_per_subap2:1.1f}e-/frame/subap')
+        print(f'First stage: {ph_per_subap1:1.1f}e-/frame/pix, Second stage: {ph_per_subap2:1.1f}e-/frame/pix')
 
         return ph_per_subap1, ph_per_subap2
 
@@ -248,9 +248,9 @@ class CascadingAO(HighLevelAO):
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,4,3)
-        showZoomCenter(psf1, pixelSize, shrink=0.8,
+        showZoomCenter(psf1/xp.max(psf1), pixelSize, shrink=0.8,
         title = f'Corrected PSF 1\nSR = {xp.exp(-res1_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
-            , cmap='inferno', xlabel=r'$\lambda/D$'
+            , cmap='inferno', xlabel=r'$\lambda/D$', vmin=-10
             , ylabel=r'$\lambda/D$') 
         plt.subplot(2,4,2)
         myimshow(det1_frames[frame_id], title = 'Detector 1 frame', shrink=0.8)
@@ -259,9 +259,9 @@ class CascadingAO(HighLevelAO):
         plt.title('DM1 command [m]')
         plt.axis('off')
         plt.subplot(2,4,7)
-        showZoomCenter(psf2, pixelSize, shrink=0.8,
+        showZoomCenter(psf2/xp.max(psf2), pixelSize, shrink=0.8,
         title = f'Corrected PSF 2\nSR = {xp.exp(-res2_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
-            , cmap='inferno', xlabel=r'$\lambda/D$'
+            , cmap='inferno', xlabel=r'$\lambda/D$', vmin=-10
             , ylabel=r'$\lambda/D$') 
         plt.subplot(2,4,6)
         myimshow(det2_frames[frame_id], title = 'Detector 2 frame', shrink=0.8)
@@ -270,7 +270,7 @@ class CascadingAO(HighLevelAO):
         plt.title('DM2 command [m]')
         plt.axis('off')
 
-        N = 100 if 100 < self.Nits//2 else self.Nits//2
+        N = self.Nits-100 if self.Nits > 200 else self.Nits//2
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res1_modes = xp.zeros([N,self.KL.shape[0]])
         res2_modes = xp.zeros([N,self.KL.shape[0]])
@@ -314,6 +314,47 @@ class CascadingAO(HighLevelAO):
         # plt.title('Optical gains')
         # plt.grid()
         # plt.xscale('log')
+
+    def plot_ristretto_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=10):
+        """
+        Plots the telemetry data for a specific iteration/frame.
+        
+        Parameters
+        ----------
+        lambdaRef : float
+            The reference wavelength in meters.
+        frame_id : list, optional
+            The frames over which the std is computed, by default, the bottom half.
+        save_prefix : str, optional
+            The prefix used when saving telemetry data, by default None.
+        """
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        if frame_ids is None:
+            frame_ids = xp.arange(self.Nits)
+        else:
+            frame_ids = xp.array(frame_ids)
+        frame_ids = xp.asnumpy(frame_ids)
+
+        res2_phases, = self.load_telemetry_data(save_prefix=save_prefix, data_keys=['res2_phases'])
+
+        N = len(frame_ids)
+        res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        for j in range(N):
+            res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+
+        smf2_couplings=self.get_ristretto_contrast(res2_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling,smfRadiusInMAS=19)
+
+        plt.figure()
+        plt.plot(xp.asnumpy(smf2_couplings[1:].T),'--')
+        plt.grid()
+        plt.yscale('log')
+        plt.xlabel('Iteration')
+        plt.ylabel('Normalized flux')
+        plt.title('Post-coronographic star flux\nin the 6 side spaxels\n(normalized to non-coronographic star flux)')
+
+        return smf2_couplings
 
     
     def show_psf(self, frame_id:int=-1, save_prefix:str=None, oversampling:int=12):
@@ -391,9 +432,6 @@ class CascadingAO(HighLevelAO):
         _,rms_psf1,pix_dist=self.get_contrast(res1_phases_in_rad,oversampling=oversampling)
         _,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
 
-        smf1_couplings,_=self.get_ristretto_contrast(res1_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling)
-        smf2_couplings,_=self.get_ristretto_contrast(res2_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling)
-
         # lambdaOverD2arcsec = lambdaRef/self.pupilSizeInM*180/xp.pi*3600 
         # arcsecs = pix_dist*lambdaOverD2arcsec
         _,ax = plt.subplots()
@@ -411,15 +449,6 @@ class CascadingAO(HighLevelAO):
         # ax2.set_xticks(ax.get_xticks())
         # ax2.set_xlabel(f'{x*lambdaOverD2arcsec:.1f}"' for x in ax.get_xticks())
         plt.tight_layout()
-
-        plt.figure()
-        plt.plot(xp.asnumpy(smf1_couplings.T))
-        plt.grid()
-        plt.yscale('log')        
-        plt.figure()
-        plt.plot(xp.asnumpy(smf2_couplings.T))
-        plt.grid()
-        plt.yscale('log')
 
         return rms_psf1, rms_psf2, pix_dist
     

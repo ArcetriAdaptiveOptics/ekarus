@@ -12,7 +12,10 @@ def main(tn:str='offaxis_modalbase',
          show:bool=False,
          show_contrast:bool =False,
          atmo_tn='nine_layers_25mOS',
-         lambdaRef:float=700e-9):
+         offset_calibration:bool=True,
+         use_ncpa_cmd:bool=True,
+         use_slope_null:bool=False,
+         lambdaRef:float=700e-9,):
 
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence(tn=atmo_tn)
@@ -20,17 +23,25 @@ def main(tn:str='offaxis_modalbase',
     # Define apodizer phase
     oversampling = 4
     pupil = 1-ssao.cmask.copy()
-    dark_zone = define_target_roi(pupil, iwa=2.5, owa=6, oversampling=oversampling)
+    dark_zone = define_target_roi(pupil, iwa=2.5, owa=5.5, oversampling=oversampling)
     target_contrast = xp.ones([pupil.shape[0]*oversampling,pupil.shape[1]*oversampling])
     target_contrast[dark_zone] = 1e-7
     app_phase = get_apodizer_phase(pupil, target_contrast, oversampling=oversampling, max_its=5000, beta=0.975)
     app_psf = calc_psf(pupil*xp.exp(1j*app_phase,dtype=xp.complex64))
 
+    plt.figure()
+    show_psf(app_psf,title='Apodized PSF',vmin=-8)
+
     # Ortho-normalize modes
+    coeff = lambdaRef/ssao.pyr.lambdaInM
+    app_phase *= coeff
     app_cmd = xp.linalg.pinv(ssao.dm.IFF) @ app_phase[pupil.astype(bool)]
     p = app_cmd/xp.sqrt(xp.sum(app_cmd**2))
     P = xp.eye(ssao.dm.Nacts) - xp.outer(p,p)
-    Ckol = compute_ifs_covmat(pupil,diameter=8,influence_functions=ssao.dm.IFF.T,r0=10e-2,L0=25,oversampling=4,verbose=True,xp=xp,dtype=xp.float32)
+    Ckol = compute_ifs_covmat(pupil,diameter=ssao.pupilSizeInM,
+                              influence_functions=ssao.dm.IFF.T,r0=ssao.layers._r0,
+                              L0=ssao.layers.L0,oversampling=4,verbose=True,
+                              xp=xp,dtype=xp.float32)
     Cred = P @ Ckol @ P.T
     m2c,D,_ = xp.linalg.svd(Cred)
     KL = (ssao.dm.IFF @ m2c).T
@@ -44,9 +55,6 @@ def main(tn:str='offaxis_modalbase',
     first_mode_cmd = m2c[:,0]
     m2c[:,0] = last_mode_cmd.copy()
     m2c[:,-1] = first_mode_cmd.copy()
-
-    KL = KL[1:,:]
-    m2c = m2c[:,1:]
 
     # Save KL and m2c
     if not os.path.exists(ssao.savecalibpath):
@@ -72,30 +80,41 @@ def main(tn:str='offaxis_modalbase',
         plt.yscale('log')
         plt.title('Modes eigenvalues')
         
-    display_modes(pupil, xp.asnumpy(KL.T), N=8)
+        display_modes(pupil, xp.asnumpy(KL.T), N=8)
 
     # Calibration and loop
-    amp = 50e-9
-    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp)
+    amp = 25e-9
+    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False)
     ssao.sc.load_reconstructor(IM,m2c)
     ssao.KL = KL.copy()
-    # err2, _ = ssao.run_loop(lambdaRef, starMagnitude=ssao.starMagnitude, save_prefix='')
+    err2, _ = ssao.run_loop(lambdaRef, starMagnitude=ssao.starMagnitude, save_prefix='')
 
     # Repeat everything with apodizer offset
     apo_ssao = SingleStageAO(tn)
     apo_ssao.initialize_turbulence(tn=atmo_tn)
-    # lambdaOverD = ssao.pyr.lambdaInM/ssao.pupilSizeInM
-    # nPhotons = ssao.get_photons_per_second(ssao.starMagnitude)*ssao.sc.dt
-    # apo_field = (1-ssao.cmask) * xp.exp(1j*app_phase,dtype=xp.cfloat)
-    # apo_ssao.sc.compute_slope_null(apo_field,lambdaOverD,nPhotons)
+    if use_slope_null:
+        lambdaOverD = ssao.pyr.lambdaInM/ssao.pupilSizeInM
+        nPhotons = ssao.get_photons_per_second(ssao.starMagnitude)*ssao.sc.dt
+        apo_field = (1-ssao.cmask) * xp.exp(1j*app_phase,dtype=xp.cfloat)
+        apo_ssao.sc.compute_slope_null(apo_field,lambdaOverD,nPhotons)
+        plt.figure()
+        plt.imshow(xp.asnumpy(apo_ssao.ccd.last_frame),origin='lower',cmap='RdGy')
+        plt.colorbar()
+        plt.title('Slope null frame')
     apo_ssao.KL = KL.copy()
-    _, apoIM = apo_ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=50e-9, phase_offset=app_phase[~ssao.cmask], save_prefix='apo_')
+    if offset_calibration:
+        _, apoIM = apo_ssao.compute_reconstructor(apo_ssao.sc, KL, apo_ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False, phase_offset=app_phase[~ssao.cmask], save_prefix=f'apo{coeff:1.1f}_offset_')
+    else:
+        _, apoIM = apo_ssao.compute_reconstructor(apo_ssao.sc, KL, apo_ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False, save_prefix='apo_')
     apo_ssao.sc.load_reconstructor(apoIM,m2c)
-    ncpa_cmd = app_cmd*lambdaRef/(2*xp.pi)
-    # plt.figure()
-    # plt.imshow(xp.asnumpy(reshape_on_mask(ssao.dm.IFF @ ncpa_cmd,ssao.dm.mask)),origin='lower',cmap='RdBu')
-    # plt.colorbar()
-    apo_err2, in_err2 = apo_ssao.run_loop(lambdaRef, starMagnitude=ssao.starMagnitude, save_prefix='apo_', ncpa_cmd=ncpa_cmd)
+    if use_ncpa_cmd:
+        ncpa_cmd = app_cmd*lambdaRef/(2*xp.pi)
+        # plt.figure()
+        # plt.imshow(xp.asnumpy(reshape_on_mask(ssao.dm.IFF @ ncpa_cmd,ssao.dm.mask)),origin='lower',cmap='RdBu')
+        # plt.colorbar()
+        apo_err2, in_err2 = apo_ssao.run_loop(lambdaRef, starMagnitude=ssao.starMagnitude, save_prefix='apo_', ncpa_cmd=ncpa_cmd)
+    else:
+        apo_err2, in_err2 = apo_ssao.run_loop(lambdaRef, starMagnitude=ssao.starMagnitude, save_prefix='apo_')
 
     if show_contrast:
         ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(max(0,ssao.Nits-100),ssao.Nits).tolist(), save_prefix='apo_', one_sided_contrast=True)
@@ -103,7 +122,7 @@ def main(tn:str='offaxis_modalbase',
     tvec = xp.asnumpy(xp.arange(ssao.Nits)*ssao.dt*1e+3)
     plt.figure()
     plt.plot(tvec,xp.asnumpy(in_err2),'-.',label='turbulence')
-    # plt.plot(tvec,xp.asnumpy(err2),'-.',label='standard loop')
+    plt.plot(tvec,xp.asnumpy(err2),'-.',label='standard loop')
     plt.plot(tvec,xp.asnumpy(apo_err2),'-.',label='apodizer loop')
     plt.legend()
     plt.grid()
@@ -112,7 +131,7 @@ def main(tn:str='offaxis_modalbase',
     plt.ylabel(r'$\sigma^2 [rad^2]$')
     plt.gca().set_yscale('log')
 
-    # ssao.plot_iteration(lambdaRef=lambdaRef, save_prefix='')
+    ssao.plot_iteration(lambdaRef=lambdaRef, save_prefix='')
     apo_ssao.plot_iteration(lambdaRef=lambdaRef, save_prefix='apo_')
 
     plt.show()

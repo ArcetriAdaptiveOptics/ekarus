@@ -5,7 +5,7 @@ import xupy as xp
 
 from ekarus.e2e.devices.deformable_mirror import DeformableMirror
 import ekarus.e2e.utils.deformable_mirror_utilities as dmutils
-from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask
+from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask, remap_on_new_mask
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.e2e.utils.root import dmpath as _dmpath
 
@@ -48,7 +48,8 @@ class DSM(DeformableMirror):
         self.max_stroke = kwargs['max_stroke'] if 'max_stroke' in kwargs else None
 
         valid_ids = xp.arange(xp.sum(1-self.mask))
-        master_ids = dmutils.find_master_acts(self.pupil_mask, self.act_coords, d_thr = xp.sqrt(4*self.pitch))
+        masked_if = remap_on_new_mask(self.IFF.copy(), self.mask, self.pupil_mask)
+        master_ids = dmutils.find_master_acts(masked_if)#self.pupil_mask, self.act_coords, d_thr = xp.sqrt(8*self.pitch))
         if len(master_ids) < self.Nacts: # slaving
             # self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, slaving_method='wmean', p=2, d_thr=1.0*self.pitch)
             self.slaving = dmutils.get_slaving_m2c(self.act_coords, master_ids, slaving_method='zero')
