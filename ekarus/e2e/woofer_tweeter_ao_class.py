@@ -61,7 +61,7 @@ class WooferTweeterAO(HighLevelAO):
         return ph_per_subap1, ph_per_subap2
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None, bootStrapIts:int=0):
         """
         Main loop for the single stage AO system.
 
@@ -82,8 +82,8 @@ class WooferTweeterAO(HighLevelAO):
 
         # Define variables
         mask_len = int(xp.sum(1 - self.cmask))
-        int_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
-        dm_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
+        int1_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
+        int2_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
         dm1_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
         dm2_cmds = xp.zeros([self.Nits,self.dm.Nacts], dtype=self.dtype)
 
@@ -97,6 +97,8 @@ class WooferTweeterAO(HighLevelAO):
             rec1_modes = xp.zeros([self.Nits,self.sc1.Rec.shape[0]], dtype=self.dtype)
             ccd2_images = xp.zeros([self.Nits, self.ccd2.detector_shape[0], self.ccd2.detector_shape[1]], dtype=self.dtype)
             rec2_modes = xp.zeros([self.Nits,self.sc2.Rec.shape[0]], dtype=self.dtype)
+            modes1 = xp.zeros([self.sc1.Rec.shape[0]], dtype=self.dtype)
+            modes2 = xp.zeros([self.sc2.Rec.shape[0]], dtype=self.dtype)
 
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)
@@ -112,21 +114,25 @@ class WooferTweeterAO(HighLevelAO):
             if i >= self.sc2.delay:
                 dm2_surf = IF @ dm2_cmds[i - self.sc2.delay, :]
 
+            if i == bootStrapIts:
+                self.sc1.nModes -= self.sc2.nModes
+                self.sc1.modalGains[:self.sc2.nModes] *= 0
+
             residual_phase = input_phase - dm1_surf[self.dm.visible_pix_ids] - dm2_surf[self.dm.visible_pix_ids]
 
             if i % int(self.sc1.dt/self.dt) == 0:
-                int_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, self.sc1, 
+                int1_cmds[i,:], modes1 = self.perform_loop_iteration(residual_phase, self.sc1, 
                                                                     starMagnitude=starMagnitude, 
                                                                     slaving=self.dm.slaving)
-                dm1_cmds[i,:] = self.sc1.iir_filter(int_cmds[:i+1,:], dm1_cmds[:i+1,:])
+                dm1_cmds[i,:] = self.sc1.iir_filter(int1_cmds[:i+1,:], dm1_cmds[:i+1,:])
             else:
                 dm1_cmds[i,:] = dm1_cmds[i-1,:].copy()
 
-            if i % int(self.sc2.dt/self.dt) == 0:
-                int_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, self.sc2, 
+            if i % int(self.sc2.dt/self.dt) == 0  and i > bootStrapIts:
+                int2_cmds[i,:], modes2 = self.perform_loop_iteration(residual_phase, self.sc2, 
                                                                     starMagnitude=starMagnitude, 
                                                                     slaving=self.dm.slaving)
-                dm2_cmds[i,:] = self.sc2.iir_filter(int_cmds[:i+1,:], dm2_cmds[:i+1,:])
+                dm2_cmds[i,:] = self.sc2.iir_filter(int2_cmds[:i+1,:], dm2_cmds[:i+1,:])
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
 
@@ -204,7 +210,7 @@ class WooferTweeterAO(HighLevelAO):
         psf, pixelSize = self._psf_from_frame(xp.array(res_phases[frame_id]), lambdaRef)
         cmask = self.cmask.get() if xp.on_gpu else self.cmask.copy()
 
-        lo_dm_surf = self.dm.IFF @ dm1_cmds[frame_id]
+        lo_dm_surf = self.dm.IFF @ dm2_cmds[frame_id]
         lo_dm_surf = reshape_on_mask(lo_dm_surf[self.dm.visible_pix_ids], self.cmask)
 
         plt.figure()#figsize=(9,9))
@@ -214,13 +220,13 @@ class WooferTweeterAO(HighLevelAO):
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,4,2)
-        myimshow(det1_frames[frame_id], title = 'LO detector frame', shrink=0.8, cmap='Blues')
+        myimshow(det2_frames[frame_id], title = 'LO detector frame', shrink=0.8, cmap='Blues')
         plt.subplot(2,4,3)
         showZoomCenter(psf/xp.max(psf), pixelSize, shrink=0.8,
         title = f'Corrected PSF\nSR = {xp.exp(-res_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}[nm]'
             , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
         plt.subplot(2,4,4)
-        self.dm.plot_position(dm1_cmds[frame_id])
+        self.dm.plot_position(dm2_cmds[frame_id])
         plt.title('LODM command [m]')
         plt.axis('off')
         plt.subplot(2,4,5)
@@ -229,15 +235,16 @@ class WooferTweeterAO(HighLevelAO):
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,4,6)
-        myimshow(det2_frames[frame_id], title = 'HO detector frame', shrink=0.8, cmap='Blues')
+        myimshow(det1_frames[frame_id], title = 'HO detector frame', shrink=0.8, cmap='Blues')
         plt.subplot(2,4,8)
-        self.dm.plot_position(dm2_cmds[frame_id])
+        self.dm.plot_position(dm1_cmds[frame_id])
         plt.title('HODM command [m]')
         plt.axis('off')
 
+        nModes = self.sc1.nModes+self.sc2.nModes
         N = int(xp.maximum(self.Nits-100,self.Nits/2))
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
-        res2_modes = xp.zeros([N,self.sc1.nModes+self.sc2.nModes])
+        res2_modes = xp.zeros([N,nModes])
         phase2modes = xp.linalg.pinv(self.KL) #xp.linalg.pinv(self.KL.T)
         for frame in range(N):
             mask = ma_atmo_phases[-N+frame].mask.copy()
@@ -246,7 +253,7 @@ class WooferTweeterAO(HighLevelAO):
             # res1_phase = xp.asarray(res_woofer_phases[-N+frame].data[~mask])
             # res1_modes[frame,:] = xp.dot(res1_phase,phase2modes[:,:self.sc1.nModes]) #pphase2modes @ res1_phase
             res2_phase = xp.asarray(res_phases[-N+frame].data[~mask])
-            res2_modes[frame,:] = xp.dot(res2_phase,phase2modes[:,:(self.sc2.nModes+self.sc1.nModes)]) #p phase2modes @ res2_phase
+            res2_modes[frame,:] = xp.dot(res2_phase,phase2modes[:,:nModes]) #p phase2modes @ res2_phase
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
         res2_mode_rms = xp.sqrt(xp.mean(res2_modes**2,axis=0))
         rec1_modes_rms = xp.sqrt(xp.mean(rec1_modes[-N-1:-1,:]**2,axis=0))
@@ -254,10 +261,10 @@ class WooferTweeterAO(HighLevelAO):
 
         plt.figure()
         plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(atmo_mode_rms)*1e+9,'--.',label='turbulence')
-        plt.plot(xp.asnumpy(xp.arange(self.sc1.nModes))+1,xp.asnumpy(rec1_modes_rms)*1e+9,'--',label='LOWFS modes')
-        plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes)+self.sc1.nModes)+1,
-                 xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='HOWFS modes')
-        plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes+self.sc1.nModes))+1,xp.asnumpy(res2_mode_rms)*1e+9,'--.',label='residual')
+        plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes))+1,xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='LOWFS modes')
+        plt.plot(xp.asnumpy(xp.arange(self.sc1.nModes)+self.sc2.nModes)+1,
+                 xp.asnumpy(rec1_modes_rms[self.sc2.nModes:])*1e+9,'--',label='HOWFS modes')
+        plt.plot(xp.asnumpy(xp.arange(nModes))+1,xp.asnumpy(res2_mode_rms)*1e+9,'--.',label='residual')
         plt.legend()
         plt.xlabel('mode index')
         plt.ylabel('mode RMS amp [nm]')

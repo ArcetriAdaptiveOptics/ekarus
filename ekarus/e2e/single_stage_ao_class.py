@@ -48,9 +48,9 @@ class SingleStageAO(HighLevelAO):
         print('Initializing devices ...')
 
         try:
-            self.pyr, self.ccd, self.sc = self._initialize_slope_computer('PYR','CCD','SLOPE.COMPUTER')
+            self.pyr, self.ccd, self.sc = self._initialize_slope_computer('WFS','CCD','SLOPE.COMPUTER')
         except KeyError:
-            self.pyr, self.ccd, self.sc = self._initialize_slope_computer('PYR1','CCD1','SLOPE.COMPUTER1')
+            self.pyr, self.ccd, self.sc = self._initialize_slope_computer('WFS1','CCD1','SLOPE.COMPUTER1')
 
         try:
             dm_pars = self._config.read_dm_pars()
@@ -131,7 +131,7 @@ class SingleStageAO(HighLevelAO):
                                                                     slaving=self.dm.slaving)
                 dm_cmds[i,:] += self.sc.iir_filter(int_cmds[:i+1,:], dm_cmds[:i+1,:])
             else:
-                dm_cmds[i,:] += dm_cmds[i-1,:].copy()
+                dm_cmds[i,:] = dm_cmds[i-1,:].copy()
 
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2 #[xp.abs(residual_phase)>0.0]
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
@@ -262,7 +262,7 @@ class SingleStageAO(HighLevelAO):
         # plt.xscale('log')
     
 
-    def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='', oversampling:int=12, one_sided_contrast:bool=False):
+    def plot_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='', oversampling:int=12, one_sided_contrast:bool=False, plot:bool=True):
         """
         Plots the telemetry data for a specific iteration/frame.
         
@@ -293,14 +293,15 @@ class SingleStageAO(HighLevelAO):
             res_phases_in_rad[j] = xp.asarray(ma_res_phases[frame_ids[j]].data[~ma_res_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
         _,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling,one_sided_contrast=one_sided_contrast)
 
-        plt.figure()
-        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf),'--')
-        plt.grid()
-        plt.yscale('log')
-        plt.xlabel(r'$\lambda/D$')
-        plt.xlim([0,30])
-        plt.ylim([1e-10,1e-2])
-        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
+        if plot:
+            plt.figure()
+            plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf),'--')
+            plt.grid()
+            plt.yscale('log')
+            plt.xlabel(r'$\lambda/D$')
+            plt.xlim([0,30])
+            plt.ylim([1e-10,1e-2])
+            plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
         return rms_psf, pix_dist
     

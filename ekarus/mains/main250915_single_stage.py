@@ -180,11 +180,10 @@ def main(tn:str='example_single_stage',
         plt.ylabel(r'$\sigma^2 [rad^2]$')
         plt.gca().set_yscale('log')
 
-
-    subap_masks = xp.sum(ssao.sc._roi_masks,axis=0)
-    ccd_frame = ssao.ccd.last_frame
-    plt.figure()
-    myimshow(ccd_frame/xp.max(ccd_frame)-subap_masks,cmap='twilight')
+    # subap_masks = xp.sum(ssao.sc._roi_masks,axis=0)
+    # ccd_frame = ssao.ccd.last_frame
+    # plt.figure()
+    # myimshow(ccd_frame/xp.max(ccd_frame)-subap_masks,cmap='twilight')
     
     plt.show()
 

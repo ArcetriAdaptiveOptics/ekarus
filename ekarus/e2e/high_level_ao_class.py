@@ -687,9 +687,9 @@ class HighLevelAO():
         if scaleAmps is True:
             rad_orders = self.radial_order(xp.arange(Nmodes)) #xp.sqrt(xp.arange(Nmodes)+1)
             ampInM /= xp.sqrt(rad_orders)
-        # print(ampInM)
-        amps = ampInM*(2*xp.pi)/lambdaInM
-        print(f'Calibration amplitudes: {xp.max(ampInM)*1e+9:1.0f}-{xp.min(ampInM)*1e+9:1.1f} [nm] ({xp.max(amps)*1e+3:1.0f}-{xp.min(amps)*1e+3:1.0f} [mrad])')
+        amps = ampInM*(2*xp.pi)/lambdaInM        
+        if scaleAmps is True:
+            print(f'Calibration amplitudes: {xp.max(ampInM)*1e+9:1.0f}-{xp.min(ampInM)*1e+9:1.1f} [nm] ({xp.max(amps)*1e+3:1.0f}-{xp.min(amps)*1e+3:1.0f} [mrad])')
         for i in range(Nmodes):
             if phase_offset is None:
                 print(f'\rReconstructing mode {i+1}/{Nmodes}', end='\r', flush=True)

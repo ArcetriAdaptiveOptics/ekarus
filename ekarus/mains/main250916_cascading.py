@@ -190,9 +190,9 @@ def main(tn:str='example_cascading_stage',
         cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
                                                     frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), 
                                                     save_prefix=save_prefix)
-        cascao.smf = cascao.plot_ristretto_contrast(lambdaRef=lambdaRef,oversampling=8,
-                                                    frame_ids=xp.arange(cascao.Nits).tolist(), 
-                                                    save_prefix=save_prefix)
+        # cascao.smf = cascao.plot_ristretto_contrast(lambdaRef=lambdaRef,oversampling=8,
+        #                                             frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), 
+        #                                             save_prefix=save_prefix)
 
     tvec = xp.asnumpy(xp.arange(cascao.Nits)*cascao.dt*1e+3)
     plt.figure()#figsize=(1.7*Nits/10,3))

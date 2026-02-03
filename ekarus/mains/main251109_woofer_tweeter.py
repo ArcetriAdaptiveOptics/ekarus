@@ -18,7 +18,8 @@ def main(tn:str,
          optimize_gain:bool=False, 
          gain1_list:list=None, 
          gain2_list:list=None,
-         saveprefix:str=None):
+         saveprefix:str=None,
+         bootStrapIts:int=0):
 
     print('Initializing devices ...')
     wooftweet = WooferTweeterAO(tn)
@@ -29,11 +30,11 @@ def main(tn:str,
     KL, m2c = wooftweet.define_KL_modes(wooftweet.dm, zern_modes=2)
     # display_modes(1-wooftweet.cmask, xp.asnumpy(KL.T), N=8)
 
-    _, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL[:wooftweet.sc1.nModes,:], wooftweet.wfs1.lambdaInM, ampsInM=amp, save_prefix='wfs1_')
-    wooftweet.sc1.load_reconstructor(IM1,m2c[:,:wooftweet.sc1.nModes])
+    _, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL, wooftweet.wfs1.lambdaInM, ampsInM=amp, save_prefix='wfs1_')
+    wooftweet.sc1.load_reconstructor(IM1,m2c)
 
-    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL, wooftweet.wfs2.lambdaInM, ampsInM=amp, save_prefix='wfs2_')
-    wooftweet.sc2.load_reconstructor(IM2[:,wooftweet.sc1.nModes:],m2c[:,wooftweet.sc1.nModes:])
+    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL[:wooftweet.sc2.nModes,:], wooftweet.wfs2.lambdaInM, ampsInM=amp, save_prefix='wfs2_')
+    wooftweet.sc2.load_reconstructor(IM2,m2c[:,:wooftweet.sc2.nModes])
 
     wooftweet.get_photons_per_subap(wooftweet.starMagnitude)
 
@@ -62,7 +63,7 @@ def main(tn:str,
         print('Finding the best gain for low order modes (LO)')
         for gain in gain1_vec:
             wooftweet.sc1.set_new_gain(gain)
-            sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude)
+            sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, bootStrapIts=bootStrapIts)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'LO gain = {wooftweet.sc1.intGain:1.2f}, HO gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
             if SR > best_SR:
@@ -73,7 +74,7 @@ def main(tn:str,
         for gain in gain2_vec:
             wooftweet.sc1.set_new_gain(best_gain1)
             wooftweet.sc2.set_new_gain(gain)
-            sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude)
+            sig2, _ = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, bootStrapIts=bootStrapIts)
             SR = xp.mean(xp.exp(-sig2[-ss_it:]))
             print(f'LO gain = {wooftweet.sc1.intGain:1.2f}, HO gain = {wooftweet.sc2.intGain:1.2f}, final SR = {SR*100:1.2f}%')
             if SR > best_SR:
@@ -91,8 +92,8 @@ def main(tn:str,
     
     print('Running the loop ...')
     if saveprefix is None:
-        saveprefix = f'mag{wooftweet.starMagnitude:1.0f}_'
-    sig2, input_sig2 = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, save_prefix=saveprefix)
+        saveprefix = f'wt_mag{wooftweet.starMagnitude:1.0f}_'
+    sig2, input_sig2 = wooftweet.run_loop(lambdaRef, wooftweet.starMagnitude, save_prefix=saveprefix, bootStrapIts=bootStrapIts)
     wooftweet.sig2 = sig2
 
     if show_contrast:

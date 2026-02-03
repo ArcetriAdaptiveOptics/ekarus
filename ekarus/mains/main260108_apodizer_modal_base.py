@@ -20,10 +20,19 @@ def main(tn:str='offaxis_modalbase',
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence(tn=atmo_tn)
 
+    # Calibration and loop
+    amp = 10e-9
+    KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
+    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False)
+    ssao.sc.load_reconstructor(IM,m2c)
+    ssao.KL = KL.copy()
+    err2, _ = ssao.run_loop(lambdaRef, starMagnitude=ssao.starMagnitude, save_prefix='')
+    del KL, IM
+
     # Define apodizer phase
     oversampling = 4
     pupil = 1-ssao.cmask.copy()
-    dark_zone = define_target_roi(pupil, iwa=2.5, owa=5.5, oversampling=oversampling)
+    dark_zone = define_target_roi(pupil, iwa=3, owa=8, oversampling=oversampling)
     target_contrast = xp.ones([pupil.shape[0]*oversampling,pupil.shape[1]*oversampling])
     target_contrast[dark_zone] = 1e-7
     app_phase = get_apodizer_phase(pupil, target_contrast, oversampling=oversampling, max_its=5000, beta=0.975)
@@ -43,26 +52,26 @@ def main(tn:str='offaxis_modalbase',
                               L0=ssao.layers.L0,oversampling=4,verbose=True,
                               xp=xp,dtype=xp.float32)
     Cred = P @ Ckol @ P.T
-    m2c,D,_ = xp.linalg.svd(Cred)
-    KL = (ssao.dm.IFF @ m2c).T
+    apo_m2c,D,_ = xp.linalg.svd(Cred)
+    apo_KL = (ssao.dm.IFF @ apo_m2c).T
 
     # Define KL and m2c
-    last_mode = KL[-1,:].copy() # apodizer
-    first_mode = KL[0,:].copy() # 'piston'
-    KL[-1,:] = first_mode
-    KL[0,:] = last_mode
-    last_mode_cmd = m2c[:,-1]
-    first_mode_cmd = m2c[:,0]
-    m2c[:,0] = last_mode_cmd.copy()
-    m2c[:,-1] = first_mode_cmd.copy()
+    last_mode = apo_KL[-1,:].copy() # apodizer
+    first_mode = apo_KL[0,:].copy() # 'piston'
+    apo_KL[-1,:] = first_mode
+    apo_KL[0,:] = last_mode
+    last_mode_cmd = apo_m2c[:,-1]
+    first_mode_cmd = apo_m2c[:,0]
+    apo_m2c[:,0] = last_mode_cmd.copy()
+    apo_m2c[:,-1] = first_mode_cmd.copy()
 
     # Save KL and m2c
     if not os.path.exists(ssao.savecalibpath):
         os.mkdir(ssao.savecalibpath)
-    kl_path = os.path.join(ssao.savecalibpath,'KL.fits')
-    fits.writeto(kl_path, xp.asnumpy(KL), overwrite=True)
-    m2c_path = os.path.join(ssao.savecalibpath,'m2c.fits')
-    fits.writeto(m2c_path, xp.asnumpy(m2c), overwrite=True)
+    kl_path = os.path.join(ssao.savecalibpath,'apo_KL.fits')
+    fits.writeto(kl_path, xp.asnumpy(apo_KL), overwrite=True)
+    m2c_path = os.path.join(ssao.savecalibpath,'apo_m2c.fits')
+    fits.writeto(m2c_path, xp.asnumpy(apo_m2c), overwrite=True)
 
     if show:
         plt.figure(figsize=(12,4.5))
@@ -80,14 +89,7 @@ def main(tn:str='offaxis_modalbase',
         plt.yscale('log')
         plt.title('Modes eigenvalues')
         
-        display_modes(pupil, xp.asnumpy(KL.T), N=8)
-
-    # Calibration and loop
-    amp = 25e-9
-    _, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False)
-    ssao.sc.load_reconstructor(IM,m2c)
-    ssao.KL = KL.copy()
-    err2, _ = ssao.run_loop(lambdaRef, starMagnitude=ssao.starMagnitude, save_prefix='')
+        display_modes(pupil, xp.asnumpy(apo_KL.T), N=8)
 
     # Repeat everything with apodizer offset
     apo_ssao = SingleStageAO(tn)
@@ -101,12 +103,12 @@ def main(tn:str='offaxis_modalbase',
         plt.imshow(xp.asnumpy(apo_ssao.ccd.last_frame),origin='lower',cmap='RdGy')
         plt.colorbar()
         plt.title('Slope null frame')
-    apo_ssao.KL = KL.copy()
+    apo_ssao.KL = apo_KL.copy()
     if offset_calibration:
-        _, apoIM = apo_ssao.compute_reconstructor(apo_ssao.sc, KL, apo_ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False, phase_offset=app_phase[~ssao.cmask], save_prefix=f'apo{coeff:1.1f}_offset_')
+        _, apoIM = apo_ssao.compute_reconstructor(apo_ssao.sc, apo_KL, apo_ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False, phase_offset=app_phase[~ssao.cmask], save_prefix=f'apo{coeff:1.1f}_offset_')
     else:
-        _, apoIM = apo_ssao.compute_reconstructor(apo_ssao.sc, KL, apo_ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False, save_prefix='apo_')
-    apo_ssao.sc.load_reconstructor(apoIM,m2c)
+        _, apoIM = apo_ssao.compute_reconstructor(apo_ssao.sc, apo_KL, apo_ssao.pyr.lambdaInM, ampsInM=amp, scaleAmps=False, save_prefix='apo_')
+    apo_ssao.sc.load_reconstructor(apoIM,apo_m2c)
     if use_ncpa_cmd:
         ncpa_cmd = app_cmd*lambdaRef/(2*xp.pi)
         # plt.figure()
@@ -117,7 +119,18 @@ def main(tn:str='offaxis_modalbase',
         apo_err2, in_err2 = apo_ssao.run_loop(lambdaRef, starMagnitude=ssao.starMagnitude, save_prefix='apo_')
 
     if show_contrast:
-        ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(max(0,ssao.Nits-100),ssao.Nits).tolist(), save_prefix='apo_', one_sided_contrast=True)
+        rms_psf, dist = ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(max(0,ssao.Nits-100),ssao.Nits).tolist(), save_prefix='', one_sided_contrast=True, plot=False)
+        apo_rms_psf, _ = apo_ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(max(0,ssao.Nits-100),ssao.Nits).tolist(), save_prefix='apo_', one_sided_contrast=True, plot=False)
+        plt.figure()
+        plt.plot(xp.asnumpy(dist),xp.asnumpy(rms_psf),'--',label='Reference')
+        plt.plot(xp.asnumpy(dist),xp.asnumpy(apo_rms_psf),'--',label='Apodizer')
+        plt.legend()
+        plt.grid()
+        plt.yscale('log')
+        plt.xlabel(r'$\lambda/D$')
+        plt.xlim([0,30])
+        plt.ylim([1e-10,1e-2])
+        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
     tvec = xp.asnumpy(xp.arange(ssao.Nits)*ssao.dt*1e+3)
     plt.figure()
