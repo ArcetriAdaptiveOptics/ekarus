@@ -1,5 +1,4 @@
 import xupy as xp
-# from functools import lru_cache
 from ekarus.e2e.utils.image_utils import get_circular_mask
 
 class ZernikeWFS:
@@ -41,7 +40,6 @@ class ZernikeWFS:
         intensity = xp.abs(output_field)**2
         return intensity
 
-    # @lru_cache(maxsize=5)
     def zwfs_complex_amplitude(self,shape,lambdaOverD):
         ratio = self.lambdaOverD/lambdaOverD
         alpha = self.dot_radius * ratio

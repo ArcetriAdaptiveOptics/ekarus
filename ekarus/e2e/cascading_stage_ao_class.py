@@ -253,7 +253,7 @@ class CascadingAO(HighLevelAO):
             , cmap='inferno', xlabel=r'$\lambda/D$', vmin=-10
             , ylabel=r'$\lambda/D$') 
         plt.subplot(2,4,2)
-        myimshow(det1_frames[frame_id], title = 'Detector 1 frame', shrink=0.8)
+        myimshow(det1_frames[frame_id], title = 'Detector 1 frame', shrink=0.8, cmap='reds')
         plt.subplot(2,4,4)
         self.dm1.plot_position(dm1_cmds[frame_id])
         plt.title('DM1 command [m]')
@@ -264,7 +264,7 @@ class CascadingAO(HighLevelAO):
             , cmap='inferno', xlabel=r'$\lambda/D$', vmin=-10
             , ylabel=r'$\lambda/D$') 
         plt.subplot(2,4,6)
-        myimshow(det2_frames[frame_id], title = 'Detector 2 frame', shrink=0.8)
+        myimshow(det2_frames[frame_id], title = 'Detector 2 frame', shrink=0.8, cmap='blues')
         plt.subplot(2,4,8)
         self.dm2.plot_position(dm2_cmds[frame_id])
         plt.title('DM2 command [m]')
