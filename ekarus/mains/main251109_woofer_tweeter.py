@@ -35,7 +35,6 @@ def main(tn:str,
     wooftweet.sc1.load_reconstructor(IM1,m2c)
 
     _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL[:wooftweet.sc2.nModes,:], lambdaInM=wooftweet.wfs2.lambdaInM, ampsInM=amp2, save_prefix='wfs2_')
-    IM2 /= xp.std(IM2,axis=0)
     wooftweet.sc2.load_reconstructor(IM2,m2c[:,:wooftweet.sc2.nModes])
 
     wooftweet.get_photons_per_subap(wooftweet.starMagnitude)

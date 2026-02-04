@@ -404,7 +404,7 @@ class HighLevelAO():
             beam_split_ratio=det_pars["beam_splitter_ratio"],
         )
 
-        zero_phase = 1-self.cmask
+        zero_phase = (1-self.cmask).astype(xp.cfloat)
         # Sensor
         oversampling = wfs_pars["oversampling"]
         sensorLambda = wfs_pars["lambdaInM"]
@@ -468,10 +468,9 @@ class HighLevelAO():
         sc.calibrate_sensor(tn=self._tn, prefix_str=wfs_id+'_',
                         recompute=self.recompute,**args)
         nPhotons = self.get_photons_per_second(self.starMagnitude) * sc.dt
-
         sc.compute_slope_null(zero_phase, lambdaOverD, nPhotons)
-        if type == 'ZWFS':
-            sc.slope_null = None
+        # if type == 'ZWFS':
+        #     sc.slope_null = None
         #     sc.frame_null = sc._detector.last_frame.copy()
 
         return wfs, det, sc

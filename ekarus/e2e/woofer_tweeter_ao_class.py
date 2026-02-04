@@ -20,7 +20,8 @@ class WooferTweeterAO(HighLevelAO):
         
         self.telemetry_keys = [
             "atmo_phases",
-            "dm_phases",
+            "dm1_phases",
+            "dm2_phases",
             "res_phases",
             "ccd1_frames",
             "rec1_modes",
@@ -100,10 +101,6 @@ class WooferTweeterAO(HighLevelAO):
             modes1 = xp.zeros([self.sc1.Rec.shape[0]], dtype=self.dtype)
             modes2 = xp.zeros([self.sc2.Rec.shape[0]], dtype=self.dtype)
 
-        # if bootStrapIts > 0:
-        #     sc2_gains = self.sc2.modalGains.copy()
-        #     self.sc2.modalGains *= 0.0
-
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)
             sim_time = self.dt * i
@@ -115,13 +112,15 @@ class WooferTweeterAO(HighLevelAO):
             if i >= self.sc1.delay:
                 dm1_surf = IF @ dm1_cmds[i - self.sc1.delay, :]
 
-            if i >= self.sc2.delay+bootStrapIts:
+            if i >= self.sc2.delay and i > bootStrapIts:
                 dm2_surf = IF @ dm2_cmds[i - self.sc2.delay, :]
 
             if i == bootStrapIts:
                 self.sc1.nModes -= self.sc2.nModes
-                self.sc1.modalGains[:self.sc2.nModes] *= 0
-                # self.sc2.modalGains = sc2_gains.copy()
+                _, IM1 = self.compute_reconstructor(self.sc1, self.KL, lambdaInM=self.wfs1.lambdaInM, ampsInM=5e-9, save_prefix='wfs1_')
+                self.sc1.load_reconstructor(IM1[:,self.sc2.nModes:],self.sc1.m2c[:,self.sc2.nModes:])
+                self.sc1.modalGains = self.sc1.modalGains[self.sc2.nModes:]
+                # self.sc1.modalGains[:self.sc2.nModes] *= 0
 
             residual_phase = input_phase - dm1_surf[self.dm.visible_pix_ids] - dm2_surf[self.dm.visible_pix_ids]
 
@@ -140,6 +139,7 @@ class WooferTweeterAO(HighLevelAO):
                 dm2_cmds[i,:] = self.sc2.iir_filter(int2_cmds[:i+1,:], dm2_cmds[:i+1,:])
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
+            dm2_cmds[i,:] -= xp.mean(dm2_cmds[i,:])
 
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
@@ -148,7 +148,10 @@ class WooferTweeterAO(HighLevelAO):
                 input_phases[i, :] = input_phase          
                 residual_phases[i, :] = residual_phase
                 ccd1_images[i, :, :] = self.ccd1.last_frame
-                rec1_modes[i, :] = modes1
+                if i >= bootStrapIts:
+                    rec1_modes[i, self.sc2.nModes:] = modes1
+                else:
+                    rec1_modes[i, :] = modes1
 
                 ccd2_images[i, :, :] = self.ccd2.last_frame
                 rec2_modes[i, :] = modes2
@@ -159,11 +162,13 @@ class WooferTweeterAO(HighLevelAO):
             dm_mask_cube = xp.asnumpy(xp.stack([self.dm.mask for _ in range(self.Nits)]))
             mask_cube = xp.asnumpy(xp.stack([self.cmask for _ in range(self.Nits)]))
             input_phases = xp.stack([reshape_on_mask(input_phases[i, :], self.cmask) for i in range(self.Nits)])
-            dm_phases = xp.stack([reshape_on_mask(IF @ (dm1_cmds[i, :]+dm2_cmds[i, :]), self.dm.mask)for i in range(self.Nits)])
+            dm1_phases = xp.stack([reshape_on_mask(IF @ dm1_cmds[i, :], self.dm.mask)for i in range(self.Nits)])
+            dm2_phases = xp.stack([reshape_on_mask(IF @ dm2_cmds[i, :], self.dm.mask)for i in range(self.Nits)])
             res_phases = xp.stack([reshape_on_mask(residual_phases[i, :], self.cmask)for i in range(self.Nits)])
 
             ma_input_phases = masked_array(xp.asnumpy(input_phases), mask=mask_cube)
-            ma_dm_phases = masked_array(xp.asnumpy(dm_phases), mask=dm_mask_cube)
+            ma_dm1_phases = masked_array(xp.asnumpy(dm1_phases), mask=dm_mask_cube)
+            ma_dm2_phases = masked_array(xp.asnumpy(dm2_phases), mask=dm_mask_cube)
             ma_res_phases = masked_array(xp.asnumpy(res_phases), mask=mask_cube)
 
             data_dict = {}
@@ -171,7 +176,8 @@ class WooferTweeterAO(HighLevelAO):
                 self.telemetry_keys,
                 [
                     ma_input_phases,
-                    ma_dm_phases,
+                    ma_dm1_phases,
+                    ma_dm2_phases,
                     ma_res_phases,
                     ccd1_images,
                     rec1_modes,
@@ -204,7 +210,7 @@ class WooferTweeterAO(HighLevelAO):
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        ma_atmo_phases, _, res_phases, det1_frames, rec1_modes, dm1_cmds, det2_frames, rec2_modes, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
+        ma_atmo_phases, _, _, res_phases, det1_frames, rec1_modes, dm1_cmds, det2_frames, rec2_modes, dm2_cmds = self.load_telemetry_data(save_prefix=save_prefix)
 
         atmo_phase_rad = ma_atmo_phases[frame_id].data[~ma_atmo_phases[frame_id].mask]*(2*xp.pi/lambdaRef)
         res_phase_rad = res_phases[frame_id].data[~res_phases[frame_id].mask]*(2*xp.pi/lambdaRef)

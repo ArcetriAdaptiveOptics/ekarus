@@ -47,7 +47,7 @@ class ZernikeWFS:
         alpha = self.dot_radius * ratio
         delta = self.phase_delay * ratio
         amp = get_circular_mask(shape,alpha*self.oversampling/2,mask_center=(shape[0]/2,shape[1]/2))
-        phase = delta * (1-amp)
+        phase = delta * (1-amp).astype(self.dtype)
         field = xp.exp(1j*phase,dtype=self.cdtype)#1.0 - (1.0 - xp.exp(1j*phase,dtype=self.cdtype))*amp
         return field
     
