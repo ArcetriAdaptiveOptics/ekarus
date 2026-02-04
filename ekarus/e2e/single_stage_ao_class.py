@@ -227,13 +227,14 @@ class SingleStageAO(HighLevelAO):
         N = int(xp.maximum(self.Nits-100,self.Nits/2))
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res_modes = xp.zeros([N,self.KL.shape[0]])
+        res_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
         phase2modes = xp.linalg.pinv(self.KL) #xp.linalg.pinv(self.KL.T)
         for frame in range(N):
             mask = ma_atmo_phases[-N+frame].mask.copy()
             atmo_phase = xp.asarray(ma_atmo_phases[-N+frame].data[~mask])
             atmo_modes[frame,:] = xp.dot(atmo_phase,phase2modes) #phase2modes @ atmo_phase
-            res_phase = xp.asarray(ma_res_phases[-N+frame].data[~mask])
-            res_modes[frame,:] = xp.dot(res_phase,phase2modes) #phase2modes @ res_phase
+            res_phases[frame,:] = xp.asarray(ma_res_phases[-N+frame].data[~mask])
+            res_modes[frame,:] = xp.dot(res_phases[frame,:],phase2modes) #phase2modes @ res_phase
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
         res_mode_rms = xp.sqrt(xp.mean(res_modes**2,axis=0))
         rec_modes_rms = xp.sqrt(xp.mean(rec_modes[-N-1:-1,:]**2,axis=0))
@@ -251,6 +252,31 @@ class SingleStageAO(HighLevelAO):
         plt.grid()
         plt.xscale('log')
         plt.yscale('log')
+
+        # dm_cmds = xp.asarray(dm_cmds)
+        # max_cmd = xp.max(xp.abs(dm_cmds),axis=1)
+        # lo_dm_cmds = self.sc.m2c[:,:3] @ xp.asarray(rec_modes[:,:3]).T
+        # max_lo_cmd = xp.max(xp.abs(lo_dm_cmds),axis=1)
+
+        # plt.figure()
+        # plt.plot(xp.asnumpy(max_cmd)*1e+9,'--',label='All modes')
+        # plt.plot(xp.asnumpy(max_lo_cmd)*1e+9,'--',label='First 3 modes')
+        # plt.grid()
+        # plt.legend()
+        # plt.ylabel('Max cmd [nm]')
+        # plt.title('Maximum DM command')
+
+        res_rms = xp.sqrt(xp.mean(res_phases**2,axis=1))
+        res_rms_lo = xp.sqrt(xp.sum(res_modes[:,:30]**2,axis=1))
+
+        plt.figure()
+        plt.plot(xp.asnumpy(res_rms)*1e+9,'--',label='Full')
+        plt.plot(xp.asnumpy(res_rms_lo)*1e+9,'--',label='First 30 KL')
+        plt.grid()
+        plt.legend()
+        plt.ylabel('RMS [nm]')
+        plt.title('AO residuals')
+        print(f'Average AO residual: {xp.mean(res_rms)*1e+9:1.1f} [nm], of which {xp.mean(res_rms_lo)*1e+9:1.1f} [nm] on the first 30 KL')
 
         # opt_gains = rec_modes_rms/res_mode_rms[:self.sc.nModes]
 
@@ -291,9 +317,14 @@ class SingleStageAO(HighLevelAO):
         res_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
         for j in range(N):
             res_phases_in_rad[j] = xp.asarray(ma_res_phases[frame_ids[j]].data[~ma_res_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
-        _,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling,one_sided_contrast=one_sided_contrast)
+        coro_psf,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling,one_sided_contrast=one_sided_contrast)
 
         if plot:
+            plt.figure()
+            showZoomCenter(coro_psf, 1/oversampling, shrink=0.8,
+            title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}[nm]'
+                , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
+
             plt.figure()
             plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf),'--')
             plt.grid()

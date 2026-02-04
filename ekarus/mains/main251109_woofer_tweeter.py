@@ -24,16 +24,18 @@ def main(tn:str,
     print('Initializing devices ...')
     wooftweet = WooferTweeterAO(tn)
 
-    amp = 25e-9
+    amp1 = 25e-9
+    amp2 = 5e-9
 
     wooftweet.initialize_turbulence(tn=atmo_tn)
     KL, m2c = wooftweet.define_KL_modes(wooftweet.dm, zern_modes=2)
     # display_modes(1-wooftweet.cmask, xp.asnumpy(KL.T), N=8)
 
-    _, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL, wooftweet.wfs1.lambdaInM, ampsInM=amp, save_prefix='wfs1_')
+    _, IM1 = wooftweet.compute_reconstructor(wooftweet.sc1, KL, lambdaInM=wooftweet.wfs1.lambdaInM, ampsInM=amp1, save_prefix='wfs1_')
     wooftweet.sc1.load_reconstructor(IM1,m2c)
 
-    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL[:wooftweet.sc2.nModes,:], wooftweet.wfs2.lambdaInM, ampsInM=amp, save_prefix='wfs2_')
+    _, IM2 = wooftweet.compute_reconstructor(wooftweet.sc2, KL[:wooftweet.sc2.nModes,:], lambdaInM=wooftweet.wfs2.lambdaInM, ampsInM=amp2, save_prefix='wfs2_')
+    IM2 /= xp.std(IM2,axis=0)
     wooftweet.sc2.load_reconstructor(IM2,m2c[:,:wooftweet.sc2.nModes])
 
     wooftweet.get_photons_per_subap(wooftweet.starMagnitude)
@@ -100,7 +102,7 @@ def main(tn:str,
         wooftweet.psd, wooftweet.pix_scale = wooftweet.plot_contrast(lambdaRef=lambdaRef, 
                                                                     frame_ids=xp.arange(wooftweet.Nits-200,wooftweet.Nits).tolist(),
                                                                     save_prefix=saveprefix, oversampling=10)
-        wooftweet.smf = wooftweet.plot_ristretto_contrast(lambdaRef=lambdaRef,frame_ids=xp.arange(wooftweet.Nits).tolist(), save_prefix=saveprefix, oversampling=10)
+        # wooftweet.smf = wooftweet.plot_ristretto_contrast(lambdaRef=lambdaRef,frame_ids=xp.arange(wooftweet.Nits).tolist(), save_prefix=saveprefix, oversampling=10)
         
     if show:
         wooftweet.plot_iteration(lambdaRef, frame_id=-1, save_prefix=saveprefix)

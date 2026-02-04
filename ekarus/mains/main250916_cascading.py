@@ -26,12 +26,8 @@ def main(tn:str='example_cascading_stage',
     cascao = CascadingAO(tn)
     cascao.initialize_turbulence(atmo_tn)
 
-    amp1 = 50e-9
-    amp2 = 50e-9
-    if cascao.sc1.modulationAngleInLambdaOverD < 1.0:
-        amp1 = 25e-9
-    if cascao.sc2.modulationAngleInLambdaOverD < 1.0:
-        amp2 = 25e-9
+    amp1 = 25e-9
+    amp2 = 5e-9
 
     KL1, m2c1 = cascao.define_KL_modes(cascao.dm1, zern_modes=2, save_prefix='DM1_')
     Rec1, IM1 = cascao.compute_reconstructor(cascao.sc1, KL1, cascao.pyr1.lambdaInM, ampsInM=amp1, save_prefix='SC1_')

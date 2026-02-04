@@ -274,6 +274,7 @@ class CascadingAO(HighLevelAO):
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res1_modes = xp.zeros([N,self.KL.shape[0]])
         res2_modes = xp.zeros([N,self.KL.shape[0]])
+        res_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
         phase2modes = xp.linalg.pinv(self.KL.T)
         for frame in range(N):
             mask = ma_atmo_phases[-N+frame].mask.copy()
@@ -281,8 +282,8 @@ class CascadingAO(HighLevelAO):
             atmo_modes[frame,:] = phase2modes @ atmo_phase
             res1_phase = xp.asarray(res1_phases[-N+frame].data[~mask])
             res1_modes[frame,:] = phase2modes @ res1_phase
-            res2_phase = xp.asarray(res2_phases[-N+frame].data[~mask])
-            res2_modes[frame,:] = phase2modes @ res2_phase
+            res_phases[frame,:] = xp.asarray(res2_phases[-N+frame].data[~mask])
+            res2_modes[frame,:] = phase2modes @ res_phases[frame,:]
         atmo_mode_rms = xp.sqrt(xp.mean(atmo_modes**2,axis=0))
         res1_mode_rms = xp.sqrt(xp.mean(res1_modes**2,axis=0))
         res2_mode_rms = xp.sqrt(xp.mean(res2_modes**2,axis=0))
@@ -302,6 +303,31 @@ class CascadingAO(HighLevelAO):
         plt.grid()
         plt.xscale('log')
         plt.yscale('log')
+
+        # dm_cmds = xp.asarray(dm1_cmds+dm2_cmds)
+        # max_cmd = xp.max(xp.abs(dm_cmds),axis=1)
+        # lo_dm_cmds = self.sc1.m2c[:,:3] @ xp.asarray(rec1_modes[:,:3]+rec2_modes[:,:3]).T
+        # max_lo_cmd = xp.max(xp.abs(lo_dm_cmds),axis=1)
+
+        # plt.figure()
+        # plt.plot(xp.asnumpy(max_cmd)*1e+9,'--',label='All modes')
+        # plt.plot(xp.asnumpy(max_lo_cmd)*1e+9,'--',label='First 3 modes')
+        # plt.grid()
+        # plt.legend()
+        # plt.ylabel('Max cmd [nm]')
+        # plt.title('Maximum DM command')
+
+        res_rms = xp.sqrt(xp.mean(res_phases**2,axis=1))
+        res_rms_lo = xp.sqrt(xp.sum(res2_modes[:,:30]**2,axis=1))
+
+        plt.figure()
+        plt.plot(xp.asnumpy(res_rms)*1e+9,'--',label='Full')
+        plt.plot(xp.asnumpy(res_rms_lo)*1e+9,'--',label='First 30 KL')
+        plt.grid()
+        plt.legend()
+        plt.ylabel('RMS [nm]')
+        plt.title('AO residuals')
+        print(f'Average AO residual: {xp.mean(res_rms)*1e+9:1.1f} [nm], of which {xp.mean(res_rms_lo)*1e+9:1.1f} [nm] on the first 30 KL')
 
         # opt1_gains = rec1_modes_rms/res1_mode_rms[:self.sc1.nModes]
         # opt2_gains = rec2_modes_rms/res2_mode_rms[:self.sc2.nModes]
@@ -430,7 +456,13 @@ class CascadingAO(HighLevelAO):
             res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
             res1_phases_in_rad[j] = xp.asarray(res1_phases[frame_ids[j]].data[~res1_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
         _,rms_psf1,pix_dist=self.get_contrast(res1_phases_in_rad,oversampling=oversampling)
-        _,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
+        coro_psf2,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
+
+
+        plt.figure()
+        showZoomCenter(coro_psf2, 1/oversampling, shrink=0.8,
+        title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}[nm]'
+            , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
 
         # lambdaOverD2arcsec = lambdaRef/self.pupilSizeInM*180/xp.pi*3600 
         # arcsecs = pix_dist*lambdaOverD2arcsec

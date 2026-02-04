@@ -353,12 +353,13 @@ class HighLevelAO():
             coro_psf /= max_psf
             psf_stack.append(coro_psf)
         psf_stack = xp.array(psf_stack)
-        psf_rms = xp.std(psf_stack,axis=0)
-        H,W = psf_rms.shape
+        psf_std = xp.std(psf_stack,axis=0)
+        H,W = psf_std.shape
         if one_sided_contrast:
-            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms[:,W/2:]),H/2,0)
+            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_std[:,W/2:]),H/2,0)
         else:
-            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_rms),H/2,W/2)
+            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_std),H/2,W/2)
+        psf_rms = xp.sqrt(xp.mean(psf_stack**2,axis=0))
         pix_dist = dist/oversampling
         return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
 
@@ -418,7 +419,9 @@ class HighLevelAO():
                 delay=wfs_pars['dotDelay']*xp.pi, 
                 oversampling=oversampling, 
                 lambdaOverD=lambdaOverD)
-            args = {}
+            rebin = oversampling*self.pupilSizeInPixels/max(detector_shape)
+            centerObs = xp.floor(self.pupilSizeInPixels/rebin*self.centerObscurationInM/self.pupilSizeInM+1.0)
+            args = {'centerObscurationInPixels': centerObs}
             
         elif type == '4PWFS' or type == '3PWFS':
             subapPixSep = wfs_pars["subapPixSep"]
@@ -465,7 +468,11 @@ class HighLevelAO():
         sc.calibrate_sensor(tn=self._tn, prefix_str=wfs_id+'_',
                         recompute=self.recompute,**args)
         nPhotons = self.get_photons_per_second(self.starMagnitude) * sc.dt
+
         sc.compute_slope_null(zero_phase, lambdaOverD, nPhotons)
+        if type == 'ZWFS':
+            sc.slope_null = None
+        #     sc.frame_null = sc._detector.last_frame.copy()
 
         return wfs, det, sc
 
@@ -584,72 +591,6 @@ class HighLevelAO():
             return cl_opt_gains, pl_opt_gains
         else:
             return cl_opt_gains
-        
-    
-    def get_ristretto_contrast(self, residual_phases_in_rad, lambdaInM,
-                               oversampling:int=12, smfRadiusInMAS=18, #star_flux=1e+4,
-                               use_avg_field:bool=False, normalize_to_perfect_psf:bool=False):
-        # Spectral resolution: 620-840nm / 140'000 = 1.57pm
-        # Proxima Cen flux ~ 4e+8 ph/s in 620-840nm (estimate)
-        # Flux per spectral line = (4e+8/(840-620)*0.00157) ~= 3000 ph/s
-        N = residual_phases_in_rad.shape[0]
-        res_phases = xp.array(residual_phases_in_rad)
-        padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
-        pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
-        field_amp = 1-pup_mask
-        if normalize_to_perfect_psf:
-            psf = abs(xp.fft.fftshift(xp.fft.fft2(field_amp)))**2
-            tot_psf = xp.sum(psf)
-        lambdaOverD = lambdaInM/self.pupilSizeInM
-        smfRadInPix = smfRadiusInMAS/(lambdaOverD*180/xp.pi*1000*3600)*oversampling
-        angles = xp.arange(6)*2*np.pi/6
-        x_smf = xp.hstack([0,xp.cos(angles) * smfRadInPix * 2])
-        y_smf = xp.hstack([0,xp.sin(angles) * smfRadInPix * 2])
-        # X,Y = image_grid(pup_mask.shape,recenter=True)
-        # fiber_ef = lambda xc,yc,sigma: xp.exp(-((X-xc)**2+(Y-yc)**2)/2/sigma**2)
-        # sigma_smf = smfRadInPix*0.7#/np.sqrt(np.log(2**8))
-        fiber_coupling = xp.zeros([7,N])
-        apothem = smfRadInPix-0.6
-        hex_mask = xp.zeros([7,pup_mask.shape[0],pup_mask.shape[1]],dtype=bool)
-        for h in range(7):
-            def is_inside_hexagon(i, j):
-                x = xp.asnumpy(j - pup_mask.shape[0]/2 - float(x_smf[h]))
-                y = xp.asnumpy(i - pup_mask.shape[1]/2 - float(y_smf[h]))
-                c1 = np.abs(x) < float(apothem)
-                c2 = np.abs(x/2 + y*np.sqrt(3)/2) < float(apothem)
-                c3 = np.abs(x/2 - y*np.sqrt(3)/2) < float(apothem)
-                return c1 & c2 & c3
-            hex = np.fromfunction(is_inside_hexagon, pup_mask.shape)
-            hex_mask[h,:,:] = xp.asarray(hex,dtype=bool)    
-        for k,res_phase in enumerate(res_phases):
-            print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
-            phase_2d = reshape_on_mask(res_phase, pup_mask)
-            if use_avg_field:
-                input_field = field_amp * xp.exp(1j*phase_2d, dtype=self.cdtype)
-                avg_electric_field = xp.sum(input_field * field_amp) / xp.sum(field_amp)
-                perfect_coro_field = input_field - avg_electric_field * field_amp
-            else:
-                phase_var = xp.sum((res_phase-xp.mean(res_phase))**2)/len(res_phase)
-                perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d, dtype=self.cdtype))
-            coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
-            I = xp.abs(coro_focal_plane_ef)**2
-            if normalize_to_perfect_psf is False:
-                input_field = field_amp * xp.exp(1j*phase_2d)
-                psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
-                tot_psf = xp.sum(psf)
-            I /= tot_psf
-            for j in range(7):
-                # fiberj_ef = fiber_ef(x_smf[j],y_smf[j],sigma_smf)
-                # fiberj_ef /= xp.max(fiberj_ef) # normalize to 1
-                # fiber_coupling[j,k] = xp.abs(xp.sum(fiberj_ef*coro_focal_plane_ef*hex_mask[j]))**2/(xp.sum(xp.abs(fiberj_ef)**2*hex_mask[j])*xp.sum(xp.abs(coro_focal_plane_ef)**2*hex_mask[j]))
-                fiber_coupling[j,k] = xp.sum(I*hex_mask[j,:,:])
-        # import matplotlib.pyplot as plt
-        # plt.figure()
-        # showZoomCenter(psf*xp.sum(hex_mask[1:,:,:],axis=0), 1/oversampling, cmap='inferno', xlabel=r'$\lambda/D$'
-        #     , ylabel=r'$\lambda/D$') 
-        return fiber_coupling
-
-
 
 
     def _get_slopes(self, slope_computer, MM, lambdaInM, ampInM, phase_offset=None, scaleAmps:bool=True):
@@ -780,6 +721,77 @@ class HighLevelAO():
     @staticmethod
     def phase_rms(vec):
         return xp.sqrt(xp.sum(vec**2)/len(vec))
+    
+    # def get_ristretto_performance(self, bootStrapIts:int=100, save_prefix:str=''):
+    #     ma_res_phases, = self.load_telemetry_data(data_keys=['residual_phases'], save_prefix=save_prefix)
+    #     N = xp.shape(ma_res_phases)[0]
+    #     res_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
+    #     for j in range(N):
+    #         res_phases[j] = xp.asarray(ma_res_phases[j+bootStrapIts].data[~ma_res_phases[j+bootStrapIts].mask])
+    #     res_rms = xp.sqrt(xp.mean(res_phases**2,axis=0))
+        
+
+    
+
+    # def get_ristretto_contrast(self, residual_phases_in_rad, lambdaInM,
+    #                            oversampling:int=12, smfRadiusInMAS=18, #star_flux=1e+4,
+    #                            use_avg_field:bool=False, normalize_to_perfect_psf:bool=False):
+    #     N = residual_phases_in_rad.shape[0]
+    #     res_phases = xp.array(residual_phases_in_rad)
+    #     padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
+    #     pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
+    #     field_amp = 1-pup_mask
+    #     if normalize_to_perfect_psf:
+    #         psf = abs(xp.fft.fftshift(xp.fft.fft2(field_amp)))**2
+    #         tot_psf = xp.sum(psf)
+    #     lambdaOverD = lambdaInM/self.pupilSizeInM
+    #     smfRadInPix = smfRadiusInMAS/(lambdaOverD*180/xp.pi*1000*3600)*oversampling
+    #     angles = xp.arange(6)*2*np.pi/6
+    #     x_smf = xp.hstack([0,xp.cos(angles) * smfRadInPix * 2])
+    #     y_smf = xp.hstack([0,xp.sin(angles) * smfRadInPix * 2])
+    #     # X,Y = image_grid(pup_mask.shape,recenter=True)
+    #     # fiber_ef = lambda xc,yc,sigma: xp.exp(-((X-xc)**2+(Y-yc)**2)/2/sigma**2)
+    #     # sigma_smf = smfRadInPix*0.7#/np.sqrt(np.log(2**8))
+    #     fiber_coupling = xp.zeros([7,N])
+    #     apothem = smfRadInPix-0.6
+    #     hex_mask = xp.zeros([7,pup_mask.shape[0],pup_mask.shape[1]],dtype=bool)
+    #     for h in range(7):
+    #         def is_inside_hexagon(i, j):
+    #             x = xp.asnumpy(j - pup_mask.shape[0]/2 - float(x_smf[h]))
+    #             y = xp.asnumpy(i - pup_mask.shape[1]/2 - float(y_smf[h]))
+    #             c1 = np.abs(x) < float(apothem)
+    #             c2 = np.abs(x/2 + y*np.sqrt(3)/2) < float(apothem)
+    #             c3 = np.abs(x/2 - y*np.sqrt(3)/2) < float(apothem)
+    #             return c1 & c2 & c3
+    #         hex = np.fromfunction(is_inside_hexagon, pup_mask.shape)
+    #         hex_mask[h,:,:] = xp.asarray(hex,dtype=bool)    
+    #     for k,res_phase in enumerate(res_phases):
+    #         print(f'\rComputing contrast: processing frame {k+1:1.0f}/{N:1.0f}',end='\r',flush=True)
+    #         phase_2d = reshape_on_mask(res_phase, pup_mask)
+    #         if use_avg_field:
+    #             input_field = field_amp * xp.exp(1j*phase_2d, dtype=self.cdtype)
+    #             avg_electric_field = xp.sum(input_field * field_amp) / xp.sum(field_amp)
+    #             perfect_coro_field = input_field - avg_electric_field * field_amp
+    #         else:
+    #             phase_var = xp.sum((res_phase-xp.mean(res_phase))**2)/len(res_phase)
+    #             perfect_coro_field = field_amp * (xp.sqrt(xp.exp(-phase_var))-xp.exp(1j*phase_2d, dtype=self.cdtype))
+    #         coro_focal_plane_ef = xp.fft.fftshift(xp.fft.fft2(perfect_coro_field))
+    #         I = xp.abs(coro_focal_plane_ef)**2
+    #         if normalize_to_perfect_psf is False:
+    #             input_field = field_amp * xp.exp(1j*phase_2d)
+    #             psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
+    #             tot_psf = xp.sum(psf)
+    #         I /= tot_psf
+    #         for j in range(7):
+    #             # fiberj_ef = fiber_ef(x_smf[j],y_smf[j],sigma_smf)
+    #             # fiberj_ef /= xp.max(fiberj_ef) # normalize to 1
+    #             # fiber_coupling[j,k] = xp.abs(xp.sum(fiberj_ef*coro_focal_plane_ef*hex_mask[j]))**2/(xp.sum(xp.abs(fiberj_ef)**2*hex_mask[j])*xp.sum(xp.abs(coro_focal_plane_ef)**2*hex_mask[j]))
+    #             fiber_coupling[j,k] = xp.sum(I*hex_mask[j,:,:])
+    #     # import matplotlib.pyplot as plt
+    #     # plt.figure()
+    #     # showZoomCenter(psf*xp.sum(hex_mask[1:,:,:],axis=0), 1/oversampling, cmap='inferno', xlabel=r'$\lambda/D$'
+    #     #     , ylabel=r'$\lambda/D$') 
+    #     return fiber_coupling
 
 
     # def measure_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM, save_prefix:str=''):

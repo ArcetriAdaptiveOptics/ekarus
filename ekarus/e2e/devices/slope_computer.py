@@ -158,7 +158,9 @@ class SlopeComputer():
                 except FileNotFoundError:
                     camera_shape = self._detector.detector_shape
                     roiSizeInPix = max(camera_shape)/self._wfs.oversampling
-                    roi_mask = get_circular_mask(camera_shape, mask_radius=roiSizeInPix/2)
+                    centerObscPixelSize = kwargs['centerObscurationInPixels']
+                    roi_mask = xp.logical_or(get_circular_mask(camera_shape, mask_radius=roiSizeInPix//2-0.5),
+                                              ~get_circular_mask(camera_shape, mask_radius=xp.floor(centerObscPixelSize/2+1.0)))
                     self._roi_masks = roi_mask
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8))
             case _:
@@ -181,7 +183,8 @@ class SlopeComputer():
             case '3PWFS':
                 slopes = self._compute_3pyr_signal(detector_image)
             case 'ZWFS':
-                slopes = detector_image[~self._roi_masks]
+                signal = detector_image[~self._roi_masks]
+                slopes = signal/xp.mean(signal)
             case _:
                 raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
             
