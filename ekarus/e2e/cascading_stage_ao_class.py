@@ -253,7 +253,7 @@ class CascadingAO(HighLevelAO):
             , cmap='inferno', xlabel=r'$\lambda/D$', vmin=-10
             , ylabel=r'$\lambda/D$') 
         plt.subplot(2,4,2)
-        myimshow(det1_frames[frame_id], title = 'Detector 1 frame', shrink=0.8, cmap='reds')
+        myimshow(det1_frames[frame_id], title = 'Detector 1 frame', shrink=0.8, cmap='Reds')
         plt.subplot(2,4,4)
         self.dm1.plot_position(dm1_cmds[frame_id])
         plt.title('DM1 command [m]')
@@ -264,7 +264,7 @@ class CascadingAO(HighLevelAO):
             , cmap='inferno', xlabel=r'$\lambda/D$', vmin=-10
             , ylabel=r'$\lambda/D$') 
         plt.subplot(2,4,6)
-        myimshow(det2_frames[frame_id], title = 'Detector 2 frame', shrink=0.8, cmap='blues')
+        myimshow(det2_frames[frame_id], title = 'Detector 2 frame', shrink=0.8, cmap='Blues')
         plt.subplot(2,4,8)
         self.dm2.plot_position(dm2_cmds[frame_id])
         plt.title('DM2 command [m]')
@@ -291,10 +291,10 @@ class CascadingAO(HighLevelAO):
         rec2_modes_rms = xp.sqrt(xp.mean(rec2_modes[-N-1:-1,:]**2,axis=0))
 
         plt.figure()
-        plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
-        plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(res1_mode_rms)*1e+9,label='1st stage residual (true)')
+        plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(atmo_mode_rms)*1e+9,'--.',label='turbulence')
+        plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(res1_mode_rms)*1e+9,'--.',label='1st stage residual (true)')
         plt.plot(xp.asnumpy(xp.arange(self.sc1.nModes))+1,xp.asnumpy(rec1_modes_rms)*1e+9,'--',label='1st stage residual (reconstructed)')
-        plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(res2_mode_rms)*1e+9,label='2nd stage residual (true)')
+        plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(res2_mode_rms)*1e+9,'--.',label='2nd stage residual (true)')
         plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes))+1,xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='2nd stage residual (reconstructed)')
         plt.legend()
         plt.xlabel('mode #')
@@ -341,46 +341,46 @@ class CascadingAO(HighLevelAO):
         # plt.grid()
         # plt.xscale('log')
 
-    def plot_ristretto_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=10):
-        """
-        Plots the telemetry data for a specific iteration/frame.
+    # def plot_ristretto_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=10):
+    #     """
+    #     Plots the telemetry data for a specific iteration/frame.
         
-        Parameters
-        ----------
-        lambdaRef : float
-            The reference wavelength in meters.
-        frame_id : list, optional
-            The frames over which the std is computed, by default, the bottom half.
-        save_prefix : str, optional
-            The prefix used when saving telemetry data, by default None.
-        """
-        if save_prefix is None:
-            save_prefix = self.save_prefix
+    #     Parameters
+    #     ----------
+    #     lambdaRef : float
+    #         The reference wavelength in meters.
+    #     frame_id : list, optional
+    #         The frames over which the std is computed, by default, the bottom half.
+    #     save_prefix : str, optional
+    #         The prefix used when saving telemetry data, by default None.
+    #     """
+    #     if save_prefix is None:
+    #         save_prefix = self.save_prefix
 
-        if frame_ids is None:
-            frame_ids = xp.arange(self.Nits)
-        else:
-            frame_ids = xp.array(frame_ids)
-        frame_ids = xp.asnumpy(frame_ids)
+    #     if frame_ids is None:
+    #         frame_ids = xp.arange(self.Nits)
+    #     else:
+    #         frame_ids = xp.array(frame_ids)
+    #     frame_ids = xp.asnumpy(frame_ids)
 
-        res2_phases, = self.load_telemetry_data(save_prefix=save_prefix, data_keys=['res2_phases'])
+    #     res2_phases, = self.load_telemetry_data(save_prefix=save_prefix, data_keys=['res2_phases'])
 
-        N = len(frame_ids)
-        res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
-        for j in range(N):
-            res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+    #     N = len(frame_ids)
+    #     res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+    #     for j in range(N):
+    #         res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
 
-        smf2_couplings=self.get_ristretto_contrast(res2_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling,smfRadiusInMAS=19)
+    #     smf2_couplings=self.get_ristretto_contrast(res2_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling,smfRadiusInMAS=19)
 
-        plt.figure()
-        plt.plot(xp.asnumpy(smf2_couplings[1:].T),'--')
-        plt.grid()
-        plt.yscale('log')
-        plt.xlabel('Iteration')
-        plt.ylabel('Normalized flux')
-        plt.title('Post-coronographic star flux\nin the 6 side spaxels\n(normalized to non-coronographic star flux)')
+    #     plt.figure()
+    #     plt.plot(xp.asnumpy(smf2_couplings[1:].T),'--')
+    #     plt.grid()
+    #     plt.yscale('log')
+    #     plt.xlabel('Iteration')
+    #     plt.ylabel('Normalized flux')
+    #     plt.title('Post-coronographic star flux\nin the 6 side spaxels\n(normalized to non-coronographic star flux)')
 
-        return smf2_couplings
+    #     return smf2_couplings
 
     
     def show_psf(self, frame_id:int=-1, save_prefix:str=None, oversampling:int=12):
@@ -452,30 +452,45 @@ class CascadingAO(HighLevelAO):
         N = len(frame_ids)
         res1_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
         res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        psf_rms = None
         for j in range(N):
             res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
-            res1_phases_in_rad[j] = xp.asarray(res1_phases[frame_ids[j]].data[~res1_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+            res1_phases_in_rad[j] = xp.asarray(res1_phases[frame_ids[j]].data[~res1_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))            
+            psf, _ = self._psf_from_frame(xp.array(res2_phases[frame_ids[j]]), lambdaRef, oversampling=oversampling)
+            if psf_rms is None:
+                psf_rms = psf**2
+            else:
+                psf_rms += psf**2
+        psf_rms = xp.sqrt(psf_rms/2)
+        psf_rms /= xp.max(psf_rms)
         _,rms_psf1,pix_dist=self.get_contrast(res1_phases_in_rad,oversampling=oversampling)
         coro_psf2,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)
 
+        plt.figure()
+        showZoomCenter(psf_rms, 1/oversampling, shrink=0.8,
+        title = f'PSF @ {lambdaRef*1e+9:1.0f}nm', ext=0.54,
+        cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', 
+        vmax=0, vmin=-10) 
 
         plt.figure()
         showZoomCenter(coro_psf2, 1/oversampling, shrink=0.8,
-        title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}[nm]'
-            , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
+        title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}nm', ext=0.54,
+        cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', 
+        vmax=0, vmin=-10) 
 
         # lambdaOverD2arcsec = lambdaRef/self.pupilSizeInM*180/xp.pi*3600 
         # arcsecs = pix_dist*lambdaOverD2arcsec
-        _,ax = plt.subplots()
-        ax.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf1),label='First stage')
-        ax.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf2),label='Second stage')
-        ax.legend()
-        ax.grid()
-        ax.set_yscale('log')
-        ax.set_xlabel(r'$\lambda/D$')
-        ax.set_xlim([0,30])
-        ax.set_ylim([1e-10,1e-2])
-        ax.set_title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
+        # _,ax = plt.subplots()
+        plt.figure()
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf1),label='First stage')
+        plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf2),label='Second stage')
+        plt.legend()
+        plt.grid()
+        plt.yscale('log')
+        plt.xlabel(r'$\lambda/D$')
+        plt.xlim([0,30])
+        plt.ylim([1e-10,1e-2])
+        plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
         # ax2 = ax.twiny()
         # ax2.set_xlim(ax.get_xlim())
         # ax2.set_xticks(ax.get_xticks())

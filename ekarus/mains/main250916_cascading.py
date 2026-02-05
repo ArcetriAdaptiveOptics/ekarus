@@ -13,7 +13,7 @@ from numpy.ma import masked_array
 
 def main(tn:str='example_cascading_stage', 
          atmo_tn='nine_layers_25mOS',
-         lambdaRef=730e-9, 
+         lambdaRef=700e-9, 
          show:bool=False, 
          show_contrast:bool=True,
          optimize_gain:bool=False, 

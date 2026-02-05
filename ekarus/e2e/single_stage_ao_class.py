@@ -242,8 +242,8 @@ class SingleStageAO(HighLevelAO):
         x = xp.asnumpy(xp.arange(self.KL.shape[0]))+1
 
         plt.figure()
-        plt.plot(x,xp.asnumpy(atmo_mode_rms)*1e+9,label='turbulence')
-        plt.plot(x,xp.asnumpy(res_mode_rms)*1e+9,label='residual (true)')
+        plt.plot(x,xp.asnumpy(atmo_mode_rms)*1e+9,'--.',label='turbulence')
+        plt.plot(x,xp.asnumpy(res_mode_rms)*1e+9,'--.',label='residual (true)')
         plt.plot(x[:self.sc.nModes],xp.asnumpy(rec_modes_rms)*1e+9,'--',label='residual (measured)')
         plt.legend()
         plt.xlabel('mode index')
@@ -310,20 +310,34 @@ class SingleStageAO(HighLevelAO):
             frame_ids = xp.array(frame_ids)
         frame_ids = xp.asnumpy(frame_ids)
 
-        data_load = self.load_telemetry_data(data_keys=['residual_phases'], save_prefix=save_prefix)
-        ma_res_phases = data_load[0]
+        ma_res_phases, = self.load_telemetry_data(data_keys=['residual_phases'], save_prefix=save_prefix)
 
         N = len(frame_ids)
         res_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        psf_rms = None
         for j in range(N):
-            res_phases_in_rad[j] = xp.asarray(ma_res_phases[frame_ids[j]].data[~ma_res_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+            res_phase_j = xp.asarray(ma_res_phases[frame_ids[j]].data[~ma_res_phases[frame_ids[j]].mask])
+            res_phases_in_rad[j] = res_phase_j*(2*xp.pi/lambdaRef)            
+            psf, _ = self._psf_from_frame(xp.asarray(ma_res_phases[frame_ids[j]]), lambdaRef, oversampling=oversampling)
+            if psf_rms is None:
+                psf_rms = psf**2
+            else:
+                psf_rms += psf**2
+        psf_rms = xp.sqrt(psf_rms/2)
+        psf_rms /= xp.max(psf_rms)
         coro_psf,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling,one_sided_contrast=one_sided_contrast)
 
         if plot:
             plt.figure()
-            showZoomCenter(coro_psf, 1/oversampling, shrink=0.8,
+            showZoomCenter(psf_rms, 1/oversampling, shrink=0.8, ext=0.54,
+            title = f'PSF @ {lambdaRef*1e+9:1.0f}[nm]'
+                , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', 
+                vmax=0, vmin=-10) 
+            plt.figure()
+            showZoomCenter(coro_psf, 1/oversampling, shrink=0.8, ext=0.54,
             title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}[nm]'
-                , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
+                , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', 
+                vmax=0, vmin=-10) 
 
             plt.figure()
             plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf),'--')
@@ -332,7 +346,7 @@ class SingleStageAO(HighLevelAO):
             plt.xlabel(r'$\lambda/D$')
             plt.xlim([0,30])
             plt.ylim([1e-10,1e-2])
-            plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
+            plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f}nm\n(assuming a perfect coronograph)')
 
         return rms_psf, pix_dist
     

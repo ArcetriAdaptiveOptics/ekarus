@@ -62,7 +62,7 @@ class WooferTweeterAO(HighLevelAO):
         return ph_per_subap1, ph_per_subap2
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None, bootStrapIts:int=0):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None):
         """
         Main loop for the single stage AO system.
 
@@ -101,6 +101,9 @@ class WooferTweeterAO(HighLevelAO):
             modes1 = xp.zeros([self.sc1.Rec.shape[0]], dtype=self.dtype)
             modes2 = xp.zeros([self.sc2.Rec.shape[0]], dtype=self.dtype)
 
+        bootstrap_gains = self.sc2.modalGains.copy()
+        self.sc2.modalGains *= 0
+
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)
             sim_time = self.dt * i
@@ -112,15 +115,16 @@ class WooferTweeterAO(HighLevelAO):
             if i >= self.sc1.delay:
                 dm1_surf = IF @ dm1_cmds[i - self.sc1.delay, :]
 
-            if i >= self.sc2.delay and i > bootStrapIts:
+            if i >= self.sc2.delay:
                 dm2_surf = IF @ dm2_cmds[i - self.sc2.delay, :]
 
-            if i == bootStrapIts:
+            if i == self.bootStrapIts:
                 self.sc1.nModes -= self.sc2.nModes
-                _, IM1 = self.compute_reconstructor(self.sc1, self.KL, lambdaInM=self.wfs1.lambdaInM, ampsInM=5e-9, save_prefix='wfs1_')
-                self.sc1.load_reconstructor(IM1[:,self.sc2.nModes:],self.sc1.m2c[:,self.sc2.nModes:])
-                self.sc1.modalGains = self.sc1.modalGains[self.sc2.nModes:]
-                # self.sc1.modalGains[:self.sc2.nModes] *= 0
+                # _, IM = self.compute_reconstructor(self.sc1, self.KL, lambdaInM=self.wfs1.lambdaInM, ampsInM=5e-9)
+                # self.sc1.load_reconstructor(IM[:,self.sc2.nModes:],self.sc1.m2c[:,self.sc2.nModes:])
+                # self.sc1.modalGains = self.sc1.modalGains[self.sc2.nModes:]
+                self.sc1.modalGains[:self.sc2.nModes] *= 0
+                self.sc2.modalGains = bootstrap_gains.copy()
 
             residual_phase = input_phase - dm1_surf[self.dm.visible_pix_ids] - dm2_surf[self.dm.visible_pix_ids]
 
@@ -139,7 +143,7 @@ class WooferTweeterAO(HighLevelAO):
                 dm2_cmds[i,:] = self.sc2.iir_filter(int2_cmds[:i+1,:], dm2_cmds[:i+1,:])
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
-            dm2_cmds[i,:] -= xp.mean(dm2_cmds[i,:])
+            # dm2_cmds[i,:] -= xp.mean(dm2_cmds[i,:])
 
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
@@ -148,10 +152,10 @@ class WooferTweeterAO(HighLevelAO):
                 input_phases[i, :] = input_phase          
                 residual_phases[i, :] = residual_phase
                 ccd1_images[i, :, :] = self.ccd1.last_frame
-                if i >= bootStrapIts:
-                    rec1_modes[i, self.sc2.nModes:] = modes1
-                else:
-                    rec1_modes[i, :] = modes1
+                # if i >= bootStrapIts:
+                #     rec1_modes[i, self.sc2.nModes:] = modes1
+                # else:
+                rec1_modes[i, :] = modes1
 
                 ccd2_images[i, :, :] = self.ccd2.last_frame
                 rec2_modes[i, :] = modes2
@@ -246,14 +250,14 @@ class WooferTweeterAO(HighLevelAO):
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,4,6)
-        myimshow(det1_frames[frame_id], title = 'HO detector frame', shrink=0.8, cmap='Blues')
+        myimshow(det1_frames[frame_id], title = 'HO detector frame', shrink=0.8, cmap='Reds')
         plt.subplot(2,4,8)
         self.dm.plot_position(dm1_cmds[frame_id])
         plt.title('HODM command [m]')
         plt.axis('off')
 
         nModes = int(xp.minimum(self.sc1.nModes+self.sc2.nModes,self.KL.shape[0]))
-        N = int(xp.maximum(self.Nits-100,self.Nits/2))
+        N = int(xp.maximum(self.Nits-100-self.bootStrapIts,self.Nits/2))
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res2_modes = xp.zeros([N,nModes])
         res2_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
@@ -339,14 +343,27 @@ class WooferTweeterAO(HighLevelAO):
 
         N = len(frame_ids)
         res_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+        psf_rms = None
         for j in range(N):
             res_phases_in_rad[j] = xp.asarray(res_phases[frame_ids[j]].data[~res_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+            psf, _ = self._psf_from_frame(xp.array(res_phases[frame_ids[j]]), lambdaRef, oversampling=oversampling)
+            if psf_rms is None:
+                psf_rms = psf**2
+            else:
+                psf_rms += psf**2
+        psf_rms = xp.sqrt(psf_rms/2)
+        psf_rms /= xp.max(psf_rms)
         coro_psf,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling)
 
         plt.figure()
-        showZoomCenter(coro_psf, 1/oversampling, shrink=0.8,
-        title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}[nm]'
-            , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmin=-10) 
+        showZoomCenter(psf_rms, 1/oversampling, shrink=1.0, ext=0.54,
+        title = f'PSF @ {lambdaRef*1e+9:1.0f}nm', 
+        cmap='inferno', xlabel=r'$\lambda/D$',
+        ylabel=r'$\lambda/D$', vmax=0, vmin=-10) 
+        plt.figure()
+        showZoomCenter(coro_psf, 1/oversampling, shrink=1.0, ext=0.54,
+        title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}nm', 
+        cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', vmax=0, vmin=-10) 
 
         plt.figure()
         plt.plot(xp.asnumpy(pix_dist),xp.asnumpy(rms_psf))
@@ -354,58 +371,59 @@ class WooferTweeterAO(HighLevelAO):
         plt.yscale('log')
         plt.xlabel(r'$\lambda/D$')
         plt.xlim([0,30])
+        plt.ylim([1e-8,1e-2])
         plt.title(f'Contrast @ {lambdaRef*1e+9:1.0f} nm\n(assuming a perfect coronograph)')
 
         return rms_psf, pix_dist
     
 
-    def plot_ristretto_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=10):
-        """
-        Plots the telemetry data for a specific iteration/frame.
+    # def plot_ristretto_contrast(self, lambdaRef, frame_ids:list=None, save_prefix:str='',oversampling:int=10):
+    #     """
+    #     Plots the telemetry data for a specific iteration/frame.
         
-        Parameters
-        ----------
-        lambdaRef : float
-            The reference wavelength in meters.
-        frame_id : list, optional
-            The frames over which the std is computed, by default, the bottom half.
-        save_prefix : str, optional
-            The prefix used when saving telemetry data, by default None.
-        """
-        if save_prefix is None:
-            save_prefix = self.save_prefix
+    #     Parameters
+    #     ----------
+    #     lambdaRef : float
+    #         The reference wavelength in meters.
+    #     frame_id : list, optional
+    #         The frames over which the std is computed, by default, the bottom half.
+    #     save_prefix : str, optional
+    #         The prefix used when saving telemetry data, by default None.
+    #     """
+    #     if save_prefix is None:
+    #         save_prefix = self.save_prefix
 
-        if frame_ids is None:
-            frame_ids = xp.arange(self.Nits)
-        else:
-            frame_ids = xp.array(frame_ids)
-        frame_ids = xp.asnumpy(frame_ids)
+    #     if frame_ids is None:
+    #         frame_ids = xp.arange(self.Nits)
+    #     else:
+    #         frame_ids = xp.array(frame_ids)
+    #     frame_ids = xp.asnumpy(frame_ids)
 
-        res2_phases, = self.load_telemetry_data(save_prefix=save_prefix, data_keys=['res_phases'])
+    #     res2_phases, = self.load_telemetry_data(save_prefix=save_prefix, data_keys=['res_phases'])
 
-        N = len(frame_ids)
-        # res1_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
-        res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
-        for j in range(N):
-            res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
-            # res1_phases_in_rad[j] = xp.asarray(res1_phases[frame_ids[j]].data[~res1_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+    #     N = len(frame_ids)
+    #     # res1_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+    #     res2_phases_in_rad = xp.zeros([N,int(xp.sum(1-self.cmask))])
+    #     for j in range(N):
+    #         res2_phases_in_rad[j] = xp.asarray(res2_phases[frame_ids[j]].data[~res2_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
+    #         # res1_phases_in_rad[j] = xp.asarray(res1_phases[frame_ids[j]].data[~res1_phases[frame_ids[j]].mask]*(2*xp.pi/lambdaRef))
 
-        # smf1_couplings=self.get_ristretto_contrast(res1_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling)
-        smf2_couplings=self.get_ristretto_contrast(res2_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling,smfRadiusInMAS=19)
+    #     # smf1_couplings=self.get_ristretto_contrast(res1_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling)
+    #     smf2_couplings=self.get_ristretto_contrast(res2_phases_in_rad,lambdaInM=lambdaRef,oversampling=oversampling,smfRadiusInMAS=19)
 
-        # plt.figure()
-        # plt.plot(xp.asnumpy(smf1_couplings.T))
-        # plt.grid()
-        # plt.yscale('log')        
-        plt.figure()
-        plt.plot(xp.asnumpy(smf2_couplings[1:].T),'--')
-        plt.grid()
-        plt.yscale('log')
-        plt.xlabel('Iteration')
-        plt.ylabel('Normalized flux')
-        plt.title('Post-coronographic star flux\nin the 6 side spaxels\n(normalized to non-coronographic star flux)')
+    #     # plt.figure()
+    #     # plt.plot(xp.asnumpy(smf1_couplings.T))
+    #     # plt.grid()
+    #     # plt.yscale('log')        
+    #     plt.figure()
+    #     plt.plot(xp.asnumpy(smf2_couplings[1:].T),'--')
+    #     plt.grid()
+    #     plt.yscale('log')
+    #     plt.xlabel('Iteration')
+    #     plt.ylabel('Normalized flux')
+    #     plt.title('Post-coronographic star flux\nin the 6 side spaxels\n(normalized to non-coronographic star flux)')
 
-        return smf2_couplings
+    #     return smf2_couplings
 
     # def __init__(self, tn, xp=np):
 

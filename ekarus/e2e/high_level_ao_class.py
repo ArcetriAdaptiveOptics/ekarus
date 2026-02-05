@@ -319,7 +319,7 @@ class HighLevelAO():
 
     def get_contrast(self, residual_phases_in_rad, oversampling:int=10,
                      use_avg_field:bool=False, normalize_to_perfect_psf:bool=True,
-                     one_sided_contrast:bool=False):
+                     one_sided_contrast:bool=False, std_contrast:bool=False):
         """
         Computes the PSF and contrast from the residual phase
         using the formula for a perfect idealized coronograph.
@@ -328,9 +328,11 @@ class HighLevelAO():
         res_phases = xp.array(residual_phases_in_rad)
         padding_len = int(self.cmask.shape[0]*(oversampling-1)/2)
         pup_mask = xp.pad(self.cmask, padding_len, mode='constant', constant_values=1)
-        psf_stack = []
-        # psf_stack = xp.zeros([N,self.cmask.shape[0]*oversampling,self.cmask.shape[1]*oversampling])
-        field_amp = 1-pup_mask
+        field_amp = (1-pup_mask).astype(self.dtype)
+        if std_contrast is True:
+            psf_stack = []
+        else:
+            psf_stack = xp.zeros_like(field_amp,dtype=self.dtype)
         if normalize_to_perfect_psf:
             psf = abs(xp.fft.fftshift(xp.fft.fft2(field_amp)))**2
             max_psf = xp.max(psf)
@@ -351,17 +353,22 @@ class HighLevelAO():
                 psf = abs(xp.fft.fftshift(xp.fft.fft2(input_field)))**2
                 max_psf = xp.max(psf)
             coro_psf /= max_psf
-            psf_stack.append(coro_psf)
-        psf_stack = xp.array(psf_stack)
-        psf_std = xp.std(psf_stack,axis=0)
-        H,W = psf_std.shape
-        if one_sided_contrast:
-            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_std[:,W/2:]),H/2,0)
+            if std_contrast is True:
+                psf_stack.append(coro_psf)
+            else:
+                psf_stack += coro_psf**2
+        if std_contrast is True:
+            psf_stack = xp.array(psf_stack)
+            psf_contrast = xp.std(psf_stack,axis=0)
         else:
-            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_std),H/2,W/2)
-        psf_rms = xp.sqrt(xp.mean(psf_stack**2,axis=0))
+            psf_contrast = xp.sqrt(psf_stack/N)
+        H,W = psf_contrast.shape
+        if one_sided_contrast:
+            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_contrast[:,W/2:]),H/2,0)
+        else:
+            rad_profile,dist = computeRadialProfile(xp.asnumpy(psf_contrast),H/2,W/2)
         pix_dist = dist/oversampling
-        return xp.array(psf_rms), xp.array(rad_profile), xp.array(pix_dist)
+        return xp.array(psf_contrast), xp.array(rad_profile), xp.array(pix_dist)
 
 
     def _read_loop_parameters(self):

@@ -180,12 +180,12 @@ def imageShow(image2d, pixelSize=1, title='', xlabel='', ylabel='', zlabel='', s
     cbar= plt.colorbar(shrink=shrink)
     cbar.ax.set_ylabel(zlabel)
 
-def showZoomCenter(image, pixelSize, **kwargs):
+def showZoomCenter(image, pixelSize, ext=0.2, **kwargs):
     '''show log(image) zoomed around center'''    
     if hasattr(image,'get'):
         image = image.get()
     imageHalfSizeInPoints= image.shape[0]/2
-    roi= [int(imageHalfSizeInPoints*0.8), int(imageHalfSizeInPoints*1.2)]
+    roi= [int(imageHalfSizeInPoints*(1-ext)), int(imageHalfSizeInPoints*(1+ext))]
     imageZoomedLog= np.log(image[roi[0]: roi[1], roi[0]:roi[1]])
     imageShow(imageZoomedLog, pixelSize=pixelSize, **kwargs)
 
