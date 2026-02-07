@@ -27,6 +27,8 @@ class SlopeComputer():
         self._wfs = wfs
         self._detector = detector
 
+        self.lambdaInM = wfs.lambdaInM
+
         try:
             (
                 self.dt,

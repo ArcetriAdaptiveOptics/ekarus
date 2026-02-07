@@ -1,11 +1,12 @@
 import os
 import xupy as xp
 import numpy as np
+import datetime
 
 from ekarus.e2e.utils import my_fits_package as myfits
 from ekarus.analytical.turbulence_layers import TurbulenceLayers
 from ekarus.e2e.utils.read_configuration import ConfigReader
-from ekarus.e2e.utils.root import resultspath, calibpath, atmopath
+from ekarus.e2e.utils.root import resultspath, calibpath, atmopath, vibrpath
 
 from ekarus.e2e.utils.image_utils import get_circular_mask, reshape_on_mask, remap_on_new_mask#, showZoomCenter
 from ekarus.analytical.kl_modes import make_modal_base_from_ifs_fft
@@ -27,6 +28,7 @@ class HighLevelAO():
         self.dtype = xp.float
         self.cdtype = xp.cfloat
         self.atmo_pars = None
+        self.tt_vibrations = None
 
         self._config = ConfigReader(tn)
         self._tn = tn
@@ -34,6 +36,18 @@ class HighLevelAO():
         self._define_pupil_mask()
         self._read_loop_parameters()
 
+    @staticmethod
+    def _generate_tn():
+        tt = datetime.datetime.now()
+        return tt.strftime('%y%m%d_%H%m%S')
+    
+    def save_data(self,data,filename:str='data',overwrite:bool=True):
+        tn = self._generate_tn()
+        dirpath = os.path.join(resultspath,tn)
+        if not os.path.exists(dirpath):
+            os.mkdir(dirpath)
+        filepath = os.path.join(dirpath,filename)
+        myfits.save_fits(filepath,data,overwrite=overwrite)
 
     def get_photons_per_second(self, starMagnitude: float, B0: float = 1e+10) -> float:
         """ Compute the number of photons collected per second. """
@@ -231,6 +245,139 @@ class HighLevelAO():
         self.layers._L0 = L0
 
 
+    def initialize_vibrations(self, tn: str = None,
+                              seed: int = None, scale: float = 1.0):
+        """
+        Initialize tip-tilt vibration time-series from a one-sided PSD.
+
+        Parameters
+        ----------
+        psd : array-like or tuple, optional
+            If array-like and shape (N,2) it must contain [freqs, PSD_values].
+            If 1D array provided it is interpreted as PSD values sampled on
+            an internal frequency grid and will be interpolated to the simulation
+            frequency grid. If None and `psd_fits_path` provided, PSD will be
+            read from the FITS file.
+        psd_fits_path : str, optional
+            Path to a FITS file containing the PSD (two columns: freq, PSD).
+        seed : int, optional
+            RNG seed for repeatability.
+        scale : float, optional
+            Linear scale factor to apply to the generated time-series.
+
+        The generated time-series is stored in `self.tt_vibrations` as an
+        array of shape (Nits, 2) (tip, tilt) in arbitrary units consistent
+        with the input PSD. Use `get_vibrations_at_time(t)` to obtain the
+        tip-tilt phase map at a given time.
+        """
+        if tn is not None:
+            self.vibro_tn = tn
+        else:
+            self.vibro_tn = self._tn
+        vibro_dir = os.path.join(vibrpath,self.vibro_tn)
+        if not os.path.exists(vibro_dir):
+            os.mkdir(vibro_dir)
+        vibro_path = os.path.join(vibro_dir,'tt_vibration_psd.fits')
+
+        # Prepare simulation parameters
+        N = int(self.Nits)
+        dt = float(self.dt)
+        df = 1.0 / (N * dt)
+        # frequency grid for interpolation (one-sided, 0..Nyquist)
+        pos_freqs = np.arange(0, N//2 + 1) * df
+
+        # read or parse PSD input
+        try:
+            arr = xp.asnumpy(myfits.read_fits(vibro_path))
+            if arr.ndim == 2:
+                f_in = arr[0]
+                S_in = arr[1]
+                S_pos = np.interp(pos_freqs, f_in, S_in, left=S_in[0], right=S_in[-1])
+            elif arr.ndim == 1:
+                # interpret as PSD samples evenly spaced from 0..Nyquist
+                f_in = np.linspace(0, pos_freqs[-1], len(arr))
+                S_pos = np.interp(pos_freqs, f_in, arr, left=arr[0], right=arr[-1])
+            else:
+                raise ValueError('Unrecognized PSD format')
+        except FileNotFoundError:
+            print(f'File {vibro_path} not found, using white noise')
+            S_pos = np.ones_like(pos_freqs)
+            S_pos *= 1e-6/np.trapz(S_pos,pos_freqs)
+
+        # Build complex spectrum consistent with one-sided PSD S_pos
+        rng = np.random.default_rng(seed)
+        spec = np.zeros(N, dtype=complex)
+
+        # DC component (real)
+        spec[0] = rng.normal(loc=0.0, scale=np.sqrt(S_pos[0] * N * df))
+        # positive freqs 1..N/2-1
+        for k in range(1, N//2):
+            Sfk = S_pos[k]
+            amp = np.sqrt(0.5 * Sfk * N * df)
+            phi = rng.uniform(0, 2 * np.pi)
+            spec[k] = amp * (np.cos(phi) + 1j * np.sin(phi))
+            spec[-k] = np.conj(spec[k])
+        # Nyquist (if even N) should be real
+        if N % 2 == 0:
+            k = N//2
+            spec[k] = rng.normal(loc=0.0, scale=np.sqrt(S_pos[k] * N * df))
+
+        # inverse FFT -> time series (real)
+        tt = np.fft.ifft(spec).real
+        # produce two independent channels with same PSD
+        rng2 = np.random.default_rng(None if seed is None else seed + 1)
+        spec2 = np.zeros(N, dtype=complex)
+        spec2[0] = rng2.normal(loc=0.0, scale=np.sqrt(S_pos[0] * N * df))
+        for k in range(1, N//2):
+            Sfk = S_pos[k]
+            amp = np.sqrt(0.5 * Sfk * N * df)
+            phi = rng2.uniform(0, 2 * np.pi)
+            spec2[k] = amp * (np.cos(phi) + 1j * np.sin(phi))
+            spec2[-k] = np.conj(spec2[k])
+        if N % 2 == 0:
+            k = N//2
+            spec2[k] = rng2.normal(loc=0.0, scale=np.sqrt(S_pos[k] * N * df))
+        tt2 = np.fft.ifft(spec2).real
+
+        timeseries = np.vstack((tt, tt2)).T * float(scale)
+
+        # store as xp array for consistency with rest of class
+        self.tt_vibrations = xp.asarray(timeseries, dtype=self.dtype)
+
+
+    def get_vibrations_at_time(self, time: float):
+        """
+        Return the tip-tilt phase map at a given time.
+
+        Parameters
+        ----------
+        time : float
+            Time in seconds for which to retrieve the vibration-induced phase.
+
+        Returns
+        -------
+        phase_map : array
+            A 2D phase map (on the pupil grid) in the same units as turbulence
+            phase screens. The tip and tilt are converted to a linear phase
+            slope across the pupil mask.
+        """
+        # map time to nearest sample
+        dt = float(self.dt)
+        idx = int(np.round(time / dt)) % self.tt_vibrations.shape[0]
+        tip, tilt = xp.asnumpy(self.tt_vibrations[idx])
+
+        # Create linear phase map across pupil: phase = kx*x + ky*y
+        Npix = self.pupilSizeInPixels
+        yv, xv = np.mgrid[0:Npix, 0:Npix]
+        cx = (Npix - 1) / 2.0
+        cy = (Npix - 1) / 2.0
+        x = (xv - cx) / self.pixelScale  # meters from center
+        y = (yv - cy) / self.pixelScale
+        phase_map = tip * x + tilt * y
+        phase_map = phase_map[~xp.asnumpy(self.cmask)]
+        return xp.asarray(phase_map, dtype=self.dtype)
+
+
     def perform_loop_iteration(self, phase, slope_computer, starMagnitude:float=None, slaving=None):
         """
         Performs a single iteration of the AO loop.
@@ -250,7 +397,7 @@ class HighLevelAO():
         modes : xp.array
             The reconstructed modes in meters.
         """
-        lambda_ref = slope_computer._wfs.lambdaInM
+        lambda_ref = slope_computer.lambdaInM
         m2rad = 2*xp.pi/lambda_ref
         lambdaOverD = lambda_ref/self.pupilSizeInM
         Nphotons = self.get_photons_per_second(starMagnitude) * slope_computer.dt

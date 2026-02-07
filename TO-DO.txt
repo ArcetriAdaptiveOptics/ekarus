@@ -1,8 +1,10 @@
-IMPORTANT:
-DM branch: Simplified DM class (IFFs, act_coords), Analytical slaving
-Controller branch: modal IIR filter, ML reconstruction, regularization
+Fix multiple frequencies issue (DM rising time?)
 
-PETALING (LWE) sensitivity
+Modal IIR filter class
+DM branch: Simplified DM class (IFFs, act_coords)
+Slaving embedded in m2c
+Remove slope computer from config file (move modulation to pyWFS)
+
+ML reconstructor
 Sensor fusion
-OGs from PSD (long exposure)
 

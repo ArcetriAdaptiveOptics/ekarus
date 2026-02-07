@@ -18,6 +18,7 @@ def main(tn:str='example_single_stage',
          optimize_gain:bool=False, 
          starMagnitudes=None, 
          atmo_tn='nine_layers_25mOS',
+         vibrations_tn=None,
          lambdaRef:float=700e-9,
          save_prefix:str=None):
     
@@ -33,9 +34,15 @@ def main(tn:str='example_single_stage',
     ssao = SingleStageAO(tn)
     ssao.initialize_turbulence(tn=atmo_tn)
 
-    amp = 50e-9
-    if ssao.sc.modulationAngleInLambdaOverD < 1.0:
-        amp = 25e-9
+    if vibrations_tn is not None:
+        vibrations = True
+        ssao.initialize_vibrations(tn=vibrations_tn)
+    else:
+        vibrations = False
+
+    # amp = 50e-9
+    # if ssao.sc.modulationAngleInLambdaOverD < 1.0:
+    amp = 25e-9
 
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
     Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp)
@@ -54,7 +61,7 @@ def main(tn:str='example_single_stage',
         for jj in range(N):
             g = gain_vec[jj]
             ssao.sc.set_new_gain(g)
-            err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude)
+            err2, _ = ssao.run_loop(lambdaRef, ssao.starMagnitude, vibrations=vibrations)
             SR = xp.mean(xp.exp(-err2[-it_ss:]))
             SR_vec[jj] = SR.copy()
             print(f'Tested gain = {g:1.2f}, final SR = {SR*100:1.2f}%' )
@@ -78,14 +85,14 @@ def main(tn:str='example_single_stage',
         for k in range(len(starMagnitudes)):
             starMag = starMagnitudes[k]
             save_prefix = f'magV{starMag:1.0f}_'#+ssao.atmo_pars_str
-            sig[k,:],_ = ssao.run_loop(lambdaRef, starMag, save_prefix=save_prefix)
+            sig[k,:],_ = ssao.run_loop(lambdaRef, starMag, save_prefix=save_prefix, vibrations=vibrations)
             print(f'Simulated magnitude {starMag:1.1f}, average SR: {xp.mean(xp.exp(-sig[k,-it_ss:]))*1e+2:1.2f}%')
         ssao.SR = xp.mean(xp.exp(-sig[:,-it_ss:]),axis=1)
         ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
     else:
         if save_prefix is None:
             save_prefix = f'mag{ssao.starMagnitude:1.0f}_'#+ssao.atmo_pars_str
-        sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix=save_prefix)
+        sig2, input_sig2 = ssao.run_loop(lambdaRef, ssao.starMagnitude, save_prefix=save_prefix, vibrations=vibrations)
         ssao.plot_iteration(lambdaRef, frame_id=-1, save_prefix=save_prefix)
         # ssao.SR_in = xp.exp(-input_sig2)
         # ssao.SR_out = xp.exp(-sig2)
@@ -138,7 +145,7 @@ def main(tn:str='example_single_stage',
             plt.title('Slope null modes')
 
     if show_contrast:
-        ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(ssao.Nits-100,ssao.Nits).tolist(), save_prefix=save_prefix)
+        ssao.plot_contrast(lambdaRef, frame_ids=xp.arange(int(0.1/ssao.dt),ssao.Nits).tolist(), save_prefix=save_prefix)
 
     if starMagnitudes is not None:
         ssao.sig2 = sig

@@ -6,20 +6,21 @@ from ekarus.e2e.woofer_tweeter_ao_class import WooferTweeterAO
 # import ekarus.e2e.utils.my_fits_package as myfits   
 import xupy as xp
 
-# from ekarus.e2e.utils.image_utils import reshape_on_mask
-# from numpy.ma import masked_array
+from ekarus.e2e.utils.image_utils import reshape_on_mask
+from numpy.ma import masked_array
 
 
 def main(tn:str, 
          atmo_tn:str='paranal',
          show:bool=False,
          show_contrast:bool=True,
-         lambdaRef:float=730e-9,
+         lambdaRef:float=700e-9,
          optimize_gain:bool=False, 
          gain1_list:list=None, 
          gain2_list:list=None,
          saveprefix:str=None,
-         bootStrapIts:int=0):
+         bootStrapIts:int=0,
+         gain_after_bootstrap:float=0):
 
     print('Initializing devices ...')
     wooftweet = WooferTweeterAO(tn)
@@ -43,6 +44,7 @@ def main(tn:str,
         optimize_gain = True
 
     wooftweet.bootStrapIts = bootStrapIts
+    wooftweet.gain_after_bootstrap = gain_after_bootstrap
 
     if optimize_gain:
 
@@ -122,31 +124,31 @@ def main(tn:str,
 
     return wooftweet
 
-# def plot_mode_j(pupil,Mat,j:int,title:str=''):
-#     mode = reshape_on_mask(Mat[:,j],(1-pupil).astype(bool))
-#     plt.imshow(masked_array(xp.asnumpy(mode),xp.asnumpy(1-pupil)),origin='lower',cmap='RdBu')
-#     plt.colorbar()
-#     plt.axis('off')
-#     plt.title(title)
+def plot_mode_j(pupil,Mat,j:int,title:str=''):
+    mode = reshape_on_mask(Mat[:,j],(1-pupil).astype(bool))
+    plt.imshow(masked_array(xp.asnumpy(mode),xp.asnumpy(1-pupil)),origin='lower',cmap='RdBu')
+    plt.colorbar()
+    plt.axis('off')
+    plt.title(title)
 
-# def display_modes(pupil, Mat, N:int=8):
-#     nModes = xp.shape(Mat)[1]
-#     plt.figure(figsize=(2.25*N,12))
-#     for i in range(N):
-#         plt.subplot(6,N,i+1)
-#         plot_mode_j(pupil,Mat,i,title=f'Mode {i}')
-#         plt.subplot(6,N,i+1+N)
-#         plot_mode_j(pupil,Mat,i+N,title=f'Mode {i+N}')
+def display_modes(pupil, Mat, N:int=8):
+    nModes = xp.shape(Mat)[1]
+    plt.figure(figsize=(2.25*N,12))
+    for i in range(N):
+        plt.subplot(6,N,i+1)
+        plot_mode_j(pupil,Mat,i,title=f'Mode {i}')
+        plt.subplot(6,N,i+1+N)
+        plot_mode_j(pupil,Mat,i+N,title=f'Mode {i+N}')
 
-#         plt.subplot(6,N,i+1+N*2)
-#         plot_mode_j(pupil,Mat,nModes//2-N+i,title=f'Mode {nModes//2-N+i}')
-#         plt.subplot(6,N,i+1+N*3)
-#         plot_mode_j(pupil,Mat,nModes//2+N+i,title=f'Mode {nModes//2+N+i}')
+        plt.subplot(6,N,i+1+N*2)
+        plot_mode_j(pupil,Mat,nModes//2-N+i,title=f'Mode {nModes//2-N+i}')
+        plt.subplot(6,N,i+1+N*3)
+        plot_mode_j(pupil,Mat,nModes//2+N+i,title=f'Mode {nModes//2+N+i}')
 
-#         plt.subplot(6,N,i+1+N*4)
-#         plot_mode_j(pupil,Mat,nModes-2*N+i,title=f'Mode {nModes-2*N+i}')
-#         plt.subplot(6,N,i+1+N*5)
-#         plot_mode_j(pupil,Mat,nModes-N+i,title=f'Mode {nModes-N+i}')
+        plt.subplot(6,N,i+1+N*4)
+        plot_mode_j(pupil,Mat,nModes-2*N+i,title=f'Mode {nModes-2*N+i}')
+        plt.subplot(6,N,i+1+N*5)
+        plot_mode_j(pupil,Mat,nModes-N+i,title=f'Mode {nModes-N+i}')
 
 if __name__ == '__main__':
     wooftweet = main(show=True)

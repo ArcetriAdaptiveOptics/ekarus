@@ -184,7 +184,7 @@ def main(tn:str='example_cascading_stage',
 
     if show_contrast:
         cascao.psd1, cascao.psd2, cascao.pix_scale = cascao.plot_contrast(lambdaRef=lambdaRef, oversampling=8,
-                                                    frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), 
+                                                    frame_ids=xp.arange(200,cascao.Nits).tolist(), 
                                                     save_prefix=save_prefix)
         # cascao.smf = cascao.plot_ristretto_contrast(lambdaRef=lambdaRef,oversampling=8,
         #                                             frame_ids=xp.arange(cascao.Nits-200,cascao.Nits).tolist(), 

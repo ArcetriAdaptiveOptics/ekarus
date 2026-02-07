@@ -59,7 +59,7 @@ class SingleStageAO(HighLevelAO):
         self.dm = DSM(dm_pars["Nacts"], pupil_mask = self.cmask.copy(), geom=dm_pars['geom'], max_stroke=dm_pars['max_stroke_in_m'])
     
 
-    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None, ncpa_cmd=None):
+    def run_loop(self, lambdaInM:float, starMagnitude:float, save_prefix:str=None, vibrations:bool=False, ncpa_cmd=None):
         """
         Main loop for the single stage AO system.
 
@@ -96,6 +96,9 @@ class SingleStageAO(HighLevelAO):
         #     tt_amps = xp.zeros(2)
         #     c2tt = xp.linalg.pinv(self.dm.act_coords.T)
         #     tt2surf = IF @ self.dm.act_coords.T
+
+        if vibrations:
+            print(f'Using vibrations from {self.vibro_tn}')
             
 
         if save_prefix is not None:
@@ -110,6 +113,8 @@ class SingleStageAO(HighLevelAO):
 
             atmo_phase = self.get_phasescreen_at_time(sim_time)
             input_phase = atmo_phase[~self.cmask]
+            if self.tt_vibrations is not None and vibrations is True:
+                input_phase += self.get_vibrations_at_time(sim_time)
             input_phase -= xp.mean(input_phase)  # remove piston
                 
             if i >= self.sc.delay:
@@ -209,12 +214,12 @@ class SingleStageAO(HighLevelAO):
         plt.figure(figsize=(9,9))
         plt.subplot(2,2,1)
         myimshow(masked_array(ma_atmo_phases[frame_id],cmask), \
-        title=f'Atmosphere phase [m]\nSR = {xp.exp(-in_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f} [nm]',\
+        title=f'Atmosphere phase [m]\nSR = {xp.exp(-in_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}nm',\
         cmap='RdBu',shrink=0.8)
         plt.axis('off')
         plt.subplot(2,2,2)
         showZoomCenter(psf/xp.max(psf), pixelSize, shrink=0.8,
-        title = f'Corrected PSF\nSR = {xp.exp(-res_err_rad2):1.3f} @{lambdaRef*1e+9:1.0f}[nm]'
+        title = f'Corrected PSF\nSR = {xp.exp(-res_err_rad2):1.3f} @ {lambdaRef*1e+9:1.0f}nm'
             , cmap='inferno', xlabel=r'$\lambda/D$'
             , ylabel=r'$\lambda/D$', vmin=-10) 
         plt.subplot(2,2,3)
@@ -224,7 +229,7 @@ class SingleStageAO(HighLevelAO):
         plt.title('Mirror command [m]')
         plt.axis('off')
 
-        N = int(xp.maximum(self.Nits-100,self.Nits/2))
+        N = int(xp.maximum(self.Nits-int(0.1/self.dt),self.Nits/2))
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res_modes = xp.zeros([N,self.KL.shape[0]])
         res_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
@@ -244,7 +249,7 @@ class SingleStageAO(HighLevelAO):
         plt.figure()
         plt.plot(x,xp.asnumpy(atmo_mode_rms)*1e+9,'--.',label='turbulence')
         plt.plot(x,xp.asnumpy(res_mode_rms)*1e+9,'--.',label='residual (true)')
-        plt.plot(x[:self.sc.nModes],xp.asnumpy(rec_modes_rms)*1e+9,'--',label='residual (measured)')
+        plt.plot(x[:self.sc.nModes],xp.asnumpy(rec_modes_rms/self.sc.modalGains)*1e+9,'--',label='residual (measured)')
         plt.legend()
         plt.xlabel('mode index')
         plt.ylabel('mode RMS amp [nm]')
@@ -330,12 +335,12 @@ class SingleStageAO(HighLevelAO):
         if plot:
             plt.figure()
             showZoomCenter(psf_rms, 1/oversampling, shrink=0.8, ext=0.54,
-            title = f'PSF @ {lambdaRef*1e+9:1.0f}[nm]'
+            title = f'PSF @ {lambdaRef*1e+9:1.0f}nm'
                 , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', 
                 vmax=0, vmin=-10) 
             plt.figure()
             showZoomCenter(coro_psf, 1/oversampling, shrink=0.8, ext=0.54,
-            title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}[nm]'
+            title = f'Coronographic PSF @ {lambdaRef*1e+9:1.0f}nm'
                 , cmap='inferno', xlabel=r'$\lambda/D$', ylabel=r'$\lambda/D$', 
                 vmax=0, vmin=-10) 
 
@@ -350,41 +355,98 @@ class SingleStageAO(HighLevelAO):
 
         return rms_psf, pix_dist
     
-
-    def get_tt_spectrum(self, save_prefix:str=None, show:bool=False):
+    
+    def get_tt_spectrum(self, save_prefix:str=None, show:bool=True):
 
         if save_prefix is None:
             save_prefix = self.save_prefix
 
-        data_load = self.load_telemetry_data(data_keys=['dm_commands'], save_prefix=save_prefix)
-        dm_cmds = xp.array(data_load[0])
+        ma_res_phases,ma_atmo_phases, = self.load_telemetry_data(data_keys=['residual_phases','atmo_phases'], save_prefix=save_prefix)
 
-        max_cmd = xp.max(xp.abs(dm_cmds),axis=1)
-        # if self.dm.slaving is not None:
-        #     dm_cmds = (xp.linalg.pinv(self.dm.slaving) @ dm_cmds.T).T
-        # dm_modes = xp.linalg.pinv(self.sc.m2c) @ dm_cmds.T
-        # TT = dm_modes[:2,:]
+        Ntot = int(xp.maximum(self.Nits-int(0.1/self.dt),self.Nits/2))
+        N = int(0.1/self.dt)
+        Nspe = int(xp.floor(Ntot/N))
+        atmo_tt_psd = None
+        res_tt_psd = None
+        for k in range(Nspe):
+            res_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
+            atmo_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
+            for j in range(N):
+                res_phases[j] = xp.asarray(ma_res_phases[-Ntot+k*N+j].data[~ma_res_phases[-Ntot+k*N+j].mask])
+                atmo_phases[j] = xp.asarray(ma_atmo_phases[-Ntot+k*N+j].data[~ma_atmo_phases[-Ntot+k*N+j].mask])
 
-        TT = xp.linalg.pinv(self.dm.act_coords.T) @ dm_cmds.T
+            atmo_tt = xp.linalg.pinv(self.KL[:2,:].T) @ atmo_phases.T
+            res_tt = xp.linalg.pinv(self.KL[:2,:].T) @ res_phases.T
 
-        spe = xp.fft.rfft(TT, norm="ortho", axis=-1)
-        nn = xp.sqrt(spe.shape[-1])
-        spe_tt = (xp.abs(spe)) / nn
-        spe_tt[:,0] = 0 # remove DC component
-        freq = xp.fft.rfftfreq(TT.shape[-1], d=self.dt)
+            freq = xp.fft.rfftfreq(atmo_tt.shape[-1], d=self.dt)
+            spe_atmo = xp.fft.rfft(atmo_tt, norm="ortho", axis=-1)
+            nn = xp.sqrt(spe_atmo.shape[-1])
+            spe_atmo_tt = (xp.abs(spe_atmo)) / nn
+            spe_atmo_tt[:,0] = 0 # remove DC component  
+
+            spe_res = xp.fft.rfft(res_tt, norm="ortho", axis=-1)
+            spe_res_tt = (xp.abs(spe_res)) / nn
+            spe_res_tt[:,0] = 0 # remove DC component
+
+            if k==0:
+                atmo_tt_psd = (spe_atmo_tt**2)/Nspe
+                res_tt_psd = (spe_res_tt**2)/Nspe
+            else:
+                atmo_tt_psd += (spe_atmo_tt**2)/Nspe
+                res_tt_psd += (spe_res_tt**2)/Nspe
 
         if show:
             plt.figure()
-            plt.plot(xp.asnumpy(freq), xp.asnumpy(spe_tt[0])*1e+9, label='tip')
-            plt.plot(xp.asnumpy(freq), xp.asnumpy(spe_tt[1])*1e+9, label='tilt')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(atmo_tt_psd[0])*1e+9**2,color='C0', label='Atmo tip')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(atmo_tt_psd[1])*1e+9**2,color='C1', label='Atmo tilt')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(res_tt_psd[0])*1e+9**2,'--',color='C0', label='Residual tip')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(res_tt_psd[1])*1e+9**2,'--',color='C1', label='Residual tilt')
             plt.grid()
             plt.legend()
             plt.xlabel('Frequency [Hz]')
-            plt.ylabel('WF RMS [nm]')
+            plt.ylabel(r'WF RMS [$nm^2$]')
             plt.xscale('log')
             plt.yscale('log')
 
-        return TT, spe_tt, freq, max_cmd
+        data_spe = xp.vstack([freq,atmo_tt_psd,res_tt_psd])
+
+        return data_spe, atmo_tt, res_tt
+    
+
+    # def get_tt_spectrum(self, save_prefix:str=None, show:bool=False):
+
+    #     if save_prefix is None:
+    #         save_prefix = self.save_prefix
+
+    #     data_load = self.load_telemetry_data(data_keys=['dm_commands'], save_prefix=save_prefix)
+    #     dm_cmds = xp.array(data_load[0])
+
+    #     max_cmd = xp.max(xp.abs(dm_cmds),axis=1)
+    #     # if self.dm.slaving is not None:
+    #     #     dm_cmds = (xp.linalg.pinv(self.dm.slaving) @ dm_cmds.T).T
+    #     # dm_modes = xp.linalg.pinv(self.sc.m2c) @ dm_cmds.T
+    #     # TT = dm_modes[:2,:]
+
+    #     TT = xp.linalg.pinv(self.dm.act_coords.T) @ dm_cmds.T
+
+    #     spe = xp.fft.rfft(TT, norm="ortho", axis=-1)
+    #     nn = xp.sqrt(spe.shape[-1])
+    #     spe_tt = (xp.abs(spe)) / nn
+    #     spe_tt[:,0] = 0 # remove DC component
+    #     freq = xp.fft.rfftfreq(TT.shape[-1], d=self.dt)
+
+    #     if show:
+    #         plt.figure()
+    #         plt.plot(xp.asnumpy(freq), xp.asnumpy(spe_tt[0])*1e+9, label='tip')
+    #         plt.plot(xp.asnumpy(freq), xp.asnumpy(spe_tt[1])*1e+9, label='tilt')
+    #         plt.grid()
+    #         plt.legend()
+    #         plt.xlabel('Frequency [Hz]')
+    #         plt.ylabel('WF RMS [nm]')
+    #         plt.xscale('log')
+    #         plt.yscale('log')
+
+    #     return TT, spe_tt, freq, max_cmd
 
 
 

@@ -270,7 +270,7 @@ class CascadingAO(HighLevelAO):
         plt.title('DM2 command [m]')
         plt.axis('off')
 
-        N = self.Nits-100 if self.Nits > 200 else self.Nits//2
+        N = self.Nits-int(0.1/self.dt) if self.Nits > 200 else self.Nits//2
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res1_modes = xp.zeros([N,self.KL.shape[0]])
         res2_modes = xp.zeros([N,self.KL.shape[0]])
@@ -293,9 +293,9 @@ class CascadingAO(HighLevelAO):
         plt.figure()
         plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(atmo_mode_rms)*1e+9,'--.',label='turbulence')
         plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(res1_mode_rms)*1e+9,'--.',label='1st stage residual (true)')
-        plt.plot(xp.asnumpy(xp.arange(self.sc1.nModes))+1,xp.asnumpy(rec1_modes_rms)*1e+9,'--',label='1st stage residual (reconstructed)')
+        plt.plot(xp.asnumpy(xp.arange(self.sc1.nModes))+1,xp.asnumpy(rec1_modes_rms/self.sc1.modalGains)*1e+9,'--',label='1st stage residual (reconstructed)')
         plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(res2_mode_rms)*1e+9,'--.',label='2nd stage residual (true)')
-        plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes))+1,xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='2nd stage residual (reconstructed)')
+        plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes))+1,xp.asnumpy(rec2_modes_rms/self.sc2.modalGains)*1e+9,'--',label='2nd stage residual (reconstructed)')
         plt.legend()
         plt.xlabel('mode #')
         plt.ylabel('mode RMS amp [nm]')
@@ -498,6 +498,75 @@ class CascadingAO(HighLevelAO):
         plt.tight_layout()
 
         return rms_psf1, rms_psf2, pix_dist
+    
+    def get_tt_spectrum(self, save_prefix:str=None, show:bool=True):
+
+        if save_prefix is None:
+            save_prefix = self.save_prefix
+
+        ma_res1_phases,ma_res2_phases,ma_atmo_phases, = self.load_telemetry_data(data_keys=['res1_phases','res2_phases','atmo_phases'], save_prefix=save_prefix)
+
+        Ntot = int(xp.maximum(self.Nits-int(0.1/self.dt),self.Nits/2))
+        N = int(0.1/self.dt)
+        Nspe = int(xp.floor(Ntot/N))
+        atmo_tt_psd = None
+        res1_tt_psd = None
+        res2_tt_psd = None
+        for k in range(Nspe):
+            res1_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
+            res2_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
+            atmo_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
+            for j in range(N):
+                res1_phases[j] = xp.asarray(ma_res1_phases[-Ntot+k*N+j].data[~ma_res1_phases[-Ntot+k*N+j].mask])
+                res2_phases[j] = xp.asarray(ma_res2_phases[-Ntot+k*N+j].data[~ma_res2_phases[-Ntot+k*N+j].mask])
+                atmo_phases[j] = xp.asarray(ma_atmo_phases[-Ntot+k*N+j].data[~ma_atmo_phases[-Ntot+k*N+j].mask])
+
+            phase2tt = xp.linalg.pinv(self.KL[:2,:].T)
+            atmo_tt = phase2tt @ atmo_phases.T
+            res1_tt = phase2tt @ res1_phases.T
+            res2_tt = phase2tt @ res2_phases.T
+
+            freq = xp.fft.rfftfreq(atmo_tt.shape[-1], d=self.dt)
+            spe_atmo = xp.fft.rfft(atmo_tt, norm="ortho", axis=-1)
+            nn = xp.sqrt(spe_atmo.shape[-1])
+            spe_atmo_tt = (xp.abs(spe_atmo)) / nn
+            spe_atmo_tt[:,0] = 0 # remove DC component  
+
+            spe_res1 = xp.fft.rfft(res1_tt, norm="ortho", axis=-1)
+            spe_res1_tt = (xp.abs(spe_res1)) / nn
+            spe_res1_tt[:,0] = 0 # remove DC component
+
+            spe_res2 = xp.fft.rfft(res2_tt, norm="ortho", axis=-1)
+            spe_res2_tt = (xp.abs(spe_res2)) / nn
+            spe_res2_tt[:,0] = 0 # remove DC component
+
+            if k==0:
+                atmo_tt_psd = (spe_atmo_tt**2)/Nspe
+                res1_tt_psd = (spe_res1_tt**2)/Nspe
+                res2_tt_psd = (spe_res2_tt**2)/Nspe
+            else:
+                atmo_tt_psd += (spe_atmo_tt**2)/Nspe
+                res1_tt_psd += (spe_res1_tt**2)/Nspe
+                res2_tt_psd += (spe_res2_tt**2)/Nspe
+
+        if show:
+            plt.figure()
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(atmo_tt_psd[0])*1e+9**2,color='C0', label='Atmo tip')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(atmo_tt_psd[1])*1e+9**2,color='C1', label='Atmo tilt')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(res1_tt_psd[0])*1e+9**2,'--',color='C0', label=r'$1^{st}$ stage residual tip')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(res1_tt_psd[1])*1e+9**2,'--',color='C1', label=r'$1^{st}$ stage residual tilt')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(res2_tt_psd[0])*1e+9**2,':',color='C0', label=r'$2^{nd}$ stage residual tip')
+            plt.plot(xp.asnumpy(freq), xp.asnumpy(res2_tt_psd[1])*1e+9**2,':',color='C1', label=r'$2^{nd}$ stage residual tilt')
+            plt.grid()
+            plt.legend()
+            plt.xlabel('Frequency [Hz]')
+            plt.ylabel(r'WF RMS [$nm^2$]')
+            plt.xscale('log')
+            plt.yscale('log')
+
+        data_spe = xp.vstack([freq,atmo_tt_psd,res1_tt_psd,res2_tt_psd])
+
+        return data_spe, atmo_tt, res1_tt, res2_tt
     
 
     # def __init__(self, tn, xp=np):

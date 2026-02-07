@@ -17,6 +17,8 @@ class WooferTweeterAO(HighLevelAO):
         """The constructor"""
 
         super().__init__(tn)
+        self.bootStrapIts = 0
+        self.gain_after_bootstrap = 0.0
         
         self.telemetry_keys = [
             "atmo_phases",
@@ -104,6 +106,12 @@ class WooferTweeterAO(HighLevelAO):
         bootstrap_gains = self.sc2.modalGains.copy()
         self.sc2.modalGains *= 0
 
+        loModes2cmd = self.sc1.m2c[:,:self.sc2.nModes]
+        if self.dm.slaving is not None:
+            loModes2cmd = self.dm.slaving @ loModes2cmd
+        cmd2loModes = xp.linalg.pinv(loModes2cmd)
+        loCmd = xp.zeros(self.dm.Nacts)
+
         for i in range(self.Nits):
             print(f"\rIteration {i+1}/{self.Nits}", end="\r", flush=True)
             sim_time = self.dt * i
@@ -113,17 +121,17 @@ class WooferTweeterAO(HighLevelAO):
             input_phase -= xp.mean(input_phase)  # remove piston
 
             if i >= self.sc1.delay:
-                dm1_surf = IF @ dm1_cmds[i - self.sc1.delay, :]
+                dm1_surf = IF @ (dm1_cmds[i - self.sc1.delay, :]-loCmd)
 
             if i >= self.sc2.delay:
-                dm2_surf = IF @ dm2_cmds[i - self.sc2.delay, :]
+                dm2_surf = IF @ (dm2_cmds[i - self.sc2.delay, :]+loCmd/(self.sc1.dt/self.sc2.dt))
 
             if i == self.bootStrapIts:
                 self.sc1.nModes -= self.sc2.nModes
                 # _, IM = self.compute_reconstructor(self.sc1, self.KL, lambdaInM=self.wfs1.lambdaInM, ampsInM=5e-9)
                 # self.sc1.load_reconstructor(IM[:,self.sc2.nModes:],self.sc1.m2c[:,self.sc2.nModes:])
                 # self.sc1.modalGains = self.sc1.modalGains[self.sc2.nModes:]
-                self.sc1.modalGains[:self.sc2.nModes] *= 0
+                self.sc1.modalGains[:self.sc2.nModes] = xp.ones(self.sc2.nModes)*self.gain_after_bootstrap
                 self.sc2.modalGains = bootstrap_gains.copy()
 
             residual_phase = input_phase - dm1_surf[self.dm.visible_pix_ids] - dm2_surf[self.dm.visible_pix_ids]
@@ -143,7 +151,10 @@ class WooferTweeterAO(HighLevelAO):
                 dm2_cmds[i,:] = self.sc2.iir_filter(int2_cmds[:i+1,:], dm2_cmds[:i+1,:])
             else:
                 dm2_cmds[i,:] = dm2_cmds[i-1,:].copy()
-            # dm2_cmds[i,:] -= xp.mean(dm2_cmds[i,:])
+            
+            if i > self.bootStrapIts and self.gain_after_bootstrap > 0.0:
+                loModes = cmd2loModes @ dm1_cmds[i,:]
+                loCmd = loModes2cmd @ loModes
 
             res_phase_rad2[i] = self.phase_rms(residual_phase*m2rad)**2
             atmo_phase_rad2[i] = self.phase_rms(input_phase*m2rad)**2
@@ -257,7 +268,7 @@ class WooferTweeterAO(HighLevelAO):
         plt.axis('off')
 
         nModes = int(xp.minimum(self.sc1.nModes+self.sc2.nModes,self.KL.shape[0]))
-        N = int(xp.maximum(self.Nits-100-self.bootStrapIts,self.Nits/2))
+        N = int(xp.maximum(self.Nits-int(0.1/self.dt)-self.bootStrapIts,self.Nits/2))
         atmo_modes = xp.zeros([N,self.KL.shape[0]])
         res2_modes = xp.zeros([N,nModes])
         res2_phases = xp.zeros([N,int(xp.sum(1-self.cmask))])
@@ -277,9 +288,9 @@ class WooferTweeterAO(HighLevelAO):
 
         plt.figure()
         plt.plot(xp.asnumpy(xp.arange(self.KL.shape[0]))+1,xp.asnumpy(atmo_mode_rms)*1e+9,'--.',label='turbulence')
-        plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes))+1,xp.asnumpy(rec2_modes_rms)*1e+9,'--',label='LOWFS modes')
+        plt.plot(xp.asnumpy(xp.arange(self.sc2.nModes))+1,xp.asnumpy(rec2_modes_rms/self.sc2.modalGains)*1e+9,'--',label='LOWFS modes')
         plt.plot(xp.asnumpy(xp.arange(self.sc1.nModes)+self.sc2.nModes)+1,
-                 xp.asnumpy(rec1_modes_rms[self.sc2.nModes:])*1e+9,'--',label='HOWFS modes')
+                 xp.asnumpy(rec1_modes_rms[self.sc2.nModes:]/self.sc1.modalGains[self.sc2.nModes:])*1e+9,'--',label='HOWFS modes')
         plt.plot(xp.asnumpy(xp.arange(nModes))+1,xp.asnumpy(res2_mode_rms)*1e+9,'--.',label='residual')
         plt.legend()
         plt.xlabel('mode index')
