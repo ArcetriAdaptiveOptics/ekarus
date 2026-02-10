@@ -42,7 +42,7 @@ def main(tn:str='example_single_stage',
 
     # amp = 50e-9
     # if ssao.sc.modulationAngleInLambdaOverD < 1.0:
-    amp = 25e-9
+    amp = 15e-9
 
     KL, m2c = ssao.define_KL_modes(ssao.dm, zern_modes=2)
     Rec, IM = ssao.compute_reconstructor(ssao.sc, KL, ssao.pyr.lambdaInM, ampsInM=amp)
