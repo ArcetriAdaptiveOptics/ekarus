@@ -66,10 +66,11 @@ class Pyr3WFS:
         return intensity
     
 
-    def set_modulation_angle(self, modulationAngleInLambdaOverD):
+    def set_modulation_angle(self, modulationAngleInLambdaOverD,verbose:bool=True):
         self.modulationAngleInLambdaOverD = modulationAngleInLambdaOverD
         self._modNsteps = xp.ceil(modulationAngleInLambdaOverD*2.25*xp.pi)//4*4
-        print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self._modNsteps:1.0f} modulation steps')
+        if verbose:
+            print(f'Modulating {modulationAngleInLambdaOverD:1.0f} [lambda/D] with {self._modNsteps:1.0f} modulation steps')
     
 
     def propagate(self, input_field, lambdaOverD):
