@@ -22,6 +22,14 @@ class ZernikeWFS:
         self.dtype = xp.float
         self.cdtype = xp.cfloat
 
+    def change_dot_parameters(self, dotSizeInLambdaOverD=None, dotDelayInradians=None):
+        if dotDelayInradians is None and dotSizeInLambdaOverD is None:
+            raise ValueError('At least one paramter should be changed whenc calling this function')
+        if dotSizeInLambdaOverD is not None:
+            self.dot_radius = dotSizeInLambdaOverD*self.lambdaOverD
+        if dotDelayInradians is not None:
+            self.phase_delay = dotDelayInradians*xp.pi
+
 
     def get_intensity(self, input_field, lambdaOverD):
         """
@@ -33,10 +41,6 @@ class ZernikeWFS:
         field_on_focal_plane = xp.fft.fftshift(xp.fft.fft2(padded_field))
         transmitted_field = field_on_focal_plane * self.zwfs_complex_amplitude(padded_field.shape,lambdaOverD)
         output_field = xp.fft.ifft2(xp.fft.ifftshift(transmitted_field))
-        # cpix = L*self.oversampling//2
-        # N = self.cropSize/2
-        # cropped_field = output_field[cpix-N*L:cpix+N*L,cpix-N*L:cpix+N*L]
-        # intensity = xp.abs(cropped_field)**2
         intensity = xp.abs(output_field)**2
         return intensity
 
