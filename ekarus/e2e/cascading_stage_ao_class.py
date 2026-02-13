@@ -461,7 +461,7 @@ class CascadingAO(HighLevelAO):
                 psf_rms = psf**2
             else:
                 psf_rms += psf**2
-        psf_rms = xp.sqrt(psf_rms/2)
+        psf_rms = xp.sqrt(psf_rms/N)
         psf_rms /= xp.max(psf_rms)
         _,rms_psf1,pix_dist=self.get_contrast(res1_phases_in_rad,oversampling=oversampling)
         coro_psf2,rms_psf2,pix_dist=self.get_contrast(res2_phases_in_rad,oversampling=oversampling)

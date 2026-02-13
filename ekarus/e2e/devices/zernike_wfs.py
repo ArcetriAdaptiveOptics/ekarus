@@ -26,7 +26,7 @@ class ZernikeWFS:
         if dotDelayInradians is None and dotSizeInLambdaOverD is None:
             raise ValueError('At least one paramter should be changed whenc calling this function')
         if dotSizeInLambdaOverD is not None:
-            self.dot_radius = dotSizeInLambdaOverD*self.lambdaOverD
+            self.dot_radius = dotSizeInLambdaOverD
         if dotDelayInradians is not None:
             self.phase_delay = dotDelayInradians*xp.pi
 

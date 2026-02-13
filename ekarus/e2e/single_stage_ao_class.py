@@ -328,7 +328,7 @@ class SingleStageAO(HighLevelAO):
                 psf_rms = psf**2
             else:
                 psf_rms += psf**2
-        psf_rms = xp.sqrt(psf_rms/2)
+        psf_rms = xp.sqrt(psf_rms/N)
         psf_rms /= xp.max(psf_rms)
         coro_psf,rms_psf,pix_dist=self.get_contrast(res_phases_in_rad,oversampling=oversampling,one_sided_contrast=one_sided_contrast)
 
