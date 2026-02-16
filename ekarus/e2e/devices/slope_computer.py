@@ -128,7 +128,7 @@ class SlopeComputer():
                     self._roi_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
-                    self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
+                    self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=30,verbose=False) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(zero_phase, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     centerOnPix = False if self._slope_method == 'raw_intensity' else True
@@ -144,7 +144,7 @@ class SlopeComputer():
                     self._roi_masks = xp.asarray(subaperture_masks)
                 except FileNotFoundError:
                     print('Defining the detector subaperture masks ...')
-                    self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=10) # modulate a lot during subaperture definition
+                    self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=30,verbose=False) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(zero_phase, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
                     centerOnPix = False if self._slope_method == 'raw_intensity' else True
