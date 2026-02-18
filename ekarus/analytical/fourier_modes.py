@@ -1,7 +1,7 @@
 import xupy as xp
 from ekarus.e2e.utils.image_utils import image_grid
 
-def define_fourier_basis(mask, max_freq:int, thr:float=5e-2):
+def define_fourier_basis(mask, max_freq:int, thr:float=None):
     """
     Build a real Fourier modal basis sampled on the valid pixels inside `mask`.
     - mask: boolean array where True = masked/outside pupil (same convention as notebook).
@@ -14,23 +14,35 @@ def define_fourier_basis(mask, max_freq:int, thr:float=5e-2):
     X, Y = image_grid(mask.shape, recenter=True)
     Xv = X[~mask]/(xp.max(X)-xp.min(X))
     Yv = Y[~mask]/(xp.max(Y)-xp.min(Y))
-    freqs = xp.arange(max_freq, dtype=int)
+    freqs = xp.arange(1,max_freq, dtype=int)
     modes = []
+    spatial_freqs = []  # Track spatial frequency magnitude for each mode
     for fx in freqs:
         for fy in freqs:
-            if fx == 0 and fy == 0:
-                continue
             arg = xp.pi * (fx * Xv + fy * Yv)
             modes.append(xp.cos(arg))
             modes.append(xp.sin(arg))
+            spatial_freqs.append(xp.sqrt(fx**2 + fy**2))
+            spatial_freqs.append(xp.sqrt(fx**2 + fy**2))
     fourier_mat = xp.vstack(modes)  # shape (n_modes, M)
+    spatial_freqs = xp.array(spatial_freqs)
 
-    # remove near-duplicate / zero-energy rows (numerical safety)
-    norms = xp.linalg.norm(fourier_mat, axis=1)
-    keep = norms > (thr * xp.max(norms))
-    fourier_mat = fourier_mat[keep, :]
+    if thr is not None:
+        # remove near-duplicate / zero-energy rows (numerical safety)
+        norms = xp.linalg.norm(fourier_mat, axis=1)
+        keep = norms > (thr * xp.max(norms))
+        fourier_mat = fourier_mat[keep, :]
+        spatial_freqs = spatial_freqs[keep]
 
-    return fourier_mat
+    # Normalization
+    norm = xp.std(fourier_mat,axis=1)
+    fourier_modes = (fourier_mat.T/norm).T
+    
+    # Sorting by ascending spatial frequency
+    sort_idx = xp.argsort(spatial_freqs)
+    fourier_modes = fourier_modes[sort_idx, :]
+
+    return fourier_modes
 
 # def make_fourier_basis(coordinates, frequencies, sort_by_energy=True):
 #     '''Make a Fourier basis.

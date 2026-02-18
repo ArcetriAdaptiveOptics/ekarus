@@ -6,7 +6,7 @@ from ekarus.e2e.utils.image_utils import reshape_on_mask, image_grid
 
 def generate_app_keller(pupil, target_contrast, max_iterations:int, 
                         beta:float=0, oversampling:int=4, 
-                        phi_guess=None, phi_residual=None):
+                        phi_guess=None, phi_residual=None, iffs=None):
     """
     Function taken from HCIpy (Por et al. 2018):
     https://github.com/ehpor/hcipy/blob/master/hcipy/coronagraphy/apodizing_phase_plate.py
@@ -70,6 +70,9 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int,
     else:
         app = pupil * xp.exp(1j*phi_guess,dtype=xp.complex64)
 
+    if iffs is not None:
+        Rec = xp.linalg.pinv(iffs)
+
     # define dark zone as location where contrast is < 1e-1
     dark_zone = target_contrast < 0.1
 
@@ -95,15 +98,20 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int,
         app[~pupil.astype(bool)] = 0 # enforce pupil
         # app[pupil.astype(bool)] /= xp.abs(app[pupil.astype(bool)]) # enforce unity transmission within pupil
         app = xp.asarray(pupil) * xp.exp(1j*xp.angle(app),dtype=xp.complex64)
+
+        if iffs is not None:
+            phase = xp.angle(app)[pupil>0.0]
+            cmd = Rec @ phase
+            fit_phase = iffs @ cmd
+            app = xp.asarray(pupil) * xp.exp(1j*reshape_on_mask(fit_phase, ~pupil.astype(bool)),dtype=xp.complex64)
     
     psf = xp.abs(image)**2
     contrast =  psf / xp.max(psf)
     ref_psf = xp.abs(xp.fft.fftshift(xp.fft.fft2(pupil)))**2
 
-    flag = 0
+    flag = i
     if i == max_iterations-1:
         print(f'Maximum number of iterations ({max_iterations:1.0f}) reached, worst contrast in dark hole is: {xp.log10(xp.max(contrast[dark_zone])):1.1f}')
-        flag = 1
     else:
         print(f'Apodizer computed after {i:1.0f} iterations: average contrast in dark hole is {xp.mean(xp.log10(contrast[dark_zone])):1.1f}, Strehl is {xp.max(psf)/xp.max(ref_psf)*1e+2:1.2f}%')
 
@@ -113,18 +121,16 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int,
 def define_apodizing_phase(pupil, contrast, iwa, owa, beta:float, 
                            oversampling:int, symmetric_dark_hole:bool=False, 
                            max_its:int=1000, show:bool=True, 
-                           phi_guess_in_rad=None, phi_offset_in_rad=None):
+                           phi_guess_in_rad=None, phi_offset_in_rad=None, iffs=None):
     mask_shape = max(pupil.shape)
+    phi_guess = None
+    phi_residual = None
     if phi_guess_in_rad is not None:
         guess_phase = reshape_on_mask(phi_guess_in_rad,pupil)
         phi_guess = xp.pad(guess_phase.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
-    else:
-        phi_guess = None
     if phi_offset_in_rad is not None:
         offset_phase = reshape_on_mask(phi_offset_in_rad,pupil)
         phi_residual = xp.pad(offset_phase.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
-    else:
-        phi_residual = None
     padded_pupil = xp.pad(1-pupil.copy(), pad_width=int((mask_shape*(oversampling-1)//2)), mode='constant', constant_values=0.0)
     X,Y = image_grid(padded_pupil.shape,recenter=True)
     rho = xp.sqrt(X**2+Y**2)
@@ -135,7 +141,7 @@ def define_apodizing_phase(pupil, contrast, iwa, owa, beta:float,
         where = (rho <= owa*oversampling) * (X >= iwa*oversampling) 
     target_contrast[where] = contrast
     app, max_its_flag = generate_app_keller(padded_pupil, target_contrast, max_iterations=max_its, beta=beta, 
-                              phi_guess=phi_guess, phi_residual=phi_residual)
+                              phi_guess=phi_guess, phi_residual=phi_residual, iffs=iffs)
     phase = xp.angle(app)[padded_pupil>0.0]
     apodizer_phase = reshape_on_mask(phase, pupil)
     if show:
