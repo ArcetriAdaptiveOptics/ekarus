@@ -197,13 +197,19 @@ class SlopeComputer():
         return slopes
     
     
-    def load_reconstructor(self, IM, m2c):
+    def load_reconstructor(self, IM, m2c, RON=None):
         """
         Load the reconstructor and the mode-to-command matrix
         """
-        IMn = IM[:,:self.nModes]
-        U,D,V = xp.linalg.svd(IMn, full_matrices=False)
-        Rec = (V.T * 1/D) @ U.T
+        D = IM[:,:self.nModes]
+        if RON is not None and self.slope_null is not None:
+            print('using ML reconstructor')
+            noise = self.slope_null + RON
+            DtCn = D.T @ xp.diag(1/noise)
+            Rec = xp.linalg.pinv(DtCn @ D) @ DtCn
+        else:
+            U,S,V = xp.linalg.svd(D, full_matrices=False)
+            Rec = (V.T * 1/S) @ U.T
         self.Rec = Rec
         self.m2c = m2c[:,:self.nModes]
 

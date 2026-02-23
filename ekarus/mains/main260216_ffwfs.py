@@ -10,6 +10,7 @@ import ekarus.e2e.utils.my_fits_package as myfits
 import os
 
 from ekarus.e2e.devices.slope_computer import SlopeComputer
+from ekarus.e2e.devices.detector import Detector
 from ekarus.e2e.devices.pyr3_wfs import Pyr3WFS
 
 
@@ -29,9 +30,9 @@ lambdaOverD = wt.wfs1.lambdaInM/wt.pupilSizeInM
 ef_amp = 1-wt.cmask
 m2rad = 2*xp.pi/lambdaInM
 
-ccd = wt.ccd1
-
-def get_signal(in_ef,wfs,roi_mask,norm_amp=None):
+def get_signal(in_ef,wfs,roi_mask,norm_amp=None,ccd=None):
+    if ccd is None:
+        ccd = wt.ccd1
     push_int = wfs.get_intensity(in_ef,lambdaOverD)
     push_img = ccd.image_on_detector(push_int,photon_flux=None)
     pull_int = wfs.get_intensity(xp.conj(in_ef),lambdaOverD)
@@ -41,7 +42,9 @@ def get_signal(in_ef,wfs,roi_mask,norm_amp=None):
     signal = (push_img[roi_mask]-pull_img[roi_mask])/(2*norm_amp)
     return signal
 
-def get_throughput(wfs,roi_mask):
+def get_throughput(wfs,roi_mask,ccd=None):
+    if ccd is None:
+        ccd = wt.ccd1
     intensity = wfs.get_intensity(ef_amp.astype(xp.cfloat),lambdaOverD)
     frame = ccd.image_on_detector(intensity,photon_flux=None)
     ref_signal = frame[roi_mask]
@@ -96,7 +99,156 @@ def n_norm(vec,n:int=2):
         norm = xp.sqrt(xp.sum(vec**2))
     return norm
 
-def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,
+def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofSizes,
+                      oversampling,n:int=1,use_full_frame:bool=False,use_fourier_modes:bool=False):
+
+    if use_fourier_modes:
+        mode_basis = FM
+    else:
+        mode_basis = KL
+
+    # reset pyramid parameters
+    old_oversampling = pyr.oversampling
+    pyr.oversampling = oversampling
+    pyr.apex_angle *= oversampling/old_oversampling
+    ccd = Detector((int(240*oversampling/old_oversampling),int(240*oversampling/old_oversampling)))
+
+    sc = SlopeComputer(pyr,ccd,{'modulationInLambdaOverD':0.0})
+    args = {'zero_phase': ef_amp.astype(xp.cfloat), 'lambdaOverD': lambdaOverD, 'Npix': subapertureSize, 'centerObscurationInPixels': 0.0}
+    sc.calibrate_sensor(tn=wt._tn, prefix_str='oversampled_pyr_', **args)
+    pyr.set_modulation_angle(0.0)
+
+    # ROI masks
+    if use_full_frame is True:
+        pyr_roi = xp.ones(ccd.detector_shape).astype(bool)
+        zwfs_roi = xp.ones(wt.ccd1.detector_shape).astype(bool)
+    else:
+        pyr_roi = (xp.sum(1-sc._roi_masks,axis=0)).astype(bool)
+        zwfs_roi = (1-wt.sc2._roi_masks).astype(bool)
+
+    # Initialize variables
+    zsens = xp.zeros([len(dotSizes),len(dotDelays),Nmodes])
+    pyrsens = xp.zeros([len(roofSizes),Nmodes])
+
+    zsens_shot = xp.zeros([len(dotSizes),len(dotDelays),Nmodes])
+    pyrsens_shot = xp.zeros([len(roofSizes),Nmodes])
+
+    # Throughput
+    pyr_thrp = xp.zeros(len(roofSizes))
+    pyr_ref = xp.zeros([len(roofSizes),int(xp.sum(pyr_roi))])
+    for k,roof in enumerate(roofSizes):
+        pyr.roof = roof
+        pyr_thrp[k], pyr_ref[k,:] = get_throughput(pyr,pyr_roi,ccd=ccd)
+
+    zwfs_thrp = xp.zeros([len(dotSizes),len(dotDelays)])
+    zwfs_ref = xp.zeros([len(dotSizes),len(dotDelays),int(xp.sum(zwfs_roi))])
+    for i,dotSize in enumerate(dotSizes):
+        for j,dotDelay in enumerate(dotDelays):
+            zwfs.change_dot_parameters(dotDelayInradians=dotDelay,dotSizeInLambdaOverD=dotSize)
+            zwfs_thrp[i,j], zwfs_ref[i,j,:] = get_throughput(zwfs,zwfs_roi)
+    print(f'Throughputs: ZWFS = {zwfs_thrp[0,0]*1e+2:1.1f}%, PWFS = {pyr_thrp[0]*1e+2:1.1f}%')
+    print(f'Number of pixels: ZWFS = {xp.sum(zwfs_roi):1.0f}, PWFS = {xp.sum(pyr_roi)}')
+
+    plt.figure(figsize=(10,4.5))
+    plt.subplot(1,2,1)
+    plt.imshow(masked_array(xp.asnumpy(reshape_on_mask(pyr_ref[-1,:],(1-pyr_roi).astype(bool))),mask=xp.asnumpy(1-pyr_roi)),origin='lower',cmap='RdBu')
+    plt.subplot(1,2,2)
+    plt.imshow(masked_array(xp.asnumpy(reshape_on_mask(zwfs_ref[0,0,:],(1-zwfs_roi).astype(bool))),mask=xp.asnumpy(1-zwfs_roi)),origin='lower',cmap='RdBu')
+    plt.colorbar(shrink=0.7)
+    plt.show()
+
+    Nsubap = 60
+    if use_full_frame:
+        Nsubap = xp.sqrt(xp.sum(pyr_roi))
+
+    flux = xp.sum(ef_amp)
+
+    for mode_id in range(Nmodes):
+        print(f'\rMode {mode_id+1}/{Nmodes}', end='\r', flush=True)
+        mode = mode_basis[mode_id,:]
+        in_ef = ef_amp * xp.exp(1j*reshape_on_mask(mode*amp*m2rad,wt.cmask),dtype=xp.cfloat)
+
+        # pyWFS case
+        for k,roof in enumerate(roofSizes):
+            pyr.roof = roof
+            pyr_signal = get_signal(in_ef,pyr,pyr_roi,norm_amp=amp*m2rad,ccd=ccd)/flux
+            pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)*Nsubap
+            pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]/flux),n=n)
+
+        # zWFS case
+        for i,dotSize in enumerate(dotSizes):
+            for j,dotDelay in enumerate(dotDelays):
+                zwfs.change_dot_parameters(dotDelayInradians=dotDelay,dotSizeInLambdaOverD=dotSize)
+                z_signal = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
+                zsens[i,j,mode_id] = n_norm(z_signal,n=n)*Nsubap
+                zsens_shot[i,j,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[i,j,:]/flux),n=n)
+
+    x = xp.asnumpy(xp.arange(Nmodes)+1)
+
+    plt.figure(figsize=(14,5))
+    plt.subplot(1,2,2)
+    for k,roof in enumerate(roofSizes):
+        plt.plot(x,xp.asnumpy(pyrsens[k,:]),'-.',label=f'roof: {roof:1.2f}'+r'$\lambda/D$')
+    plt.grid()
+    plt.legend()
+    if use_fourier_modes is False:
+        plt.xscale('log')
+        plt.xlabel('KL mode')
+    else:
+        plt.xlabel('Fourier mode')
+    plt.xlim([1,Nmodes])
+    plt.title(f'RON sensitivity\nUnmod pyWFS')
+    plt.subplot(1,2,1)
+    for k,roof in enumerate(roofSizes):
+        plt.plot(x,xp.asnumpy(pyrsens_shot[k,:]),'-.',label=f'roof: {roof:1.2f}'+r'$\lambda/D$')
+    plt.grid()
+    plt.legend()
+    if use_fourier_modes is False:
+        plt.xscale('log')
+        plt.xlabel('KL mode')
+    else:
+        plt.xlabel('Fourier mode')
+    plt.xlim([1,Nmodes])
+    plt.title(f'Shot noise sensitivity\nUnmod pyWFS')
+
+    for i,dotSize in enumerate(dotSizes):
+        plt.figure(figsize=(14,5))
+        plt.subplot(1,2,2)
+        plt.plot(x,xp.asnumpy(pyrsens[0,:]),':',label='Unmod pyWFS')
+        for k,dotDelay in enumerate(dotDelays):
+            plt.plot(x,xp.asnumpy(zsens[i,k,:]),'-.',label=f'delay: {dotDelay:1.2f}'+r'$\pi$')
+        plt.grid()
+        plt.legend()
+        if use_fourier_modes is False:
+            plt.xscale('log')
+            plt.xlabel('KL mode')
+        else:
+            plt.xlabel('Fourier mode')
+        plt.xlim([1,Nmodes])
+        plt.title(f'RON sensitivity\nzWFS {dotSize:1.1f}'+r'$\lambda/D$')
+        plt.subplot(1,2,1)
+        plt.plot(x,xp.asnumpy(pyrsens_shot[0,:]),':',label='Unmod pyWFS')
+        for k,dotDelay in enumerate(dotDelays):
+            plt.plot(x,xp.asnumpy(zsens_shot[i,k,:]),'-.',label=f'delay: {dotDelay:1.2f}'+r'$\pi$')
+        plt.grid()
+        plt.legend()
+        if use_fourier_modes is False:
+            plt.xscale('log')
+            plt.xlabel('KL mode')
+        else:
+            plt.xlabel('Fourier mode')
+        plt.xlim([1,Nmodes])
+        plt.title(f'Shot noise sensitivity\nzWFS {dotSize:1.1f} '+r'$\lambda/D$')
+
+    plt.show()
+
+    # Restore oversampling
+    pyr.oversampling = old_oversampling
+    pyr.apex_angle /= oversampling/old_oversampling
+
+
+
+def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combined:bool=False,
                       use_full_frame:bool=False,use_fourier_modes:bool=False):
 
     if use_fourier_modes:
@@ -146,7 +298,7 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,
 
     Nsubap = 60
     if use_full_frame:
-        Nsubap = xp.sqrt(xp.sum(pyr_roi))/5
+        Nsubap = xp.sqrt(xp.sum(pyr_roi))
 
     display_modes(1-wt.cmask, xp.asnumpy(mode_basis[:Nmodes,:].T), N=8)
 
@@ -189,13 +341,14 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,
             # zsens_shot[k,mode_id] = n_norm(z_signal/(zwfs_ref[k,:]),n=n)*zwfs_thrp[k]
             zsens_shot[k,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[k,:]/flux),n=n)
 
-        # Combined case
-        pyr.set_modulation_angle(0.0,verbose=False)
-        pyrsig = get_signal(in_ef,pyr,pyr_roi,norm_amp=amp*m2rad)/flux
-        zwfs.change_dot_parameters(dotDelayInradians=0.5,dotSizeInLambdaOverD=2.0)
-        zsig = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
-        combsens[mode_id] = n_norm(xp.hstack([pyrsig,zsig]),n=n)*Nsubap/xp.sqrt(2)
-        combsens_shot[mode_id] = n_norm(xp.hstack([pyrsig/xp.sqrt(pyr_ref[0,:]/flux),zsig/xp.sqrt(zwfs_ref[0,:]/flux)]),n=n)/xp.sqrt(2)
+        if compute_combined:
+            # Combined case
+            pyr.set_modulation_angle(0.0,verbose=False)
+            pyrsig = get_signal(in_ef,pyr,pyr_roi,norm_amp=amp*m2rad)/flux
+            zwfs.change_dot_parameters(dotDelayInradians=0.5,dotSizeInLambdaOverD=2.0)
+            zsig = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
+            combsens[mode_id] = n_norm(xp.hstack([pyrsig,zsig]),n=n)*Nsubap
+            combsens_shot[mode_id] = n_norm(xp.hstack([pyrsig/xp.sqrt(pyr_ref[0,:]/flux),zsig/xp.sqrt(zwfs_ref[0,:]/flux)]),n=n)
 
     x = xp.asnumpy(xp.arange(Nmodes)+1)
 
@@ -283,40 +436,50 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,
     plt.xlim([1,Nmodes])
     plt.title(f'Shot noise sensitivity\n(60x60 subapertures, '+r'$\lambda$='+f'{wt.wfs2.lambdaInM*1e+9:1.0f}nm)')
 
-    plt.figure(figsize=(14,5))
-    plt.subplot(1,2,2)
-    plt.plot(x,xp.asnumpy(pyrsens[0,:]),'-.',label='Unmod pyWFS')
-    plt.plot(x,xp.asnumpy(zsens[-1,:]),'-.',label=f'z2WFS')
-    plt.plot(x,xp.asnumpy(combsens),':',label=f'Combined')
-    plt.grid()
-    plt.legend()
-    if use_fourier_modes is False:
-        plt.xscale('log')
-        plt.xlabel('KL mode')
-    else:
-        plt.xlabel('Fourier mode')
-    plt.xlim([1,Nmodes])
-    plt.title(f'RON sensitivity\n(60x60 subapertures, '+r'$\lambda$='+f'{wt.wfs2.lambdaInM*1e+9:1.0f}nm)')
-    plt.subplot(1,2,1)
-    plt.plot(x,xp.asnumpy(pyrsens_shot[0,:]),'-.',label='Unmod pyWFS')
-    plt.plot(x,xp.asnumpy(zsens_shot[-1,:]),'-.',label=f'z2WFS')
-    plt.plot(x,xp.asnumpy(combsens_shot),':',label=f'Combined')
-    plt.grid()
-    plt.legend()
-    if use_fourier_modes is False:
-        plt.xscale('log')
-        plt.xlabel('KL mode')
-    else:
-        plt.xlabel('Fourier mode')
-    plt.xlim([1,Nmodes])
-    plt.title(f'Shot noise sensitivity\n(60x60 subapertures, '+r'$\lambda$='+f'{wt.wfs2.lambdaInM*1e+9:1.0f}nm)')
+    if compute_combined:
+        plt.figure(figsize=(14,5))
+        plt.subplot(1,2,2)
+        plt.plot(x,xp.asnumpy(pyrsens[0,:]),'-.',label='Unmod pyWFS')
+        plt.plot(x,xp.asnumpy(zsens[-1,:]),'-.',label=f'z2WFS')
+        plt.plot(x,xp.asnumpy(combsens),':',label=f'Combined')
+        plt.grid()
+        plt.legend()
+        if use_fourier_modes is False:
+            plt.xscale('log')
+            plt.xlabel('KL mode')
+        else:
+            plt.xlabel('Fourier mode')
+        plt.xlim([1,Nmodes])
+        plt.title(f'RON sensitivity\n(60x60 subapertures, '+r'$\lambda$='+f'{wt.wfs2.lambdaInM*1e+9:1.0f}nm)')
+        plt.subplot(1,2,1)
+        plt.plot(x,xp.asnumpy(pyrsens_shot[0,:]),'-.',label='Unmod pyWFS')
+        plt.plot(x,xp.asnumpy(zsens_shot[-1,:]),'-.',label=f'z2WFS')
+        plt.plot(x,xp.asnumpy(combsens_shot),':',label=f'Combined')
+        plt.grid()
+        plt.legend()
+        if use_fourier_modes is False:
+            plt.xscale('log')
+            plt.xlabel('KL mode')
+        else:
+            plt.xlabel('Fourier mode')
+        plt.xlim([1,Nmodes])
+        plt.title(f'Shot noise sensitivity\n(60x60 subapertures, '+r'$\lambda$='+f'{wt.wfs2.lambdaInM*1e+9:1.0f}nm)')
 
     plt.show()
 
 
 if __name__ == '__main__':
-    rMods = xp.array([0.0,0.5,2.0,4.0,6.0])
+    roofSizes = xp.array([0.0,0.125,0.25,0.5,0.75]) # always start from 0
+    oversampling = 8
+    dotDelays = xp.array([0.5,0.4,0.3,0.25]) # always start from 1/2
     dotSizes = xp.array([1.0,1.5,2.0])
-    plot_sensitivites(Nmodes=400,amp=15e-9,rMods=rMods,dotSizes=dotSizes,n=2,use_full_frame=True,use_fourier_modes=True)
+    plot_imperfection_sensitivites(Nmodes=100,amp=15e-9,roofSizes=roofSizes,dotSizes=dotSizes,
+                                   dotDelays=dotDelays,oversampling=oversampling,
+                                    use_full_frame=True,use_fourier_modes=False,n=2)
+
+    # rMods = xp.array([0.0,0.5,2.0,4.0,6.0])
+    # dotSizes = xp.array([1.0,1.5,2.0])
+    # plot_sensitivites(Nmodes=100,amp=15e-9,rMods=rMods,dotSizes=dotSizes,n=2,
+    #                   use_full_frame=False,use_fourier_modes=False,compute_combined=False)
 
 

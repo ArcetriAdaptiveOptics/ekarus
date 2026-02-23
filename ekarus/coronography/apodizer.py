@@ -70,8 +70,16 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int,
     else:
         app = pupil * xp.exp(1j*phi_guess,dtype=xp.complex64)
 
+    if phi_residual is not None:
+        app *= xp.exp(1j*phi_residual,dtype=xp.complex64)
+
     if iffs is not None:
         Rec = xp.linalg.pinv(iffs)
+        if phi_residual is not None:
+            cmd = Rec @ phi_residual[pupil>0.0]
+            fit_res = iffs @ cmd
+            fit_residual = reshape_on_mask(fit_res, ~pupil.astype(bool))
+            ho_residual = phi_residual - fit_residual
 
     # define dark zone as location where contrast is < 1e-1
     dark_zone = target_contrast < 0.1
@@ -79,10 +87,7 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int,
     old_image = None
     for i in range(max_iterations):
         # calculate image plane electric field
-        if phi_residual is not None:
-            image = xp.fft.fftshift(xp.fft.fft2(app * xp.exp(1j*phi_residual,dtype=xp.complex64))) 
-        else:
-            image = xp.fft.fftshift(xp.fft.fft2(app)) 
+        image = xp.fft.fftshift(xp.fft.fft2(app)) 
 
         if not xp.any(xp.abs(image)**2 / xp.max(xp.abs(image)**2) > target_contrast):
             break
@@ -104,6 +109,11 @@ def generate_app_keller(pupil, target_contrast, max_iterations:int,
             cmd = Rec @ phase
             fit_phase = iffs @ cmd
             app = xp.asarray(pupil) * xp.exp(1j*reshape_on_mask(fit_phase, ~pupil.astype(bool)),dtype=xp.complex64)
+            if phi_residual is not None:
+                app *= xp.exp(1j*ho_residual,dtype=xp.complex64)
+
+    if phi_residual is not None and iffs is not None:
+        app *= xp.exp(-1j*fit_residual,dtype=xp.complex64)
     
     psf = xp.abs(image)**2
     contrast =  psf / xp.max(psf)
