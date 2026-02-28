@@ -188,7 +188,7 @@ def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofS
     plt.figure(figsize=(14,5))
     plt.subplot(1,2,2)
     for k,roof in enumerate(roofSizes):
-        plt.plot(x,xp.asnumpy(pyrsens[k,:]),'-.',label=f'roof: {roof:1.2f}'+r'$\lambda/D$')
+        plt.plot(x,xp.asnumpy(pyrsens[k,:]),'-.',label=f'roof: {roof:1.2f} '+r'$\lambda/D$')
     plt.grid()
     plt.legend()
     if use_fourier_modes is False:
@@ -200,7 +200,7 @@ def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofS
     plt.title(f'RON sensitivity\nUnmod pyWFS')
     plt.subplot(1,2,1)
     for k,roof in enumerate(roofSizes):
-        plt.plot(x,xp.asnumpy(pyrsens_shot[k,:]),'-.',label=f'roof: {roof:1.2f}'+r'$\lambda/D$')
+        plt.plot(x,xp.asnumpy(pyrsens_shot[k,:]),'-.',label=f'roof: {roof:1.2f} '+r'$\lambda/D$')
     plt.grid()
     plt.legend()
     if use_fourier_modes is False:
@@ -225,7 +225,7 @@ def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofS
         else:
             plt.xlabel('Fourier mode')
         plt.xlim([1,Nmodes])
-        plt.title(f'RON sensitivity\nzWFS {dotSize:1.1f}'+r'$\lambda/D$')
+        plt.title(f'RON sensitivity\nzWFS {dotSize:1.1f} '+r'$\lambda/D$')
         plt.subplot(1,2,1)
         plt.plot(x,xp.asnumpy(pyrsens_shot[0,:]),':',label='Unmod pyWFS')
         for k,dotDelay in enumerate(dotDelays):
@@ -470,12 +470,12 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
 
 if __name__ == '__main__':
     roofSizes = xp.array([0.0,0.125,0.25,0.5,0.75]) # always start from 0
-    oversampling = 8
+    oversampling = 4
     dotDelays = xp.array([0.5,0.4,0.3,0.25]) # always start from 1/2
     dotSizes = xp.array([1.0,1.5,2.0])
     plot_imperfection_sensitivites(Nmodes=100,amp=15e-9,roofSizes=roofSizes,dotSizes=dotSizes,
                                    dotDelays=dotDelays,oversampling=oversampling,
-                                    use_full_frame=True,use_fourier_modes=False,n=2)
+                                    use_full_frame=True,use_fourier_modes=True,n=2)
 
     # rMods = xp.array([0.0,0.5,2.0,4.0,6.0])
     # dotSizes = xp.array([1.0,1.5,2.0])

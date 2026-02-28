@@ -64,6 +64,7 @@ class SlopeComputer():
 
         self.frame_null = None
         self.slope_null = None
+        self.slopeMat = None
 
         if hasattr(wfs,'apex_angle'):
             self.wfs_type = 'PWFS'
@@ -131,8 +132,10 @@ class SlopeComputer():
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=30,verbose=False) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(zero_phase, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
-                    centerOnPix = False if self._slope_method == 'raw_intensity' else True
-                    self._define_pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixDiam=centerObscPixelSize, centerOnPix=centerOnPix)
+                    # centerOnPix = False if self._slope_method == 'raw_intensity' else True
+                    self._define_pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixDiam=centerObscPixelSize)#, centerOnPix=centerOnPix)
+                    self.roi = xp.sum(self._roi_masks,axis=0)
+                    self.slopeMat = self._compute_pyr_slopemat()
                     hdr_dict = {'APEX_ANG': self._wfs.apex_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case '3PWFS':
@@ -147,8 +150,10 @@ class SlopeComputer():
                     self._wfs.set_modulation_angle(modulationAngleInLambdaOverD=30,verbose=False) # modulate a lot during subaperture definition
                     modulated_intensity = self._wfs.get_intensity(zero_phase, lambdaOverD)
                     detector_image = self._detector.image_on_detector(modulated_intensity)
-                    centerOnPix = False if self._slope_method == 'raw_intensity' else True
-                    self._define_3pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixDiam=centerObscPixelSize, centerOnPix=centerOnPix)
+                    # centerOnPix = False if self._slope_method == 'raw_intensity' else True
+                    self._define_3pyr_subaperture_masks(detector_image, subaperturePixelSize, centerObscPixDiam=centerObscPixelSize)#, centerOnPix=centerOnPix)
+                    self.roi = xp.sum(self._roi_masks,axis=0)
+                    self.slopeMat = self._compute_3pyr_slopemat()
                     hdr_dict = {'APEX_ANG': self._wfs.vertex3_angle, 'RAD2PIX': lambdaOverD, 'OVERSAMP': self._wfs.oversampling,  'SUBAPPIX': subaperturePixelSize}
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8), hdr_dict)
             case 'ZWFS':
@@ -161,9 +166,8 @@ class SlopeComputer():
                     camera_shape = self._detector.detector_shape
                     roiSizeInPix = max(camera_shape)/self._wfs.oversampling
                     centerObscPixelSize = kwargs['centerObscurationInPixels']
-                    roi_mask = xp.logical_or(get_circular_mask(camera_shape, mask_radius=roiSizeInPix//2),
+                    self.roi = xp.logical_or(get_circular_mask(camera_shape, mask_radius=roiSizeInPix//2),
                                               ~get_circular_mask(camera_shape, mask_radius=centerObscPixelSize/2))
-                    self._roi_masks = roi_mask
                     save_fits(roi_path, (self._roi_masks).astype(xp.uint8))
             case _:
                 raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
@@ -175,21 +179,26 @@ class SlopeComputer():
         """
         intensity = self._wfs.get_intensity(input_field, lambdaOverD)
         detector_image = self._detector.image_on_detector(intensity, photon_flux=nPhotons)
+        signal = detector_image[~self.roi]
+        slopes = signal/xp.mean(signal)
+
+        if self.slopeMat is not None:
+            slopes = self.slopeMat @ slopes
 
         # if self.frame_null is not None:
         #     detector_image -= self.frame_null
 
-        match self.wfs_type:
-            case 'PWFS':
-                slopes = self._compute_pyr_signal(detector_image)
-            case '3PWFS':
-                slopes = self._compute_3pyr_signal(detector_image)
-            case 'ZWFS':
-                signal = detector_image[~self._roi_masks]
-                slopes = signal/xp.mean(signal)
-                # slopes = detector_image[~self._roi_masks]
-            case _:
-                raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
+        # match self.wfs_type:
+        #     case 'PWFS':
+        #         slopes = self._compute_pyr_signal(detector_image)
+        #     case '3PWFS':
+        #         slopes = self._compute_3pyr_signal(detector_image)
+        #     case 'ZWFS':
+        #         signal = detector_image[~self._roi_masks]
+        #         slopes = signal/xp.mean(signal)
+        #         # slopes = detector_image[~self._roi_masks]
+        #     case _:
+        #         raise NotImplementedError('Unrecognized sensor type. Available types are: PWFS, 3PWFS, ZWFS')
             
         if self.slope_null is not None:
             slopes -= self.slope_null
@@ -228,60 +237,118 @@ class SlopeComputer():
         # self.compute_slopes(zero_phase,lambdaOverD,nPhotons)
         # self.frame_null = self._detector.last_frame.copy()
 
-
-    def _compute_pyr_signal(self, detector_image):
-        A = detector_image[~self._roi_masks[0]]
-        B = detector_image[~self._roi_masks[1]]
-        C = detector_image[~self._roi_masks[2]]
-        D = detector_image[~self._roi_masks[3]]
+    def _compute_pyr_slopemat(self):
+        A = ~self._roi_masks[0]
+        B = ~self._roi_masks[1]
+        C = ~self._roi_masks[2]
+        D = ~self._roi_masks[3]
 
         match self._slope_method:
             case 'slopes':
                 up_down = (A+B) - (C+D)
                 left_right = (A+C) - (B+D)
-                slopes = xp.hstack((up_down, left_right))
+                slopeMat = xp.zeros([len(up_down)+len(left_right),int(xp.sum(1-self.roi))])
+                slopeMat[:len(up_down)] = up_down[~self.roi]
+                slopeMat[len(up_down):] = left_right[~self.roi]
 
             case 'diagonal_slopes':
                 up_down = (A+B) - (C+D)
                 left_right = (A+C) - (B+D)
                 diag = (A+D) - (B+C)#*xp.sqrt(2)
-                slopes = xp.hstack((up_down, left_right, diag))
+                slopeMat = xp.zeros([len(up_down)+len(left_right)+len(diag),int(xp.sum(1-self.roi))])
+                slopeMat[:len(up_down)] = up_down[~self.roi]
+                slopeMat[len(up_down):-len(diag)] = left_right[~self.roi]
+                slopeMat[-len(diag):] = diag[~self.roi]
                 
             case 'raw_intensity':
-                slopes = xp.hstack((A,B,C,D))
+                slopeMat = None
 
             case _:
                 raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'diagonal_slopes'")
-            
-        mean_intensity = xp.mean(xp.hstack((A,B,C,D)))/4 #xp.sum(xp.hstack((A,B,C,D)))/len(A) #
-        slopes *= 1/mean_intensity
-        return slopes
+        return slopeMat
     
 
-    def _compute_3pyr_signal(self, detector_image):
-        A = detector_image[~self._roi_masks[0]]
-        B = detector_image[~self._roi_masks[1]]
-        C = detector_image[~self._roi_masks[2]]
+    def _compute_3pyr_slopemat(self):
+        A = ~self._roi_masks[0]
+        B = ~self._roi_masks[1]
+        C = ~self._roi_masks[2]
 
         match self._slope_method:
             case 'slopes':
                 up_down = xp.sqrt(3)/2*(B-C)
                 left_right = A - (B+C)/2
-                slopes = xp.hstack((up_down, left_right))
+                slopeMat = xp.zeros([len(up_down)+len(left_right),int(xp.sum(1-self.roi))])
+                slopeMat[:len(up_down)] = up_down[~self.roi]
+                slopeMat[len(up_down):] = left_right[~self.roi]
 
             case 'all_slopes':
                 ab = (A+B)/2-C
                 bc = (C+B)/2-A
-                slopes = xp.hstack((ab,bc))
+                slopeMat = xp.zeros([len(ab)+len(bc),int(xp.sum(1-self.roi))])
+                slopeMat[:len(ab)] = ab[~self.roi]
+                slopeMat[len(ab):] = bc[~self.roi]
                 
             case 'raw_intensity':
-                slopes = xp.hstack((A,B,C))
+                slopeMat = None
 
             case _:
                 raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'all_slopes'")
+        return slopeMat
             
-        mean_intensity = xp.mean(xp.hstack((A,B,C)))/3 # xp.sum(xp.hstack((A,B,C)))/len(A) #
-        slopes *= 1/mean_intensity
+
+    # def _compute_pyr_signal(self, detector_image):
+    #     A = detector_image[~self._roi_masks[0]]
+    #     B = detector_image[~self._roi_masks[1]]
+    #     C = detector_image[~self._roi_masks[2]]
+    #     D = detector_image[~self._roi_masks[3]]
+
+    #     match self._slope_method:
+    #         case 'slopes':
+    #             up_down = (A+B) - (C+D)
+    #             left_right = (A+C) - (B+D)
+    #             slopes = xp.hstack((up_down, left_right))
+
+    #         case 'diagonal_slopes':
+    #             up_down = (A+B) - (C+D)
+    #             left_right = (A+C) - (B+D)
+    #             diag = (A+D) - (B+C)#*xp.sqrt(2)
+    #             slopes = xp.hstack((up_down, left_right, diag))
+                
+    #         case 'raw_intensity':
+    #             slopes = xp.hstack((A,B,C,D))
+
+    #         case _:
+    #             raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'diagonal_slopes'")
+            
+    #     mean_intensity = xp.mean(xp.hstack((A,B,C,D))) #xp.sum(xp.hstack((A,B,C,D)))/len(A) #
+    #     slopes *= 1/mean_intensity
+    #     return slopes
+    
+
+    # def _compute_3pyr_signal(self, detector_image):
+    #     A = detector_image[~self._roi_masks[0]]
+    #     B = detector_image[~self._roi_masks[1]]
+    #     C = detector_image[~self._roi_masks[2]]
+
+    #     match self._slope_method:
+    #         case 'slopes':
+    #             up_down = xp.sqrt(3)/2*(B-C)
+    #             left_right = A - (B+C)/2
+    #             slopes = xp.hstack((up_down, left_right))
+
+    #         case 'all_slopes':
+    #             ab = (A+B)/2-C
+    #             bc = (C+B)/2-A
+    #             slopes = xp.hstack((ab,bc))
+                
+    #         case 'raw_intensity':
+    #             slopes = xp.hstack((A,B,C))
+
+    #         case _:
+    #             raise KeyError("Unrecongised method: available methods are 'slopes', 'raw_intensity', 'all_slopes'")
+            
+    #     mean_intensity = xp.mean(xp.hstack((A,B,C))) # xp.sum(xp.hstack((A,B,C)))/len(A) #
+    #     slopes *= 1/mean_intensity
         return slopes
     
     
@@ -293,17 +360,20 @@ class SlopeComputer():
         """
         ny,nx = subaperture_image.shape
         subaperture_masks = xp.zeros((4, ny, nx), dtype=bool)
+        subap_centers = xp.zeros([4,2])
         for i in range(4):
-            qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant')
+            qx,qy = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant', centerOnPix=centerOnPix)
+            subap_centers[i,0],subap_centers[i,1] = (qx, qy)
             # qy,qx = self.find_subaperture_center(subaperture_image, index=i+1, mode='quadrant', centerOnPix=centerOnPix)
             subaperture_masks[i] = get_circular_mask(subaperture_image.shape, mask_radius=Npix/2, mask_center=(qx,qy))
             if centerObscPixDiam > 0.0:
                 obsc_mask = get_circular_mask(subaperture_image.shape, mask_radius=centerObscPixDiam//2, mask_center=(qx,qy))
                 subaperture_masks[i] = (subaperture_masks[i] + (1-obsc_mask)).astype(bool)
+        self._subap_centers = subap_centers
         self._roi_masks = subaperture_masks
 
 
-    def _define_3pyr_subaperture_masks(self, subaperture_image, Npix, centerOnPix:bool=True, centerObscPixDiam:float = 0.0):
+    def _define_3pyr_subaperture_masks(self, subaperture_image, Npix, centerOnPix:bool=False, centerObscPixDiam:float = 0.0):
         """
         Create subaperture masks for the given shape and pixel size.
 
@@ -321,7 +391,7 @@ class SlopeComputer():
 
     
     @staticmethod
-    def find_subaperture_center(detector_image, mode, index:int=1, centerOnPix:bool=True):
+    def find_subaperture_center(detector_image, mode, index:int=1, centerOnPix:bool=False):
         X,Y = image_grid(detector_image.shape, recenter=True)
         roi_mask = xp.zeros_like(detector_image, dtype=xp.float)
         if mode == 'quadrant':
