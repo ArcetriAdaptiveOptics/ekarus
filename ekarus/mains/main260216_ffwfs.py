@@ -47,8 +47,9 @@ def get_throughput(wfs,roi_mask,ccd=None):
         ccd = wt.ccd1
     intensity = wfs.get_intensity(ef_amp.astype(xp.cfloat),lambdaOverD)
     frame = ccd.image_on_detector(intensity,photon_flux=None)
-    ref_signal = frame[roi_mask]
-    thrp = xp.sum(ref_signal)/xp.sum(frame)
+    flux = xp.sum(frame)
+    ref_signal = frame[roi_mask]/flux
+    thrp = xp.sum(ref_signal)/flux
     return thrp, ref_signal
 
 def plot_mode_j(pupil,Mat,j:int,title:str=''):
@@ -99,8 +100,8 @@ def n_norm(vec,n:int=2):
         norm = xp.sqrt(xp.sum(vec**2))
     return norm
 
-def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofSizes,
-                      oversampling,n:int=1,use_full_frame:bool=False,use_fourier_modes:bool=False):
+def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofSizes,oversampling:int,vch_norm:bool=False,
+                    n:int=1,use_full_frame:bool=False,use_fourier_modes:bool=False):
 
     if use_fourier_modes:
         mode_basis = FM
@@ -172,16 +173,24 @@ def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofS
         for k,roof in enumerate(roofSizes):
             pyr.roof = roof
             pyr_signal = get_signal(in_ef,pyr,pyr_roi,norm_amp=amp*m2rad,ccd=ccd)/flux
-            pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)*Nsubap
-            pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]/flux),n=n)
+            if vch_norm:
+                pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)*Nsubap
+                pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]/flux),n=n)
+            else:
+                pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)
+                pyrsens_shot[k,mode_id] = n_norm(pyr_signal/pyr_ref[k,:],n=n)*pyr_thrp[k]
 
         # zWFS case
         for i,dotSize in enumerate(dotSizes):
             for j,dotDelay in enumerate(dotDelays):
                 zwfs.change_dot_parameters(dotDelayInradians=dotDelay,dotSizeInLambdaOverD=dotSize)
                 z_signal = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
-                zsens[i,j,mode_id] = n_norm(z_signal,n=n)*Nsubap
-                zsens_shot[i,j,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[i,j,:]/flux),n=n)
+                if vch_norm:
+                    zsens[i,j,mode_id] = n_norm(z_signal,n=n)*Nsubap
+                    zsens_shot[i,j,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[i,j,:]/flux),n=n)
+                else:
+                    zsens[i,j,mode_id] = n_norm(z_signal,n=n)
+                    zsens_shot[i,j,mode_id] = n_norm(z_signal/zwfs_ref[i,j,:],n=n)*zwfs_thrp[i,j]
 
     x = xp.asnumpy(xp.arange(Nmodes)+1)
 
@@ -249,7 +258,7 @@ def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofS
 
 
 def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combined:bool=False,
-                      use_full_frame:bool=False,use_fourier_modes:bool=False):
+                      use_full_frame:bool=False,use_fourier_modes:bool=False,vch_norm:bool=False):
 
     if use_fourier_modes:
         mode_basis = FM
@@ -321,25 +330,34 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
 
         # 3PWFS case
         pyr3_signal = get_signal(in_ef,pyr3,pyr3_roi,norm_amp=amp*m2rad)/flux
-        pyr3sens[mode_id] = n_norm(pyr3_signal,n=n)*Nsubap
-        # pyr3sens_shot[mode_id] = n_norm(pyr3_signal/(pyr3_ref),n=n)*pyr3_thrp
-        pyr3sens_shot[mode_id] = n_norm(pyr3_signal/xp.sqrt(pyr3_ref/flux),n=n)
+        if vch_norm:
+            pyr3sens[mode_id] = n_norm(pyr3_signal,n=n)*Nsubap
+            pyr3sens_shot[mode_id] = n_norm(pyr3_signal/xp.sqrt(pyr3_ref/flux),n=n)
+        else:
+            pyr3sens[mode_id] = n_norm(pyr3_signal,n=n)
+            pyr3sens_shot[mode_id] = n_norm(pyr3_signal/pyr3_ref,n=n)*pyr3_thrp
 
         # pyWFS case
         for k,rMod in enumerate(rMods):
             pyr.set_modulation_angle(rMod,verbose=False)
             pyr_signal = get_signal(in_ef,pyr,pyr_roi,norm_amp=amp*m2rad)/flux
-            pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)*Nsubap
-            # pyrsens_shot[k,mode_id] = n_norm(pyr_signal/(pyr_ref[k,:]),n=n)*pyr_thrp[k]
-            pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]/flux),n=n)
+            if vch_norm:
+                pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)*Nsubap
+                pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]/flux),n=n)
+            else:
+                pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)
+                pyrsens_shot[k,mode_id] = n_norm(pyr_signal/pyr_ref[k,:],n=n)*pyr_thrp[k]
 
         # zWFS case
         for k,dotSize in enumerate(dotSizes):
             zwfs.change_dot_parameters(dotDelayInradians=0.5,dotSizeInLambdaOverD=dotSize)
             z_signal = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
-            zsens[k,mode_id] = n_norm(z_signal,n=n)*Nsubap
-            # zsens_shot[k,mode_id] = n_norm(z_signal/(zwfs_ref[k,:]),n=n)*zwfs_thrp[k]
-            zsens_shot[k,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[k,:]/flux),n=n)
+            if vch_norm:
+                zsens[k,mode_id] = n_norm(z_signal,n=n)*Nsubap
+                zsens_shot[k,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[k,:]/flux),n=n)
+            else:
+                zsens[k,mode_id] = n_norm(z_signal,n=n)
+                zsens_shot[k,mode_id] = n_norm(z_signal/zwfs_ref[k,:],n=n)*zwfs_thrp[k]
 
         if compute_combined:
             # Combined case
@@ -347,8 +365,12 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
             pyrsig = get_signal(in_ef,pyr,pyr_roi,norm_amp=amp*m2rad)/flux
             zwfs.change_dot_parameters(dotDelayInradians=0.5,dotSizeInLambdaOverD=2.0)
             zsig = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
-            combsens[mode_id] = n_norm(xp.hstack([pyrsig,zsig]),n=n)*Nsubap
-            combsens_shot[mode_id] = n_norm(xp.hstack([pyrsig/xp.sqrt(pyr_ref[0,:]/flux),zsig/xp.sqrt(zwfs_ref[0,:]/flux)]),n=n)
+            if vch_norm:
+                combsens[mode_id] = n_norm(xp.hstack([pyrsig,zsig]),n=n)*Nsubap
+                combsens_shot[mode_id] = n_norm(xp.hstack([pyrsig/xp.sqrt(pyr_ref[0,:]/flux),zsig/xp.sqrt(zwfs_ref[0,:]/flux)]),n=n)
+            else:
+                combsens[mode_id] = n_norm(xp.hstack([pyrsig,zsig]),n=n)
+                combsens_shot[mode_id] = n_norm(xp.hstack([pyrsig/pyr_ref[0,:]*pyr_thrp[k],zsig/zwfs_ref[0,:]*zwfs_thrp[k]]),n=n)
 
     x = xp.asnumpy(xp.arange(Nmodes)+1)
 
