@@ -674,9 +674,10 @@ class HighLevelAO():
         return slope_null
 
 
-    def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM, Nmodes:int, lambdaInM:float,
-                                ampsInM:float=10e-9, save_prefix:str='', IM=None, 
-                                return_perfect_ogs:bool=False, return_lo_ogs:bool=False):
+    def calibrate_optical_gains_from_precorrected_screens(self, pre_corrected_screens, slope_computer, MM, 
+                                                          Nmodes:int, lambdaInM:float,
+                                                            ampsInM:float=10e-9, save_prefix:str='', IM=None, imprefix='',
+                                                            return_perfect_ogs:bool=False, return_lo_ogs:bool=False):
         """
         Calibrates the optical gains for each mode using a phase screen at a given time.
 
@@ -716,13 +717,13 @@ class HighLevelAO():
         except FileNotFoundError:
             if IM is None:
                 try:
-                    IM = myfits.read_fits(os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
-                    print('IM loaded from: '+os.path.join(self.savecalibpath,str(save_prefix)+'IM.fits'))
+                    IM = myfits.read_fits(os.path.join(self.savecalibpath,str(imprefix)+'IM.fits'))
+                    print('IM loaded from: '+os.path.join(self.savecalibpath,str(imprefix)+'IM.fits'))
                 except FileNotFoundError:
                     # IM = myfits.read_fits(os.path.join(self.savecalibpath,'IM.fits'))
                     # print(os.path.join(self.savecalibpath,'IM.fits'))
                     print('Computing IM ...')
-                    _,IM = self.compute_reconstructor(slope_computer, MM, lambdaInM, ampsInM, save_prefix=save_prefix)
+                    _,IM = self.compute_reconstructor(slope_computer, MM, lambdaInM, ampsInM, save_prefix=imprefix)
             IMc = IM[:,:Nmodes]
             norm = xp.diag(IMc.T @ IMc)
             N = xp.shape(pre_corrected_screens)[0]
@@ -738,18 +739,18 @@ class HighLevelAO():
                 phi = pre_corrected_screens[int(i),:]
                 phi -= xp.mean(phi)
                 res_phi = phi*2*xp.pi/lambdaInM
-                cl_slopes = self._get_slopes(slope_computer, MM, lambdaInM, ampsInM, phase_offset=res_phi, scaleAmps=False)
+                cl_slopes = self._get_slopes(slope_computer, MM[:Nmodes,:], lambdaInM, ampsInM, phase_offset=res_phi, scaleAmps=False)
                 cl_opt_gains[i] = xp.diag(cl_slopes @ IMc) / norm
                 if return_perfect_ogs:
                     phi_modes = phase2modes @ res_phi
                     lo_phi = MM.T @ phi_modes
                     ho_phi = res_phi - lo_phi
-                    pl_slopes = self._get_slopes(slope_computer, MM, lambdaInM, ampsInM, phase_offset=ho_phi, scaleAmps=False)
+                    pl_slopes = self._get_slopes(slope_computer, MM[:Nmodes,:], lambdaInM, ampsInM, phase_offset=ho_phi, scaleAmps=False)
                     pl_opt_gains[i] = xp.diag(pl_slopes @ IMc) / norm
                 if return_lo_ogs:
                     phi_modes = phase2modes @ res_phi
                     lo_phi = MM.T @ phi_modes
-                    lo_slopes = self._get_slopes(slope_computer, MM, lambdaInM, ampsInM, phase_offset=lo_phi, scaleAmps=False)
+                    lo_slopes = self._get_slopes(slope_computer, MM[:Nmodes,:], lambdaInM, ampsInM, phase_offset=lo_phi, scaleAmps=False)
                     lo_opt_gains[i] = xp.diag(lo_slopes @ IMc) / norm
             cl_opt_gains = xp.mean(cl_opt_gains,axis=0)
             myfits.save_fits(og_cl_path,cl_opt_gains)

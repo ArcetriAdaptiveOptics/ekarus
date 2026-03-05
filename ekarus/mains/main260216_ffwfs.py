@@ -49,7 +49,7 @@ def get_throughput(wfs,roi_mask,ccd=None):
     frame = ccd.image_on_detector(intensity,photon_flux=None)
     flux = xp.sum(frame)
     ref_signal = frame[roi_mask]/flux
-    thrp = xp.sum(ref_signal)/flux
+    thrp = xp.sum(ref_signal)
     return thrp, ref_signal
 
 def plot_mode_j(pupil,Mat,j:int,title:str=''):
@@ -160,7 +160,7 @@ def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofS
 
     Nsubap = 60
     if use_full_frame:
-        Nsubap = xp.sqrt(xp.sum(pyr_roi))
+        Nsubap = xp.sqrt(xp.sum(pyr_roi))/5
 
     flux = xp.sum(ef_amp)
 
@@ -175,7 +175,7 @@ def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofS
             pyr_signal = get_signal(in_ef,pyr,pyr_roi,norm_amp=amp*m2rad,ccd=ccd)/flux
             if vch_norm:
                 pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)*Nsubap
-                pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]/flux),n=n)
+                pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]),n=n)
             else:
                 pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)
                 pyrsens_shot[k,mode_id] = n_norm(pyr_signal/pyr_ref[k,:],n=n)*pyr_thrp[k]
@@ -187,7 +187,7 @@ def plot_imperfection_sensitivites(Nmodes:int,amp:float,dotSizes,dotDelays,roofS
                 z_signal = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
                 if vch_norm:
                     zsens[i,j,mode_id] = n_norm(z_signal,n=n)*Nsubap
-                    zsens_shot[i,j,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[i,j,:]/flux),n=n)
+                    zsens_shot[i,j,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[i,j,:]),n=n)
                 else:
                     zsens[i,j,mode_id] = n_norm(z_signal,n=n)
                     zsens_shot[i,j,mode_id] = n_norm(z_signal/zwfs_ref[i,j,:],n=n)*zwfs_thrp[i,j]
@@ -307,7 +307,7 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
 
     Nsubap = 60
     if use_full_frame:
-        Nsubap = xp.sqrt(xp.sum(pyr_roi))
+        Nsubap = xp.sqrt(xp.sum(pyr_roi))/5
 
     display_modes(1-wt.cmask, xp.asnumpy(mode_basis[:Nmodes,:].T), N=8)
 
@@ -332,7 +332,7 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
         pyr3_signal = get_signal(in_ef,pyr3,pyr3_roi,norm_amp=amp*m2rad)/flux
         if vch_norm:
             pyr3sens[mode_id] = n_norm(pyr3_signal,n=n)*Nsubap
-            pyr3sens_shot[mode_id] = n_norm(pyr3_signal/xp.sqrt(pyr3_ref/flux),n=n)
+            pyr3sens_shot[mode_id] = n_norm(pyr3_signal/xp.sqrt(pyr3_ref),n=n)
         else:
             pyr3sens[mode_id] = n_norm(pyr3_signal,n=n)
             pyr3sens_shot[mode_id] = n_norm(pyr3_signal/pyr3_ref,n=n)*pyr3_thrp
@@ -343,7 +343,7 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
             pyr_signal = get_signal(in_ef,pyr,pyr_roi,norm_amp=amp*m2rad)/flux
             if vch_norm:
                 pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)*Nsubap
-                pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]/flux),n=n)
+                pyrsens_shot[k,mode_id] = n_norm(pyr_signal/xp.sqrt(pyr_ref[k,:]),n=n)
             else:
                 pyrsens[k,mode_id] = n_norm(pyr_signal,n=n)
                 pyrsens_shot[k,mode_id] = n_norm(pyr_signal/pyr_ref[k,:],n=n)*pyr_thrp[k]
@@ -354,7 +354,7 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
             z_signal = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
             if vch_norm:
                 zsens[k,mode_id] = n_norm(z_signal,n=n)*Nsubap
-                zsens_shot[k,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[k,:]/flux),n=n)
+                zsens_shot[k,mode_id] = n_norm(z_signal/xp.sqrt(zwfs_ref[k,:]),n=n)
             else:
                 zsens[k,mode_id] = n_norm(z_signal,n=n)
                 zsens_shot[k,mode_id] = n_norm(z_signal/zwfs_ref[k,:],n=n)*zwfs_thrp[k]
@@ -367,7 +367,7 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
             zsig = get_signal(in_ef,zwfs,zwfs_roi,norm_amp=amp*m2rad)/flux
             if vch_norm:
                 combsens[mode_id] = n_norm(xp.hstack([pyrsig,zsig]),n=n)*Nsubap
-                combsens_shot[mode_id] = n_norm(xp.hstack([pyrsig/xp.sqrt(pyr_ref[0,:]/flux),zsig/xp.sqrt(zwfs_ref[0,:]/flux)]),n=n)
+                combsens_shot[mode_id] = n_norm(xp.hstack([pyrsig/xp.sqrt(pyr_ref[0,:]),zsig/xp.sqrt(zwfs_ref[0,:])]),n=n)
             else:
                 combsens[mode_id] = n_norm(xp.hstack([pyrsig,zsig]),n=n)
                 combsens_shot[mode_id] = n_norm(xp.hstack([pyrsig/pyr_ref[0,:]*pyr_thrp[k],zsig/zwfs_ref[0,:]*zwfs_thrp[k]]),n=n)
@@ -491,17 +491,17 @@ def plot_sensitivites(Nmodes:int,amp:float,rMods,dotSizes,n:int=1,compute_combin
 
 
 if __name__ == '__main__':
-    roofSizes = xp.array([0.0,0.125,0.25,0.5,0.75]) # always start from 0
-    oversampling = 4
-    dotDelays = xp.array([0.5,0.4,0.3,0.25]) # always start from 1/2
-    dotSizes = xp.array([1.0,1.5,2.0])
-    plot_imperfection_sensitivites(Nmodes=100,amp=15e-9,roofSizes=roofSizes,dotSizes=dotSizes,
-                                   dotDelays=dotDelays,oversampling=oversampling,
-                                    use_full_frame=True,use_fourier_modes=True,n=2)
-
-    # rMods = xp.array([0.0,0.5,2.0,4.0,6.0])
+    # roofSizes = xp.array([0.0,0.125,0.25,0.5,0.75]) # always start from 0
+    # oversampling = 4
+    # dotDelays = xp.array([0.5,0.4,0.3,0.25]) # always start from 1/2
     # dotSizes = xp.array([1.0,1.5,2.0])
-    # plot_sensitivites(Nmodes=100,amp=15e-9,rMods=rMods,dotSizes=dotSizes,n=2,
-    #                   use_full_frame=False,use_fourier_modes=False,compute_combined=False)
+    # plot_imperfection_sensitivites(Nmodes=100,amp=10e-9,roofSizes=roofSizes,dotSizes=dotSizes,
+    #                                dotDelays=dotDelays,oversampling=oversampling,
+    #                                 use_full_frame=True,use_fourier_modes=False,n=2,vch_norm=True)
+
+    rMods = xp.array([0.0,0.5,2.0,4.0,6.0])
+    dotSizes = xp.array([1.0,1.5,2.0])
+    plot_sensitivites(Nmodes=1000,amp=10e-9,rMods=rMods,dotSizes=dotSizes,n=2, vch_norm=True,
+                      use_full_frame=False,use_fourier_modes=False,compute_combined=False)
 
 

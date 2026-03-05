@@ -162,9 +162,9 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
     U1 = xp.real(U1)
     V1 = xp.real(V1)
 
+    cond_number = S1[0] / S1[n_actuators-number_of_modes_to_be_removed-1]
     if verbose:
         print(f"-- IF covariance matrix SVD ---")
-        cond_number = S1[0] / S1[n_actuators-number_of_modes_to_be_removed-1]
         print(f"    initial condition number is: {cond_number}")
 
     if if_max_condition_number is not None:
