@@ -9,14 +9,14 @@ class Coronograph(object):
     def _get_pupil_mask(self, field):
         """ Override this method with the 
         function to propagate an input focal
-        plane electric field trhough the 
+        plane electric field through the 
         coronograph pupil-plane mask """
 
     @abstractmethod
     def _get_focal_plane_mask(self, field):
         """ Override this method with the 
         function to propagate an input focal
-        plane electric field trhough the 
+        plane electric field through the 
         coronograph focal-plane mask """
 
     def _get_apodizer(self, lambdaInM):
