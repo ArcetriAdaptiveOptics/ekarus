@@ -3,7 +3,7 @@ import numpy as np
 # from arte.types.mask import CircularMask
 
 import matplotlib.pyplot as plt
-
+from scipy.interpolate import griddata
 
 
 def image_grid(shape, recenter:bool = False):
@@ -198,5 +198,42 @@ def myimshow(image, title='', cbar_title='', shrink=1.0, **kwargs):
     cbar = plt.colorbar(shrink=shrink)
     cbar.set_label(cbar_title,loc='top')
     plt.title(title)
+
+# data = np.genfromtxt('grav_def.txt',delimiter=',')
+
+def scatter_to_masked_image(x, y, z, num_pixels, method:str='cubic'):
+    """
+    Converts scattered x, y, z data into a 2D masked array image using scipy.
+    
+    Parameters:
+        x, y, z (np.ndarray): 1D arrays of coordinates and values.
+        num_pixels (int): Resolution of the output image.
+        
+    Returns:
+        np.ma.MaskedArray: The interpolated and masked 2D image.
+    """
+    # 1. Create a uniform grid
+    xi = np.linspace(x.min(), x.max(), num_pixels)
+    yi = np.linspace(y.min(), y.max(), num_pixels)
+    XI, YI = np.meshgrid(xi, yi)
+
+    # 2. Perform Interpolation
+    ZI = griddata((x, y), z, (XI, YI), method=method)
+
+    # 3. Define the circular mask
+    # We calculate the center and radius based on the input data limits.
+    cx, cy = (x.min() + x.max()) / 2, (y.min() + y.max()) / 2
+    radius = max((x.max() - x.min()) / 2, (y.max() - y.min()) / 2)
+    
+    dist_sq = (XI - cx)**2 + (YI - cy)**2
+    geometric_mask = dist_sq > radius**2
+
+    # 4. Final Masking
+    # We mask pixels that are outside the circle OR where data couldn't be 
+    # interpolated (NaN values).
+    total_mask = geometric_mask | np.isnan(ZI)
+    
+    return np.ma.masked_array(ZI, mask=total_mask)
+
 
 

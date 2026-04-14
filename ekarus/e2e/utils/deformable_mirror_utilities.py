@@ -3,6 +3,7 @@ import numpy as np
 
 from tps import ThinPlateSpline # for the simulated IFF
 # from scipy.interpolate import griddata
+from ekarus.e2e.utils.image_utils import reshape_on_mask
 
 import matplotlib.pyplot as plt
     
@@ -71,90 +72,95 @@ def simulate_influence_functions(act_coords, local_mask):#, pix_scale:float=1.0)
     return IFF
 
 
-# def get_pixel_coords(mask, coords, pix_scale:float = 1.0):
-#     """ 
-#     Convert x,y coordinates in coords to pixel coordinates
-#     or get the pixel coordinates of a mask
+def find_act_coords(IF, mask, if_master = None, use_peak:bool=False):
+    nActs = np.shape(IF)[1]
+    act_coords = np.zeros([nActs, 2])
+    
+    if use_peak is False:
+        if_master -= np.mean(if_master)
+        if_master /= np.std(if_master)
+        if_master_2d = reshape_on_mask(if_master, mask)
+        if_master_ft = np.fft.fft2(if_master_2d)
+
+    for j in range(nActs):
+        ifj = IF[:, j]
+        ifj -= np.mean(ifj)
+        ifj /= np.std(ifj)
+        ifj_2d = reshape_on_mask(ifj, mask)
+        if use_peak is False:
+            ifj_ft = np.fft.fft2(ifj_2d)
+            cross_power_spectrum = ifj_ft * np.conj(if_master_ft)
+            cc = np.fft.fftshift(np.fft.ifft2(cross_power_spectrum).real)
+        else:
+            cc = ifj_2d.copy()
+        ymax, xmax = np.unravel_index(np.argmax(cc), cc.shape) 
+
+        # X-axis sub-pixel shift
+        dx_num = cc[ymax, xmax - 1] - cc[ymax, xmax + 1]
+        dx_den = 2 * (cc[ymax, xmax - 1] - 2 * cc[ymax, xmax] + cc[ymax, xmax + 1])
+        dx = dx_num / dx_den if dx_den != 0 else 0.0
+
+        # Y-axis sub-pixel shift
+        dy_num = cc[ymax - 1, xmax] - cc[ymax + 1, xmax]
+        dy_den = 2 * (cc[ymax - 1, xmax] - 2 * cc[ymax, xmax] + cc[ymax + 1, xmax])
+        dy = dy_num / dy_den if dy_den != 0 else 0.0
+
+        act_coords[j, :] = [ymax + dy, xmax + dx]
+    
+    return act_coords
+
+# def get_coords_from_IFF(IFF, mask, use_peak=True):
+#     """
+#     Get the coordinates of the actuators from the influence functions matrix.
 
 #     Parameters
 #     ----------
-#     mask : ndarray(bool)
-#         The image mask where the pixels are.
+#     IFF : ndarray(float) [Npix,Nacts]
+#         The influence functions matrix.
         
-#     coords : ndarray(float) [2,N]
-#         The N coordinates to convert in pixel coordinates.
-#         Defaults to all pixels on the mask.
-        
-#     pix_scale : float (Optional)
-#         The number of pixels per meter.
-#         Defaults to 1.0
+#     mask : ndarray(bool) [Npix,Npix]
+#         The DM mask.
+    
+#     use_peak : bool, optional
+#         If True, actuator coordinates are computed from the IFF peak.
+#         If False, actuator coordinates are computed from the photocenter of the IFF.
+#         Defaults to True, the photocenter approach seems to be giving issues
 
 #     Returns
 #     -------
-#     pix_coords : ndarray(int) [2,N]
-#         The obtained pixel coordinates.
+#     coords : ndarray(float) [2,Nacts]
+#         The coordinates of the actuators in the mask.
 #     """
     
-#     H,W = mask.shape
-#     pix_coords = xp.zeros([2,xp.shape(coords)[-1]], dtype=xp.float)
-#     pix_coords[0,:] = coords[1,:]*pix_scale + H/2 #(coords[1,:]*pix_scale/2 + H)/2
-#     pix_coords[1,:] = coords[0,:]*pix_scale + W/2 #(coords[0,:]*pix_scale/2 + W)/2
-    
-#     return pix_coords
+#     # Get pixel coordinates
+#     xy_pix_coords = getMaskPixelCoords(mask)
 
+#     x_coords = xy_pix_coords[0,:]
+#     y_coords = xy_pix_coords[1,:]
 
-def get_coords_from_IFF(IFF, mask, use_peak=True):
-    """
-    Get the coordinates of the actuators from the influence functions matrix.
+#     mask = (mask).astype(bool) # ensure mask is boolean
+#     x_coords = x_coords[xp.invert(mask).flatten()]
+#     y_coords = y_coords[xp.invert(mask).flatten()]
 
-    Parameters
-    ----------
-    IFF : ndarray(float) [Npix,Nacts]
-        The influence functions matrix.
-        
-    mask : ndarray(bool) [Npix,Npix]
-        The DM mask.
-    
-    use_peak : bool, optional
-        If True, actuator coordinates are computed from the IFF peak.
-        If False, actuator coordinates are computed from the photocenter of the IFF.
-        Defaults to True, the photocenter approach seems to be giving issues
+#     dtype = xp.float
 
-    Returns
-    -------
-    coords : ndarray(float) [2,Nacts]
-        The coordinates of the actuators in the mask.
-    """
-    
-    # Get pixel coordinates
-    xy_pix_coords = getMaskPixelCoords(mask)
+#     # Get the coordinates of the actuators
+#     n_acts = IFF.shape[1]
+#     act_coords = xp.zeros([2, n_acts], dtype=dtype)
+#     iff_pix_coords = xp.zeros(n_acts, dtype=int)
 
-    x_coords = xy_pix_coords[0,:]
-    y_coords = xy_pix_coords[1,:]
+#     for k in range(n_acts):
+#         act_data = IFF[:, k]
+#         iff_pix_coords[k] = xp.argmax(act_data)
+#         if use_peak:
+#             max_id = xp.argmax(act_data)
+#             act_coords[0,k] = x_coords[max_id]
+#             act_coords[1,k] = y_coords[max_id] 
+#         else:
+#             act_coords[0,k] = xp.sum(x_coords * act_data) / xp.sum(act_data)
+#             act_coords[1,k] = xp.sum(y_coords * act_data) / xp.sum(act_data)
 
-    mask = (mask).astype(bool) # ensure mask is boolean
-    x_coords = x_coords[xp.invert(mask).flatten()]
-    y_coords = y_coords[xp.invert(mask).flatten()]
-
-    dtype = xp.float
-
-    # Get the coordinates of the actuators
-    n_acts = IFF.shape[1]
-    act_coords = xp.zeros([2, n_acts], dtype=dtype)
-    iff_pix_coords = xp.zeros(n_acts, dtype=int)
-
-    for k in range(n_acts):
-        act_data = IFF[:, k]
-        iff_pix_coords[k] = xp.argmax(act_data)
-        if use_peak:
-            max_id = xp.argmax(act_data)
-            act_coords[0,k] = x_coords[max_id]
-            act_coords[1,k] = y_coords[max_id] 
-        else:
-            act_coords[0,k] = xp.sum(x_coords * act_data) / xp.sum(act_data)
-            act_coords[1,k] = xp.sum(y_coords * act_data) / xp.sum(act_data)
-
-    return act_coords, iff_pix_coords
+#     return act_coords, iff_pix_coords
 
 
 def estimate_stiffness_from_IFF(IFF, CMat, act_pix_coords, cmdAmps=None):

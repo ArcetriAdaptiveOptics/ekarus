@@ -32,7 +32,7 @@ def make_ortho_modes(array, xp, dtype):
     else:
         Q, _ = xp.linalg.qr(array)
 
-    Q = xp.asarray(Q, dtype=dtype)
+    Q = xp.array(Q, dtype=dtype)
 
     return Q
 
@@ -86,10 +86,14 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
     """
 
     """Performs operations with NumPy or CuPy depending on the backend passed as an argument."""
-    if xp.on_gpu: #xp.__name__ == "cupy":
+    if xp.__name__ == "cupy":
         from cupy.linalg import svd, pinv
     else:
         from scipy.linalg import svd, pinv
+        if hasattr(pupil_mask,'get'):
+            pupil_mask = pupil_mask.get()
+        if hasattr(influence_functions,'get'):
+            influence_functions = influence_functions.get()
 
     if verbose:
         print("Starting modal basis generation...")
@@ -114,17 +118,21 @@ def make_modal_base_from_ifs_fft(pupil_mask, pupil_pix_radius, diameter, influen
     modes_to_be_removed[0, :] = 1.0
 
     if zern_modes > 0:
-        zg = ZernikeGenerator(xp.asnumpy(pupil_mask), pupil_pix_radius)
+        # if hasattr(pupil_mask,'get'):
+        #     zg = ZernikeGenerator(pupil_mask.get(), pupil_pix_radius)
+        # else:
+        zg = ZernikeGenerator(pupil_mask, pupil_pix_radius)
         zern_modes_cube = xp.stack([xp.array(zg.getZernike(z), dtype=dtype) for z in range(2, zern_modes + 2)])
 
         if verbose:
             print(f"Generated Zernike modes shape: {zern_modes_cube.shape}")
 
         for i in range(zern_modes):
-            modes_to_be_removed[i+1, :] = zern_modes_cube[i].ravel()[idx_mask]
+            modes_to_be_removed[i+1, :] = xp.array(zern_modes_cube[i].ravel()[idx_mask])
 
         # Orthonormalize Zernike modes
         modes_to_be_removed = make_ortho_modes(modes_to_be_removed, xp=xp, dtype=dtype)
+
 
         # Normalize Zernike modes
         for i in range(zern_modes):
@@ -324,7 +332,9 @@ def compute_ifs_covmat(pupil_mask, diameter, influence_functions, r0, L0,
     sp_freq        = generate_distance_grid(
         oversampling*mask_size, xp=xp, dtype=dtype
     )/(oversampling*diameter)
+    print(type(frequency_filter))
     phase_spectrum = generate_phase_spectrum(sp_freq, r0, L0, xp=xp, dtype=dtype, frequency_filter=frequency_filter)
+    print(type(phase_spectrum))
     norm_factor    = npupil_mask**2 * (oversampling * diameter)**2
 
     prod_ft_shape = ft_shape[0] * ft_shape[1]
@@ -372,7 +382,7 @@ def generate_phase_spectrum(f, r0, L0, xp=np, dtype=np.float32, frequency_filter
     """
 
     """Performs operations with NumPy or CuPy depending on the backend passed as an argument."""
-    if xp.on_gpu: #__name__ == "cupy":
+    if xp.__name__ == "cupy":
         from cupyx.scipy.special import gamma
     else:
         from scipy.special import gamma
@@ -395,7 +405,7 @@ def generate_phase_spectrum(f, r0, L0, xp=np, dtype=np.float32, frequency_filter
     # plt.xscale('log')
     # plt.yscale('log')
     # # raise ValueError()
-    return xp.asarray(out, dtype=dtype)
+    return xp.array(out, dtype=dtype)
 
 
 def generate_distance_grid(N, M=None, xp=np, dtype=np.float32):
