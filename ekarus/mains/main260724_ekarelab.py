@@ -1,44 +1,47 @@
-from ekarus.dataelab import PapyrusAnalyzer
+from ekarus.dataelab import factory
 
+tag_400KL='20260723_144418'
+tag_400KL_turbo='20260723_144441'
+tag_400KL_turbo_OL='20260723_144457'
 
-def main():
-    fname='/Users/lbusoni/Downloads/2025-10-13T22_24_56_telemetry_data.npy'
-    # Caricare l'analyzer (usa il metodo .get() per caching automatico)
-    an = PapyrusAnalyzer.get(fname)
+def main(tag):
+    ff = factory.get_factory('lorenzo')
+    # Load analyzer (use .get() for automatich caching)
+    an = ff.analyzer(tag)
 
-    # Accedere ai dati raw (restituisce array numpy)
+    # raw data (return array numpy)
     ocam_data = an.ocam_frames.get_data()          # shape: (nframes, y, x)
     modes_data = an.residual_modes.get_data()      # shape: (nframes, nmodes)
     dm_data = an.dm_commands.get_data()             # shape: (nframes, nacts)
 
-    # Accedere alle matrici di ricostruzione
+    # Control matrices
     s2m_matrix = an.s2m.get_data()                  # shape: (nmodes, nsignals)
     m2c_matrix = an.m2c.get_data()                  # shape: (nacts, nmodes)
 
 
-    # Calcolare media e std nel tempo
-    modes_mean = an.residual_modes.time_average()      # shape: (nmodes,)
-    modes_std = an.residual_modes.time_std()        # shape: (nmodes,)
-    modes_rms = an.residual_modes.time_rms()        # shape: (nmodes,)
+    # temporal stats
+    modes_mean = an.residual_modes.time_mean.get_data()      # shape: (nmodes,)
+    modes_std = an.residual_modes.time_std.get_data()        # shape: (nmodes,)
+    modes_rms = an.residual_modes.time_rms.get_data()        # shape: (nmodes,)
 
-    # Calcolare PSD
+    # modal PSD
     modes_psd = an.residual_modes.power()
 
-    # Selezionare intervalli temporali
+    # Select temporal subset of frames
     modes_subset = an.residual_modes.get_data(times=(10, 100))  # frames da 10 a 100
 
-    # Prendere un singolo frame
+    # Extract single frame
     frame_10 = an.ocam_frames.get_data()[10]        # shape: (y, x)
 
-    # Prendere un singolo modo nel tempo
+    # Extract single mode in time
     mode_5 = an.residual_modes.get_data()[:, 5]    # shape: (nframes,)
 
-    # Usare get_index_of per accessi più avanzati (se supportato)
+    # Use get_index_of for more advanced access (if supported)
 
-    # Stampare info
+    # Print info
     an.summary()
 
-    # Info come dict
+    # Info as dict
     info = an.info()
     print(f"Frames Ocam: {info['nframes_ocam']}")
     print(f"Frames residual modes: {info.get('nframes_residual_modes', info.get('nframes_modes','N/A'))}")

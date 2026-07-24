@@ -1,32 +1,31 @@
-"""Modal coefficients timeseries for Papyrus"""
+"""Modal coefficients timeseries for Ekarus"""
 
 from astropy import units as u
 from arte.dataelab.base_timeseries import BaseTimeSeries
+from ekarus.dataelab.ekarus_telemetry_keys import EkarusTelemetryKeys
 from ekarus.dataelab.numpy_loader import NumpyDataLoader
 import numpy as np
 import datetime
 
 
 class ResidualModes(BaseTimeSeries):
-    """Residual modal coefficients timeseries for Papyrus
+    """Residual modal coefficients timeseries for Ekarus
 
     Loads 'modeCube' from the telemetry file.
     Expected shape on disk: (time, n_modes, 1) or (time, n_modes)
     This class squeezes singleton axes so returned data shape is (time, n_modes).
     """
 
-    MODES_KEY = 'modeCube'
-    TIMESTAMP_KEY = 'timeStampDmCube'
 
     def __init__(self, filename):
-        data_loader = NumpyDataLoader(filename, key=ResidualModes.MODES_KEY)
+        data_loader = NumpyDataLoader(filename, key=EkarusTelemetryKeys.MODE_CUBE_KEY)
 
         # ensure any singleton trailing axis is removed (e.g. shape (T, N, 1) -> (T, N))
         data_loader._postprocess = lambda d: np.squeeze(d)
 
         # time_vector optional: try to load and convert to seconds (float)
         try:
-            time_loader = NumpyDataLoader(filename, key=ResidualModes.TIMESTAMP_KEY)
+            time_loader = NumpyDataLoader(filename, key=EkarusTelemetryKeys.TIMESTAMP_DM_CUBE_KEY)
 
             def _time_postproc(tv):
                 tv = np.asarray(tv)

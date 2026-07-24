@@ -1,4 +1,4 @@
-"""Papyrus telemetry analyzer for arte.dataelab
+"""Ekarus telemetry analyzer for arte.dataelab
 
 This analyzer follows the KADAT pattern, decomposing telemetry data
 into separate classes for each data stream (Ocam frames, modal coefficients,
@@ -22,7 +22,7 @@ Expected telemetry file keys:
 from arte.dataelab.base_analyzer import BaseAnalyzer
 from arte.dataelab.analyzer_plots import modalplot
 
-from ekarus.dataelab.papyrus_file_walker import PapyrusFileWalker
+from ekarus.dataelab.ekarus_file_walker import EkarusFileWalker
 from ekarus.dataelab.ocam_frames import OcamFrames
 from ekarus.dataelab.modes_timeseries import ResidualModes
 from ekarus.dataelab.dm_commands import DMCommands
@@ -30,8 +30,8 @@ from ekarus.dataelab.signal_to_modes_reconstructor import SignalToModesReconstru
 from ekarus.dataelab.modes_to_commands_reconstructor import ModesToCommandsReconstructor
 
 
-class PapyrusAnalyzer(BaseAnalyzer):
-    """Main analyzer for Papyrus telemetry
+class EkarusAnalyzer(BaseAnalyzer):
+    """Main analyzer for Ekarus telemetry
     
     This analyzer provides access to:
     - Raw telemetry data (Ocam frames, modal coefficients, DM commands)
@@ -40,7 +40,7 @@ class PapyrusAnalyzer(BaseAnalyzer):
     
     Usage example:
     --------------
-    >>> analyzer = PapyrusAnalyzer.get('/path/to/telemetry.npy')
+    >>> analyzer = EkarusAnalyzer.get('/path/to/telemetry.npy')
     >>> 
     >>> # Access raw data
     >>> ocam_data = analyzer.ocam_frames.get_data()
@@ -56,21 +56,38 @@ class PapyrusAnalyzer(BaseAnalyzer):
     >>> modes_mean = analyzer.modes.time_mean()
     """
 
-    def __init__(self, tag, recalc=False):
-        """Initialize Papyrus analyzer
-        
+    def __init__(self, tag, recalc=False, file_walker=None):
+        """Initialize Ekarus analyzer
+
         Parameters
         ----------
         tag : str
-            Path to telemetry .npy or .npz file
+            Snapshot tag (e.g. '20260723_144418') or explicit path to
+            a telemetry .npy/.npz file.
         recalc : bool, optional
             If True, clear cached data and recompute
+        data_root : str or Path, optional
+            Root directory where telemetry snapshots are stored. If
+            provided and `tag` looks like a snapshot tag, the analyzer
+            will resolve it to the telemetry file under
+            ``data_root / 'Telemetry snapshots' / YYYY-MM-DD / <file>``.
         """
-        super().__init__(tag, recalc)
-        
-        # File walker
-        fw = PapyrusFileWalker(tag)
-        telemetry_file = str(fw.telemetry_file())
+
+        # Keep snapshot tag as the identifier for BaseAnalyzer
+        snapshot_tag = str(tag)
+        super().__init__(snapshot_tag, recalc)
+
+        # Use provided file_walker if any, otherwise create a walker from tag
+        from pathlib import Path
+
+        if file_walker is None:
+            # create walker rooted at cwd
+            fw = EkarusFileWalker(root_dir=Path.cwd())
+        else:
+            fw = file_walker
+
+        telemetry_path = fw.telemetry_file(tag)
+        telemetry_file = str(telemetry_path)
         
         # Raw telemetry data
         self.ocam_frames = OcamFrames(telemetry_file)
@@ -97,6 +114,4 @@ class PapyrusAnalyzer(BaseAnalyzer):
         except Exception:
             info['nframes_dm'] = 'N/A'
         return info
-
-
 
